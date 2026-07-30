@@ -35,6 +35,11 @@ migrate_working_dir/
 /.superpowers/
 /.worktrees/
 
+# .NET/WPF build artifacts
+**/bin/
+**/obj/
+windows-app/artifacts/
+
 # Symbolication related
 app.*.symbols
 
