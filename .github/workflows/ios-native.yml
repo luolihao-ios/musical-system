@@ -1,0 +1,32 @@
+name: iOS native unsigned IPA
+
+on:
+  push:
+    paths:
+      - "ios-app/**"
+      - ".github/workflows/ios-native.yml"
+  pull_request:
+    paths:
+      - "ios-app/**"
+      - ".github/workflows/ios-native.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-package:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Run iOS simulator tests
+        run: ./ios-app/scripts/verify.sh
+      - name: Build unsigned device IPA
+        run: ./ios-app/scripts/package-unsigned-ipa.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: LocalMusicPlayer-iOS-unsigned
+          path: ios-app/build/ipa/LocalMusicPlayer-unsigned.ipa
+          if-no-files-found: error

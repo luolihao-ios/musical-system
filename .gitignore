@@ -39,6 +39,8 @@ migrate_working_dir/
 **/bin/
 **/obj/
 windows-app/artifacts/
+ios-app/build/
+ios-app/LocalMusicPlayer.xcodeproj/
 
 # Symbolication related
 app.*.symbols

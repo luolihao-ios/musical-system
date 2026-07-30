@@ -1,0 +1,126 @@
+name: iOS App Store Connect upload
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  archive-and-upload:
+    runs-on: macos-latest
+    env:
+      BUNDLE_ID: com.luolihao.musicalsystem
+      KEYCHAIN_PATH: ${{ runner.temp }}/local-music-signing.keychain-db
+      TEMP_SIGNING_DIR: ${{ runner.temp }}/local-music-signing
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Validate required secrets
+        env:
+          P12: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          PROFILE: ${{ secrets.IOS_APP_STORE_PROFILE_BASE64 }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          API_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          for value in "$P12" "$P12_PASSWORD" "$PROFILE" "$KEY_ID" "$ISSUER_ID" "$API_KEY"; do
+            test -n "$value"
+          done
+      - name: Import Apple Distribution signing material
+        env:
+          P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          PROFILE_BASE64: ${{ secrets.IOS_APP_STORE_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$TEMP_SIGNING_DIR" "$HOME/Library/MobileDevice/Provisioning Profiles"
+          echo "$P12_BASE64" | base64 --decode > "$TEMP_SIGNING_DIR/distribution.p12"
+          echo "$PROFILE_BASE64" | base64 --decode > "$TEMP_SIGNING_DIR/appstore.mobileprovision"
+
+          security cms -D -i "$TEMP_SIGNING_DIR/appstore.mobileprovision" \
+            > "$TEMP_SIGNING_DIR/profile.plist"
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" "$TEMP_SIGNING_DIR/profile.plist")
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" "$TEMP_SIGNING_DIR/profile.plist")
+          TEAM_ID=$(/usr/libexec/PlistBuddy -c "Print TeamIdentifier:0" "$TEMP_SIGNING_DIR/profile.plist")
+          cp "$TEMP_SIGNING_DIR/appstore.mobileprovision" \
+            "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 24)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$TEMP_SIGNING_DIR/distribution.p12" \
+            -k "$KEYCHAIN_PATH" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+
+          {
+            echo "PROFILE_UUID=$PROFILE_UUID"
+            echo "PROFILE_NAME=$PROFILE_NAME"
+            echo "TEAM_ID=$TEAM_ID"
+            echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD"
+          } >> "$GITHUB_ENV"
+      - name: Archive and export App Store IPA
+        run: |
+          set -euo pipefail
+          xcodegen generate --spec ios-app/project.yml
+          xcodebuild archive \
+            -project ios-app/LocalMusicPlayer.xcodeproj \
+            -scheme LocalMusicPlayer \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath ios-app/build/AppStore/LocalMusicPlayer.xcarchive \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME"
+
+          cat > "$TEMP_SIGNING_DIR/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>provisioningProfiles</key>
+            <dict><key>$BUNDLE_ID</key><string>$PROFILE_NAME</string></dict>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          EOF
+
+          xcodebuild -exportArchive \
+            -archivePath ios-app/build/AppStore/LocalMusicPlayer.xcarchive \
+            -exportPath ios-app/build/AppStore/export \
+            -exportOptionsPlist "$TEMP_SIGNING_DIR/ExportOptions.plist"
+      - name: Upload to App Store Connect
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          API_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8"
+          echo "$API_PRIVATE_KEY_BASE64" | base64 --decode > "$API_KEY_PATH"
+          IPA_PATH=$(find ios-app/build/AppStore/export -maxdepth 1 -name '*.ipa' -print -quit)
+          test -n "$IPA_PATH"
+          xcrun altool --validate-app --type ios -f "$IPA_PATH" \
+            --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER_ID"
+          xcrun altool --upload-app --type ios -f "$IPA_PATH" \
+            --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER_ID"
+      - name: Clean temporary signing material
+        if: always()
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+        run: |
+          security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+          rm -rf "$TEMP_SIGNING_DIR"
+          rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/${PROFILE_UUID:-}.mobileprovision"
+          rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8"

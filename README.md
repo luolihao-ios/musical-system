@@ -54,4 +54,22 @@
 
 ## iOS 原生版
 
-iOS 17+ 原生 Swift/SwiftUI 工程正在同一仓库的独立目录中建设。测试包将由 GitHub macOS Runner 生成未签名 IPA，再使用爱思助手签名安装；正式版本通过 Apple Developer 账号上传 App Store Connect。
+- Swift 6、SwiftUI、SwiftData，最低 iOS 17。
+- 支持从“文件”导入 MP3、M4A/AAC、FLAC、WAV、AIFF 和同名 LRC。
+- 支持授权读取设备音乐资料库中具有本地 `assetURL` 的可播放歌曲；云端或受保护且没有本地 URL 的项目不会被导入。
+- 支持搜索、喜欢、自建歌单、后台播放、锁屏控制、同步歌词和无歌词唱片动画。
+- iOS 与 Windows 使用完全独立的数据库，不同步数据。
+
+### GitHub 生成爱思测试包
+
+手动运行 `iOS native unsigned IPA` 工作流，下载：
+
+```text
+LocalMusicPlayer-iOS-unsigned/LocalMusicPlayer-unsigned.ipa
+```
+
+该流程不读取证书、私钥或描述文件。下载后使用爱思助手签名并安装到 iOS 17+ 真机。
+
+### App Store Connect
+
+`iOS App Store Connect upload` 工作流只允许手动触发。它引用仓库 Secrets 中的 Apple Distribution 证书、App Store 描述文件和 App Store Connect API Key，在临时钥匙串中签名、归档并上传，完成后始终清理临时签名材料。
