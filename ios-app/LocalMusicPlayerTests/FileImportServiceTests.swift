@@ -165,6 +165,7 @@ private struct Fixture {
     }
 }
 
+@MainActor
 private func XCTAssertThrowsErrorAsync(
     _ expression: () async throws -> Void,
     file: StaticString = #filePath,
