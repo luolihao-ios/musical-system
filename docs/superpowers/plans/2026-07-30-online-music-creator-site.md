@@ -1,396 +1,142 @@
-# Online Music Creator Site Implementation Plan
+# 在线音乐创作网站实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **供自动化开发人员使用：** 必须使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐项执行本计划。所有步骤用复选框记录。
 
-**Goal:** Build an independent dark-record-room music website for licensed music discovery and credit-based AI full-song generation.
+**目标：** 构建独立的暗色唱片室风格音乐网站，提供合规音乐搜索、点数付费的 AI 完整歌曲生成和试听。
 
-**Architecture:** A Next.js app serves the responsive UI and API routes. PostgreSQL stores users, credit ledgers, orders, generation jobs and works through Prisma migrations. Server-only AI-provider adapters create and poll generation jobs; jobs settle credit reservations atomically.
+**架构：** Next.js 提供自适应界面与 API 路由；PostgreSQL 使用 Prisma 保存用户、点数账本、订单、生成任务和作品。仅服务端运行的服务商适配器创建并轮询任务，任务以原子操作结算预留点数。
 
-**Tech Stack:** Next.js (App Router), TypeScript, Tailwind CSS, Prisma, PostgreSQL, Auth.js, Zod, Vitest, React Testing Library, Playwright, Docker Compose.
+**技术栈：** Next.js（App Router）、TypeScript、Tailwind CSS、Prisma、PostgreSQL、Auth.js、Zod、Vitest、React Testing Library、Playwright、Docker Compose。
 
-## Global Constraints
+## 全局约束
 
-- This is independent from the existing Windows/iOS local music-player plan.
-- Use deep gray, warm red accents, rounded cover art and translucent panels to match the Windows player.
-- The first-release interface uses Simplified Chinese for navigation, forms, errors, account, order, and player copy; centralize UI copy so future localization does not require component rewrites.
-- External music can use only licensed/official previews and source links. Never cache, download, proxy, or full-stream copyrighted third-party audio.
-- Provider and future payment secrets remain server-only environment variables.
-- PostgreSQL is the system of record. Store generated audio as authorized provider or object-storage URLs; do not store third-party external audio.
-- Reserve credits before creating an AI job; settle only on success and release them once on failure, cancellation or timeout.
-- First release creates pending credit orders but does not integrate or simulate successful WeChat Pay/Alipay payment. Future callbacks must be idempotent.
+- 这是独立网站，不修改或替换 Windows/iOS 本地播放器计划。
+- 视觉复用 Windows 播放器：深灰背景、暖红强调色、圆角封面和半透明面板。
+- 首版界面默认简体中文；文案集中管理，为将来国际化留出边界。
+- 外部音乐仅允许官方或授权预览及来源链接，绝不缓存、下载、代理或完整播放第三方受版权保护音频。
+- AI 服务商密钥与未来支付凭据只能保留在服务端环境变量。
+- PostgreSQL 是业务数据唯一事实来源。AI 音频只保存授权服务商或对象存储 URL，不保存第三方外部歌曲。
+- 创建 AI 任务前预留点数；只在成功时结算，失败、取消或超时仅释放一次。
+- 首版只创建待支付订单，不接入或模拟微信/支付宝支付成功；未来回调必须幂等。
 
 ---
 
-## File structure
+## 文件结构
 
-- `web/prisma/schema.prisma`: PostgreSQL models and enums.
-- `web/src/lib/auth.ts`, `db.ts`: session and database primitives.
-- `web/src/lib/credits.ts`, `orders.ts`: ledger and pending-order transactions.
-- `web/src/lib/music-search.ts`: server-side licensed result normalization.
-- `web/src/lib/ai/types.ts`, `registry.ts`, `providers/*.ts`: provider-neutral AI contract and adapters.
-- `web/src/lib/jobs.ts`: generation job lifecycle.
-- `web/src/components/player/*`: mini player, expanded player and queue.
-- `web/src/components/search/*`, `studio/*`, `credits/*`: feature UI.
-- `web/src/app/api/**/route.ts`: authenticated and validated HTTP endpoints.
-- `web/tests/*` and `web/e2e/*`: unit, component and browser tests.
+- web/prisma/schema.prisma：PostgreSQL 模型、关系和枚举。
+- web/src/lib/auth.ts、db.ts：认证会话和数据库单例。
+- web/src/lib/credits.ts、orders.ts：点数账本和待支付订单。
+- web/src/lib/music-search.ts：合规搜索服务端标准化。
+- web/src/lib/ai/types.ts、registry.ts、providers/*.ts：多服务商生成协议与适配器。
+- web/src/lib/jobs.ts：生成任务创建、轮询与终态结算。
+- web/src/components/player/*：迷你播放器、完整播放页和队列。
+- web/src/components/search/*、studio/*、credits/*：功能组件。
+- web/src/app/api/**/route.ts：经认证和参数校验的 API。
+- web/tests/*、web/e2e/*：单元、组件和浏览器验收测试。
 
-### Task 1: Scaffold the independent website and matching visual shell
+### 任务 1：搭建独立网站和统一视觉外壳
 
-**Files:**
-- Create: `web/package.json`, `web/next.config.ts`, `web/tsconfig.json`, `web/tailwind.config.ts`
-- Create: `web/src/app/layout.tsx`, `web/src/app/page.tsx`, `web/src/app/globals.css`
-- Create: `web/src/components/layout/site-shell.tsx`, `sidebar.tsx`, `mobile-nav.tsx`
-- Test: `web/tests/site-shell.test.tsx`
+**文件：** 新建 web/package.json、web/src/app/layout.tsx、web/src/app/page.tsx、web/src/app/globals.css、web/src/components/layout/site-shell.tsx、sidebar.tsx、mobile-nav.tsx；测试 web/tests/site-shell.test.tsx。
 
-**Interfaces:** Produces `SiteShell({ children }: { children: React.ReactNode })`.
+**接口：** 产出 SiteShell({ children })，供所有站点页面使用。
 
-- [ ] **Step 1: Write the failing shell test**
+- [ ] **步骤 1：写失败的外壳测试。** 渲染 SiteShell 后断言“搜索音乐”和“AI 写歌”导航入口可见。
+- [ ] **步骤 2：运行 cd web && npm test -- site-shell.test.tsx。** 预期：因 SiteShell 不存在失败。
+- [ ] **步骤 3：实现最小外壳。** 使用 min-h-screen、深灰背景和浅色文字；桌面显示侧边栏，窄屏显示移动端导航。定义 --background: #171717、--panel: rgba(39,39,42,.78)、--accent: #d84a4a。
+- [ ] **步骤 4：运行 cd web && npm run lint && npm test -- site-shell.test.tsx。** 预期：通过。
+- [ ] **步骤 5：提交。** git add web；git commit -m "feat: scaffold music creator website"。
 
-```tsx
-it('renders the record-room music entry points', () => {
-  render(<SiteShell><main>content</main></SiteShell>);
-  expect(screen.getByRole('link', { name: '搜索音乐' })).toBeVisible();
-  expect(screen.getByRole('link', { name: 'AI 写歌' })).toBeVisible();
-});
-```
+### 任务 2：接入 PostgreSQL、用户账户和登录
 
-- [ ] **Step 2: Verify the test fails**
+**文件：** 新建 web/docker-compose.yml、web/.env.example、web/prisma/schema.prisma、web/prisma/seed.ts、web/src/lib/db.ts、web/src/lib/auth.ts、认证路由、登录/注册页和 web/tests/auth/sign-up.test.ts。
 
-Run: `cd web && npm test -- site-shell.test.tsx`
+**接口：** 产出 createUser({ name, email, password }) 和 requireUser()，后者返回当前用户 id 与 USER/ADMIN 角色。
 
-Expected: FAIL because `SiteShell` does not exist.
+- [ ] **步骤 1：写失败的注册测试。** 注册 Ava 后断言用户邮箱正确，且对应 CreditAccount 的 available 和 reserved 都为 0。
+- [ ] **步骤 2：运行 cd web && npm test -- auth/sign-up.test.ts。** 预期：模型和认证模块不存在而失败。
+- [ ] **步骤 3：实现数据模型和注册事务。** 创建 User、Account、Session、CreditAccount、CreditLedger、CreditOrder、GenerationJob、GeneratedWork、Favourite、ListeningEvent 和 ProviderConfig。User.email、CreditAccount.userId 和 CreditLedger.idempotencyKey 必须唯一；只保存密码哈希。注册事务同时创建零余额账户。
+- [ ] **步骤 4：运行 cd web && docker compose up -d db && npx prisma migrate dev --name init && npm test -- auth/sign-up.test.ts。** 预期：通过。
+- [ ] **步骤 5：提交。** git add web；git commit -m "feat: add website accounts and database"。
 
-- [ ] **Step 3: Implement the minimal shell**
+### 任务 3：实现点数账本、待支付订单和幂等结算
 
-```tsx
-export function SiteShell({ children }: { children: React.ReactNode }) {
-  return <div className="min-h-screen bg-[#171717] text-zinc-100"><Sidebar /><main>{children}</main><MobileNav /></div>;
-}
-```
+**文件：** 新建 web/src/lib/credits.ts、orders.ts、web/src/app/api/orders/route.ts、点数套餐页面与 web/tests/credits.test.ts、web/tests/orders.test.ts。
 
-Define `--background: #171717`, `--panel: rgba(39,39,42,.78)`, and `--accent: #d84a4a`. On desktop render the sidebar; on narrow screens render mobile navigation.
+**接口：** 产出 reserveCredits(userId, amount, key)、settleReservation(key)、releaseReservation(key)、createPendingOrder(userId, packageId)。
 
-- [ ] **Step 4: Verify and commit**
+- [ ] **步骤 1：写失败的账本测试。** 充值 20 后预留 8，连续两次释放同一 job_1，断言余额为 available: 20、reserved: 0。
+- [ ] **步骤 2：运行 cd web && npm test -- credits.test.ts orders.test.ts。** 预期：账本函数不存在而失败。
+- [ ] **步骤 3：实现事务。** 每次状态变更使用 PostgreSQL 事务，并按幂等键 upsert 账本记录；预留从 available 转入 reserved，结算扣除 reserved，释放转回 available。套餐只创建 PENDING 订单，UI 显示“微信支付 / 支付宝即将接入”，前后端绝不为待支付订单充值。
+- [ ] **步骤 4：运行 cd web && npm run lint && npm test -- credits.test.ts orders.test.ts。** 预期：通过，重复调用只有一次账务影响。
+- [ ] **步骤 5：提交。** git add web；git commit -m "feat: add credit orders and ledger"。
 
-Run: `cd web && npm run lint && npm test -- site-shell.test.tsx`
+### 任务 4：接入合规联网搜索和来源标识
 
-Expected: PASS.
+**文件：** 新建 web/src/lib/music-search.ts、web/src/app/api/music-search/route.ts、搜索组件、搜索页和 web/tests/music-search.test.ts、web/tests/search-results.test.tsx。
 
-```powershell
-git add web
-git commit -m "feat: scaffold music creator website"
-```
+**接口：** 产出 searchMusic(query)，返回含 id、title、artist、artworkUrl、previewUrl、sourceName、sourceUrl 的 SearchTrack。
 
-### Task 2: Add PostgreSQL, accounts and sign-in
+- [ ] **步骤 1：写失败的标准化测试。** 给定 iTunes 项目后，断言来源为 iTunes、预览 URL 可用、来源 URL 指向 itunes。
+- [ ] **步骤 2：运行 cd web && npm test -- music-search.test.ts search-results.test.tsx。** 预期：搜索客户端不存在而失败。
+- [ ] **步骤 3：实现服务端搜索。** 用 Zod 校验 1–100 字符关键词，fetch 带超时与响应解析。每一项明确标注来源；仅当 previewUrl 存在时显示播放按钮，来源链接必须使用 target=_blank 和 rel=noreferrer。
+- [ ] **步骤 4：运行 cd web && npm run lint && npm test -- music-search.test.ts search-results.test.tsx。** 预期：通过，结果不提供外部完整播放 URL。
+- [ ] **步骤 5：提交。** git add web；git commit -m "feat: add licensed music search"。
 
-**Files:**
-- Create: `web/docker-compose.yml`, `web/.env.example`, `web/prisma/schema.prisma`, `web/prisma/seed.ts`
-- Create: `web/src/lib/db.ts`, `web/src/lib/auth.ts`, `web/src/app/api/auth/[...nextauth]/route.ts`
-- Create: `web/src/app/(auth)/sign-in/page.tsx`, `sign-up/page.tsx`, `web/src/app/api/sign-up/route.ts`
-- Test: `web/tests/auth/sign-up.test.ts`
+### 任务 5：实现多服务商适配器和生成任务
 
-**Interfaces:** Produces `createUser(input: { name: string; email: string; password: string }): Promise<User>` and `requireUser(): Promise<{ id: string; role: 'USER' | 'ADMIN' }>`.
+**文件：** 新建 web/src/lib/ai/types.ts、registry.ts、providers/replicate.ts、providers/suno.ts、providers/udio.ts、web/src/lib/jobs.ts、生成/任务查询/内部轮询路由，以及 web/tests/ai/registry.test.ts、web/tests/jobs.test.ts。
 
-- [ ] **Step 1: Write the failing sign-up test**
+**接口：** 产出 AiProvider.createJob、AiProvider.getJobStatus、createGeneration(userId, input) 和 pollPendingJobs()。
 
-```ts
-it('creates a zero-credit account with the user', async () => {
-  const user = await createUser({ name: 'Ava', email: 'ava@example.com', password: 'safe-password-123' });
-  expect(user.email).toBe('ava@example.com');
-  expect(await prisma.creditAccount.findUnique({ where: { userId: user.id } }))
-    .toMatchObject({ available: 0, reserved: 0 });
-});
-```
+- [ ] **步骤 1：写失败的成功结算测试。** 模拟服务商返回 SUCCEEDED、授权音频 URL 和标题，轮询后断言新增一个 GeneratedWork，且 8 点数从预留变为已结算。
+- [ ] **步骤 2：运行 cd web && npm test -- ai/registry.test.ts jobs.test.ts。** 预期：任务模块不存在而失败。
+- [ ] **步骤 3：实现协议与状态转换。** GenerationInput 包含 providerId、modelId、prompt、可选 lyrics、style、mood、language、durationSeconds。注册表拒绝禁用服务商或缺少凭据。先建预留和 QUEUED 任务再发请求；成功时一个事务创建作品、标记 SUCCEEDED 并结算，失败/取消/超时标记终态且只释放一次。接入每家服务商时必须使用最新官方 API 文档。
+- [ ] **步骤 4：运行 cd web && npm run lint && npm test -- ai/registry.test.ts jobs.test.ts。** 预期：通过，终态任务重复轮询不会重复建作品或扣点。
+- [ ] **步骤 5：提交。** git add web；git commit -m "feat: add multi-provider generation jobs"。
 
-- [ ] **Step 2: Verify the test fails**
+### 任务 6：构建 AI 写歌工作台、作品库和管理页
 
-Run: `cd web && npm test -- auth/sign-up.test.ts`
+**文件：** 新建写歌表单、任务状态、作品卡片、创作页、作品库、服务商管理页和管理 API；测试 song-form、generation-status、admin/providers。
 
-Expected: FAIL because the database schema and auth module are absent.
+**接口：** 消费生成 API 和服务商配置，产出 AI 写歌工作台、任务进度与当前用户作品库。
 
-- [ ] **Step 3: Implement schema and registration**
+- [ ] **步骤 1：写失败的工作台测试。** 未登录渲染表单时显示“8 点数”；点击“开始创作”后显示“请先登录”。
+- [ ] **步骤 2：运行 cd web && npm test -- song-form.test.tsx generation-status.test.tsx admin/providers.test.ts。** 预期：组件不存在而失败。
+- [ ] **步骤 3：实现工作台。** 表单包括服务商/模型、主题提示词、曲风、情绪、语言、时长和可选歌词；提交前显示价格、余额、预计时长。页面打开时轮询任务；失败显示原因和退回点数提示。作品库只查询当前用户。管理 API 只允许 ADMIN 修改启用状态与点数价格，绝不返回密钥。
+- [ ] **步骤 4：运行 cd web && npm run lint && npm test -- song-form.test.tsx generation-status.test.tsx admin/providers.test.ts。** 预期：通过，普通用户修改配置返回 403。
+- [ ] **步骤 5：提交。** git add web；git commit -m "feat: add AI studio and works library"。
 
-Create models `User`, `Account`, `Session`, `CreditAccount`, `CreditLedger`, `CreditOrder`, `GenerationJob`, `GeneratedWork`, `Favourite`, `ListeningEvent`, and `ProviderConfig`. Use unique keys for `User.email`, `CreditAccount.userId`, and `CreditLedger.idempotencyKey`. Hash passwords; never persist plaintext. Registration uses one transaction to create both user and zeroed credit account.
+### 任务 7：加入与 Windows 一致的播放器和队列
 
-- [ ] **Step 4: Migrate, test and commit**
+**文件：** 新建 player-store.ts、player-provider.tsx、mini-player.tsx、now-playing.tsx、queue-panel.tsx；修改网站外壳、搜索结果、作品卡片；测试 player-store、mini-player、now-playing。
 
-Run: `cd web && docker compose up -d db && npx prisma migrate dev --name init && npm test -- auth/sign-up.test.ts`
+**接口：** 产出 enqueue(item)、play(item)、next()、previous()、setRepeat(mode)、setShuffle(enabled)。
 
-Expected: PASS.
+- [ ] **步骤 1：写失败的播放器测试。** 队列包含外部预览与 AI 作品，预览结束后断言当前曲目变为 AI 作品；渲染 SiteShell 后断言 mini-player 带 fixed 和 bottom-0 类。
+- [ ] **步骤 2：运行 cd web && npm test -- player-store.test.ts mini-player.test.tsx now-playing.test.tsx。** 预期：播放器模块不存在而失败。
+- [ ] **步骤 3：实现安全播放。** PlayerProvider 只持有一个 HTMLAudioElement，只接受 previewUrl 或用户拥有的授权作品 URL。迷你播放器与展开页复用 Windows 视觉：封面、暖红进度条、音量、上一首/下一首、随机、循环和队列。仅有合法歌词字段时显示歌词，否则显示“暂无可用歌词”。
+- [ ] **步骤 4：运行 cd web && npm run lint && npm test -- player-store.test.ts mini-player.test.tsx now-playing.test.tsx。** 预期：通过；预览结束时推进队列，不替换成外部完整歌曲。
+- [ ] **步骤 5：提交。** git add web；git commit -m "feat: add unified music player"。
 
-```powershell
-git add web
-git commit -m "feat: add website accounts and database"
-```
+### 任务 8：加入验收测试、环境安全和交接文档
 
-### Task 3: Implement points, pending orders and safe settlement
+**文件：** 新建 web/e2e/auth-and-orders.spec.ts、search-and-player.spec.ts、generation.spec.ts、web/README.md；修改 web/.env.example、.gitignore。
 
-**Files:**
-- Create: `web/src/lib/credits.ts`, `web/src/lib/orders.ts`, `web/src/app/api/orders/route.ts`
-- Create: `web/src/app/(site)/account/credits/page.tsx`, `web/src/components/credits/credit-packages.tsx`
-- Test: `web/tests/credits.test.ts`, `web/tests/orders.test.ts`
-
-**Interfaces:** Produces `reserveCredits(userId, amount, key)`, `settleReservation(key)`, `releaseReservation(key)`, and `createPendingOrder(userId, packageId)`.
-
-- [ ] **Step 1: Write the failing idempotency test**
-
-```ts
-it('releases one reservation exactly once', async () => {
-  await fund(user.id, 20);
-  await reserveCredits(user.id, 8, 'job_1');
-  await releaseReservation('job_1');
-  await releaseReservation('job_1');
-  expect(await balance(user.id)).toEqual({ available: 20, reserved: 0 });
-});
-```
-
-- [ ] **Step 2: Verify the test fails**
-
-Run: `cd web && npm test -- credits.test.ts orders.test.ts`
-
-Expected: FAIL because ledger functions are absent.
-
-- [ ] **Step 3: Implement transactions and the order screen**
-
-Use a PostgreSQL transaction for each credit transition and ledger `upsert` by idempotency key. A reserve decrements `available` and increments `reserved`; settlement decrements `reserved`; release moves `reserved` back to `available`. Credit packages create only a `PENDING` order. Show “微信支付 / 支付宝即将接入”; neither UI nor API may credit a pending order.
-
-- [ ] **Step 4: Verify and commit**
-
-Run: `cd web && npm run lint && npm test -- credits.test.ts orders.test.ts`
-
-Expected: PASS; duplicate calls have one accounting effect.
-
-```powershell
-git add web
-git commit -m "feat: add credit orders and ledger"
-```
-
-### Task 4: Add licensed music search and clear source attribution
-
-**Files:**
-- Create: `web/src/lib/music-search.ts`, `web/src/app/api/music-search/route.ts`
-- Create: `web/src/components/search/music-search.tsx`, `search-results.tsx`, `web/src/app/(site)/search/page.tsx`
-- Test: `web/tests/music-search.test.ts`, `web/tests/search-results.test.tsx`
-
-**Interfaces:** Produces `searchMusic(query: string): Promise<SearchTrack[]>`, where `SearchTrack` has `id`, `title`, `artist`, `artworkUrl`, `previewUrl | null`, `sourceName`, and `sourceUrl`.
-
-- [ ] **Step 1: Write the failing normalizer test**
-
-```ts
-it('keeps an iTunes result as an attributed preview', () => {
-  expect(normalizeItunes(item)).toMatchObject({
-    sourceName: 'iTunes',
-    previewUrl: 'https://audio.example/preview.m4a',
-    sourceUrl: expect.stringContaining('itunes'),
-  });
-});
-```
-
-- [ ] **Step 2: Verify it fails**
-
-Run: `cd web && npm test -- music-search.test.ts search-results.test.tsx`
-
-Expected: FAIL because the search client is absent.
-
-- [ ] **Step 3: Implement search API and UI**
-
-Validate 1–100-character queries with Zod; use server-side fetch with a timeout and response parsing. Each result shows its source. Render an audio action only for `previewUrl` and an external source link with `target="_blank" rel="noreferrer"`.
-
-- [ ] **Step 4: Verify and commit**
-
-Run: `cd web && npm run lint && npm test -- music-search.test.ts search-results.test.tsx`
-
-Expected: PASS; no result exposes a full external playback URL.
-
-```powershell
-git add web
-git commit -m "feat: add licensed music search"
-```
-
-### Task 5: Add provider adapters and durable generation jobs
-
-**Files:**
-- Create: `web/src/lib/ai/types.ts`, `registry.ts`, `providers/replicate.ts`, `providers/suno.ts`, `providers/udio.ts`, `web/src/lib/jobs.ts`
-- Create: `web/src/app/api/generations/route.ts`, `web/src/app/api/generations/[id]/route.ts`, `web/src/app/api/internal/jobs/poll/route.ts`
-- Test: `web/tests/ai/registry.test.ts`, `web/tests/jobs.test.ts`
-
-**Interfaces:** Produces `AiProvider.createJob(request)`, `AiProvider.getJobStatus(id)`, `createGeneration(userId, input)`, and `pollPendingJobs()`.
-
-- [ ] **Step 1: Write the failing success-settlement test**
-
-```ts
-it('creates a work and charges only after provider success', async () => {
-  mockProvider.getJobStatus.mockResolvedValue({
-    state: 'SUCCEEDED', audioUrl: 'https://authorized.example/song.mp3', title: 'Night Train',
-  });
-  await pollPendingJobs();
-  expect(await prisma.generatedWork.count()).toBe(1);
-  expect(await balance(user.id)).toEqual({ available: 12, reserved: 0 });
-});
-```
-
-- [ ] **Step 2: Verify it fails**
-
-Run: `cd web && npm test -- ai/registry.test.ts jobs.test.ts`
-
-Expected: FAIL because job modules are absent.
-
-- [ ] **Step 3: Implement the adapter contract and job transitions**
-
-Define `GenerationInput` as `providerId`, `modelId`, `prompt`, optional `lyrics`, `style`, `mood`, `language`, and `durationSeconds`. The registry must reject disabled providers and missing credentials. Create the reservation and `QUEUED` job before dispatch. A successful polling response transactionally creates `GeneratedWork`, marks the job `SUCCEEDED`, and settles credits; failure/cancellation/timeout marks a terminal status and releases once. Provider implementations must follow their official API documentation at implementation time.
-
-- [ ] **Step 4: Verify and commit**
-
-Run: `cd web && npm run lint && npm test -- ai/registry.test.ts jobs.test.ts`
-
-Expected: PASS; double-polling a terminal job makes no duplicate work or charge.
-
-```powershell
-git add web
-git commit -m "feat: add multi-provider generation jobs"
-```
-
-### Task 6: Build the AI studio, works library and provider administration
-
-**Files:**
-- Create: `web/src/components/studio/song-form.tsx`, `generation-status.tsx`, `web/src/components/works/work-card.tsx`
-- Create: `web/src/app/(site)/create/page.tsx`, `library/page.tsx`, `web/src/app/admin/providers/page.tsx`, `web/src/app/api/admin/providers/route.ts`
-- Test: `web/tests/song-form.test.tsx`, `web/tests/generation-status.test.tsx`, `web/tests/admin/providers.test.ts`
-
-**Interfaces:** Consumes generation routes and provider config; produces AI studio, job progress and user-owned work library.
-
-- [ ] **Step 1: Write the failing studio test**
-
-```tsx
-it('shows the price and blocks signed-out creation', async () => {
-  render(<SongForm providers={[provider]} session={null} />);
-  expect(screen.getByText('8 点数')).toBeVisible();
-  await userEvent.click(screen.getByRole('button', { name: '开始创作' }));
-  expect(screen.getByText('请先登录')).toBeVisible();
-});
-```
-
-- [ ] **Step 2: Verify it fails**
-
-Run: `cd web && npm test -- song-form.test.tsx generation-status.test.tsx admin/providers.test.ts`
-
-Expected: FAIL because studio components are absent.
-
-- [ ] **Step 3: Implement forms, polling and access control**
-
-The form contains provider/model, prompt, style, mood, language, duration and optional lyrics. Show price, balance and estimated duration. Poll job status while open; show an actionable failure reason and refunded-credit message. Query works by current user only. Provider administration requires role `ADMIN` and may only change enabled status and credit pricing—never reveal keys.
-
-- [ ] **Step 4: Verify and commit**
-
-Run: `cd web && npm run lint && npm test -- song-form.test.tsx generation-status.test.tsx admin/providers.test.ts`
-
-Expected: PASS; non-admin configuration update returns 403.
-
-```powershell
-git add web
-git commit -m "feat: add AI studio and works library"
-```
-
-### Task 7: Add the shared Windows-style player and queue
-
-**Files:**
-- Create: `web/src/components/player/player-store.ts`, `player-provider.tsx`, `mini-player.tsx`, `now-playing.tsx`, `queue-panel.tsx`
-- Modify: `web/src/components/layout/site-shell.tsx`, `web/src/components/search/search-results.tsx`, `web/src/components/works/work-card.tsx`
-- Test: `web/tests/player-store.test.ts`, `web/tests/mini-player.test.tsx`, `web/tests/now-playing.test.tsx`
-
-**Interfaces:** Produces `enqueue(item)`, `play(item)`, `next()`, `previous()`, `setRepeat(mode)`, and `setShuffle(enabled)`.
-
-- [ ] **Step 1: Write failing player tests**
-
-```ts
-it('advances from a preview to a generated work', () => {
-  const store = createPlayerStore([preview, work]);
-  store.play(preview);
-  store.onEnded();
-  expect(store.getState().current?.id).toBe(work.id);
-});
-```
-
-```tsx
-it('keeps the mini player fixed in the site shell', () => {
-  render(<SiteShell><div /></SiteShell>);
-  expect(screen.getByTestId('mini-player')).toHaveClass('fixed', 'bottom-0');
-});
-```
-
-- [ ] **Step 2: Verify they fail**
-
-Run: `cd web && npm test -- player-store.test.ts mini-player.test.tsx now-playing.test.tsx`
-
-Expected: FAIL because player modules are absent.
-
-- [ ] **Step 3: Implement safe browser audio playback**
-
-Use one HTMLAudioElement in `PlayerProvider`. It may only receive a search `previewUrl` or a user-owned authorized work URL. The fixed mini player and expanded page mirror Windows styling: cover, warm-red progress, volume, previous/next, shuffle, repeat and queue. Render lyrics only from a generated-work lyric field or licensed field; otherwise show “暂无可用歌词”.
-
-- [ ] **Step 4: Verify and commit**
-
-Run: `cd web && npm run lint && npm test -- player-store.test.ts mini-player.test.tsx now-playing.test.tsx`
-
-Expected: PASS; ending a preview advances rather than replacing it with a full external song.
-
-```powershell
-git add web
-git commit -m "feat: add unified music player"
-```
-
-### Task 8: Add browser coverage, secure configuration and handoff docs
-
-**Files:**
-- Create: `web/e2e/auth-and-orders.spec.ts`, `search-and-player.spec.ts`, `generation.spec.ts`
-- Create: `web/README.md`
-- Modify: `web/.env.example`, `.gitignore`
-
-**Interfaces:** Verifies public flows with seeded data and mocked external providers.
-
-- [ ] **Step 1: Write the failing pending-order acceptance test**
-
-```ts
-test('creating a pending order does not add credits', async ({ page }) => {
-  await loginAs(page, 'ava@example.com');
-  await page.goto('/account/credits');
-  await page.getByRole('button', { name: '购买 100 点数' }).click();
-  await expect(page.getByText('待支付')).toBeVisible();
-  await expect(page.getByText('当前余额：0')).toBeVisible();
-});
-```
-
-- [ ] **Step 2: Verify the test fails before fixtures are ready**
-
-Run: `cd web && npm run test:e2e -- auth-and-orders.spec.ts`
-
-Expected: FAIL until seed, pages and routes exist.
-
-- [ ] **Step 3: Add fixtures and documentation**
-
-Document Docker database start, migrations, seed, tests, production build, provider setup and the deferred WeChat/Alipay callback integration. `.env.example` contains names only: `DATABASE_URL`, `AUTH_SECRET`, `ITUNES_SEARCH_URL`, `REPLICATE_API_TOKEN`, `SUNO_API_KEY`, `UDIO_API_KEY`, and `INTERNAL_JOB_TOKEN`. Mock providers/search in Playwright so tests never spend credits.
-
-- [ ] **Step 4: Run final verification and commit**
-
-Run: `cd web && npm run lint && npm test && npm run test:e2e && npm run build`
-
-Expected: all tests pass and production build succeeds.
-
-Run: `rg -n "BEGIN .*PRIVATE KEY|sk-[A-Za-z0-9]|DATABASE_URL=.*@" web -g '!node_modules' -g '!README.md' -g '!.env.example'`
-
-Expected: no secrets found.
-
-```powershell
-git add web .gitignore
-git commit -m "test: verify music creator website"
-```
-
-## Final verification checklist
-
-- [ ] Accounts and all user-owned records enforce identity and role access.
-- [ ] Pending orders never credit balances.
-- [ ] Every terminal job yields exactly one settlement/release result.
-- [ ] Disabled/unconfigured providers reject paid job creation.
-- [ ] Search labels its source and plays only authorized previews.
-- [ ] Generated full works and previews coexist in the Windows-style queue.
-- [ ] Desktop sidebar/fixed player and mobile navigation/mini player respond correctly.
+**接口：** 使用种子数据和模拟外部服务验证完整流程。
+
+- [ ] **步骤 1：写失败的订单验收测试。** 用户登录后购买 100 点数，断言页面显示“待支付”和“当前余额：0”。
+- [ ] **步骤 2：运行 cd web && npm run test:e2e -- auth-and-orders.spec.ts。** 预期：测试夹具完成前失败。
+- [ ] **步骤 3：补齐测试夹具和文档。** README 说明 Docker 数据库、迁移、种子、测试、构建、服务商配置和延期的支付回调。env 示例只列 DATABASE_URL、AUTH_SECRET、ITUNES_SEARCH_URL、REPLICATE_API_TOKEN、SUNO_API_KEY、UDIO_API_KEY、INTERNAL_JOB_TOKEN 名称且不写值。Playwright 模拟外部搜索与生成，不调用真实服务或消耗点数。
+- [ ] **步骤 4：运行 cd web && npm run lint && npm test && npm run test:e2e && npm run build。** 预期：全部测试和生产构建通过。
+- [ ] **步骤 5：运行 rg -n "BEGIN .*PRIVATE KEY|sk-[A-Za-z0-9]|DATABASE_URL=.*@" web -g "!node_modules" -g "!README.md" -g "!.env.example"。** 预期：未发现密钥。
+- [ ] **步骤 6：提交。** git add web .gitignore；git commit -m "test: verify music creator website"。
+
+## 最终验收清单
+
+- [ ] 账户及所有用户数据均按身份和角色控制访问。
+- [ ] 待支付订单绝不增加余额。
+- [ ] 每个终态任务只发生一次结算或释放。
+- [ ] 已禁用或未配置的 AI 服务商拒绝创建付费任务。
+- [ ] 搜索结果明确来源，只播放授权预览。
+- [ ] AI 完整作品和外部预览可共存于 Windows 风格播放队列。
+- [ ] 桌面侧边栏/固定播放器和移动端导航/迷你播放器均可用。
