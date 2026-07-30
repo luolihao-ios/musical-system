@@ -69,6 +69,34 @@ struct TrackSnapshot: Identifiable, Equatable, Sendable {
     let isAvailable: Bool
     let lastPlayedAt: Date?
 
+    init(
+        id: String,
+        title: String,
+        artist: String,
+        album: String,
+        duration: Double,
+        sourceKind: TrackSourceKind,
+        sourceReference: String,
+        artworkReference: String? = nil,
+        lyricsReference: String? = nil,
+        isLiked: Bool = false,
+        isAvailable: Bool = true,
+        lastPlayedAt: Date? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.artist = artist
+        self.album = album
+        self.duration = duration
+        self.sourceKind = sourceKind
+        self.sourceReference = sourceReference
+        self.artworkReference = artworkReference
+        self.lyricsReference = lyricsReference
+        self.isLiked = isLiked
+        self.isAvailable = isAvailable
+        self.lastPlayedAt = lastPlayedAt
+    }
+
     @MainActor
     init(_ record: TrackRecord) {
         id = record.id
