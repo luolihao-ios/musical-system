@@ -4,6 +4,8 @@ import XCTest
 
 @MainActor
 final class LibraryModelTests: XCTestCase {
+    private var modelContainers: [ModelContainer] = []
+
     func testSearchIsAccentInsensitiveAndPlayUsesFilteredQueue() async throws {
         let store = try makeStore()
         try store.upsert(track(id: "one", title: "Lumière", artist: "Beyoncé"))
@@ -100,6 +102,7 @@ final class LibraryModelTests: XCTestCase {
 
     private func makeStore() throws -> MusicStore {
         let container = try ModelContainerFactory.make(inMemory: true)
+        modelContainers.append(container)
         return try MusicStore(context: container.mainContext)
     }
 
