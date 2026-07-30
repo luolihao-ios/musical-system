@@ -56,6 +56,48 @@ final class LibraryModelTests: XCTestCase {
         XCTAssertTrue(model.tracks[0].isLiked)
     }
 
+    func testGroupsTracksByAlbumAndArtistWithUnknownFallbacks() throws {
+        let store = try makeStore()
+        try store.upsert(
+            TrackRecord(
+                id: "known",
+                title: "夜航星",
+                artist: "测试歌手",
+                album: "测试专辑",
+                duration: 180,
+                sourceKind: .importedFile,
+                sourceReference: "/music/known.m4a"
+            )
+        )
+        try store.upsert(
+            TrackRecord(
+                id: "unknown",
+                title: "纯音乐",
+                artist: "",
+                album: "",
+                duration: 120,
+                sourceKind: .importedFile,
+                sourceReference: "/music/unknown.m4a"
+            )
+        )
+        let model = LibraryModel(
+            store: store,
+            fileImporter: FakeFileImporter(),
+            systemImporter: FakeSystemImporter(result: .imported([])),
+            playback: FakeLibraryPlayback()
+        )
+        try model.reload()
+
+        XCTAssertEqual(
+            Set(model.groups(for: .albums).map(\.title)),
+            Set(["测试专辑", "未知专辑"])
+        )
+        XCTAssertEqual(
+            Set(model.groups(for: .artists).map(\.title)),
+            Set(["测试歌手", "未知歌手"])
+        )
+    }
+
     private func makeStore() throws -> MusicStore {
         let container = try ModelContainerFactory.make(inMemory: true)
         return try MusicStore(context: container.mainContext)

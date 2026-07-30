@@ -113,9 +113,9 @@ final class LibraryModel {
         let grouped = Dictionary(grouping: tracks) { track in
             switch kind {
             case .albums:
-                track.album.isEmpty ? "未知专辑" : track.album
+                return track.album.isEmpty ? "未知专辑" : track.album
             case .artists:
-                track.artist.isEmpty ? "未知歌手" : track.artist
+                return track.artist.isEmpty ? "未知歌手" : track.artist
             case .folders:
                 if track.sourceKind == .mediaLibrary {
                     return "系统音乐资料库"
