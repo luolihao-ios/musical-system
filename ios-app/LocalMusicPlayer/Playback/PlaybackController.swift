@@ -24,8 +24,11 @@ struct SystemRandomIndex: RandomIndexProviding {
 
 @MainActor
 @Observable
-final class PlaybackController {
-    private(set) var state = PlaybackState()
+final class PlaybackController: PlaybackControlling {
+    private(set) var state = PlaybackState() {
+        didSet { onStateChanged?(state) }
+    }
+    @ObservationIgnored var onStateChanged: ((PlaybackState) -> Void)?
 
     private let engine: any AudioEngine
     private let preferencesStore: any PlaybackPreferencesStoring
