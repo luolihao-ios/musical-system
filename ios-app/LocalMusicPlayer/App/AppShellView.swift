@@ -1,27 +1,24 @@
 import SwiftUI
 
 struct AppShellView: View {
+    let container: AppContainer
+
+    @State private var showNowPlaying = false
+
     var body: some View {
         TabView {
             NavigationStack {
-                ContentUnavailableView(
-                    "还没有本地音乐",
-                    systemImage: "music.note.list",
-                    description: Text("从“文件”或设备音乐资料库导入")
+                LibraryView(
+                    model: container.libraryModel,
+                    playlists: container.playlistsModel
                 )
-                .navigationTitle("音乐库")
             }
             .tabItem {
                 Label("音乐库", systemImage: "music.note.house")
             }
 
             NavigationStack {
-                ContentUnavailableView(
-                    "还没有歌单",
-                    systemImage: "music.note.list",
-                    description: Text("创建一个歌单整理喜欢的音乐")
-                )
-                .navigationTitle("歌单")
+                PlaylistsView(model: container.playlistsModel)
             }
             .tabItem {
                 Label("歌单", systemImage: "rectangle.stack")
@@ -29,8 +26,18 @@ struct AppShellView: View {
 
             NavigationStack {
                 List {
-                    LabeledContent("本地播放", value: "不联网下载")
-                    LabeledContent("最低系统", value: "iOS 17")
+                    Section("播放") {
+                        LabeledContent("来源", value: "仅本机文件")
+                        LabeledContent("后台播放", value: "已启用")
+                    }
+                    Section("格式") {
+                        Text("MP3 · M4A/AAC · FLAC · WAV · AIFF")
+                        Text("iOS 版不支持 OGG")
+                            .foregroundStyle(.secondary)
+                    }
+                    Section("隐私") {
+                        Text("不接入在线曲库，不下载或上传音乐。")
+                    }
                 }
                 .navigationTitle("设置")
             }
@@ -39,5 +46,16 @@ struct AppShellView: View {
             }
         }
         .tint(PlayerTheme.accent)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if container.nowPlayingModel.state.currentTrack != nil {
+                MiniPlayerView(
+                    model: container.nowPlayingModel,
+                    openNowPlaying: { showNowPlaying = true }
+                )
+            }
+        }
+        .sheet(isPresented: $showNowPlaying) {
+            NowPlayingView(model: container.nowPlayingModel)
+        }
     }
 }
