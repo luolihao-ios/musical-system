@@ -74,7 +74,7 @@ class _LibraryPageState extends State<LibraryPage> {
             SliverFillRemaining(
               hasScrollBody: false,
               child: Center(
-                child: Text(widget.tracks.isEmpty ? '导入本地音乐' : '没有找到匹配的歌曲'),
+                child: Text(widget.tracks.isEmpty ? '还没有本地歌曲' : '没有找到匹配的歌曲'),
               ),
             )
           else
