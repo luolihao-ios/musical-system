@@ -15,7 +15,9 @@ final class PlaylistsModelTests: XCTestCase {
         XCTAssertTrue(try model.delete(
             model.playlists.first { $0.id == playlist.id }!
         ))
-        let liked = try XCTUnwrap(model.playlists.first(\.isBuiltIn))
+        let liked = try XCTUnwrap(
+            model.playlists.first(where: \.isBuiltIn)
+        )
         XCTAssertFalse(try model.rename(liked, to: "不能改名"))
         XCTAssertFalse(try model.delete(liked))
     }
