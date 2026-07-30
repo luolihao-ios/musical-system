@@ -80,7 +80,7 @@ final class NowPlayingBridgeTests: XCTestCase {
 @MainActor
 private final class FakePlaybackController: PlaybackControlling {
     var state: PlaybackState
-    var onStateChanged: ((PlaybackState) -> Void)?
+    private var observers: [UUID: (PlaybackState) -> Void] = [:]
     private(set) var playCount = 0
     private(set) var pauseCount = 0
     private(set) var nextCount = 0
@@ -109,6 +109,19 @@ private final class FakePlaybackController: PlaybackControlling {
 
     func seek(to position: TimeInterval) throws {
         lastSeek = position
+    }
+
+    func observeState(
+        _ observer: @escaping (PlaybackState) -> Void
+    ) -> UUID {
+        let id = UUID()
+        observers[id] = observer
+        observer(state)
+        return id
+    }
+
+    func removeStateObserver(_ id: UUID) {
+        observers[id] = nil
     }
 }
 

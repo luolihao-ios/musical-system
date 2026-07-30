@@ -26,9 +26,12 @@ struct SystemRandomIndex: RandomIndexProviding {
 @Observable
 final class PlaybackController: PlaybackControlling {
     private(set) var state = PlaybackState() {
-        didSet { onStateChanged?(state) }
+        didSet {
+            Array(stateObservers.values).forEach { $0(state) }
+        }
     }
-    @ObservationIgnored var onStateChanged: ((PlaybackState) -> Void)?
+    @ObservationIgnored private var stateObservers:
+        [UUID: (PlaybackState) -> Void] = [:]
 
     private let engine: any AudioEngine
     private let preferencesStore: any PlaybackPreferencesStoring
@@ -131,6 +134,20 @@ final class PlaybackController: PlaybackControlling {
         }
         guard moveToPreviousAvailable() else { return }
         try await loadAndPlayCurrent()
+    }
+
+    @discardableResult
+    func observeState(
+        _ observer: @escaping (PlaybackState) -> Void
+    ) -> UUID {
+        let id = UUID()
+        stateObservers[id] = observer
+        observer(state)
+        return id
+    }
+
+    func removeStateObserver(_ id: UUID) {
+        stateObservers[id] = nil
     }
 
     private func handleCompletion() async throws {

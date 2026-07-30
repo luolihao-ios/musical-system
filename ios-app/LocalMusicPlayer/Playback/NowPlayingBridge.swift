@@ -5,13 +5,17 @@ import UIKit
 @MainActor
 protocol PlaybackControlling: AnyObject {
     var state: PlaybackState { get }
-    var onStateChanged: ((PlaybackState) -> Void)? { get set }
 
     func play() async throws
     func pause() throws
     func next() async throws
     func previous() async throws
     func seek(to position: TimeInterval) throws
+    @discardableResult
+    func observeState(
+        _ observer: @escaping (PlaybackState) -> Void
+    ) -> UUID
+    func removeStateObserver(_ id: UUID)
 }
 
 struct SystemNowPlayingInfo: Equatable, Sendable {
@@ -49,6 +53,7 @@ protocol SystemNowPlayingSession: AnyObject {
 final class NowPlayingBridge {
     private let controller: any PlaybackControlling
     private let session: any SystemNowPlayingSession
+    private var stateObserverID: UUID?
 
     init(
         controller: any PlaybackControlling,
@@ -71,14 +76,15 @@ final class NowPlayingBridge {
         session.onSeek = { [weak controller] position in
             try? controller?.seek(to: position)
         }
-        controller.onStateChanged = { [weak self] state in
+        stateObserverID = controller.observeState { [weak self] state in
             self?.update(state)
         }
-        update(controller.state)
     }
 
     deinit {
-        controller.onStateChanged = nil
+        if let stateObserverID {
+            controller.removeStateObserver(stateObserverID)
+        }
         session.onPlay = nil
         session.onPause = nil
         session.onNext = nil
