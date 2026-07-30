@@ -1,0 +1,42 @@
+name: Windows native installer
+
+on:
+  push:
+    paths:
+      - "windows-app/**"
+      - ".github/workflows/windows-native.yml"
+  pull_request:
+    paths:
+      - "windows-app/**"
+      - ".github/workflows/windows-native.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+      - name: Verify
+        shell: pwsh
+        run: ./windows-app/scripts/verify.ps1
+      - name: Install Inno Setup 7
+        shell: pwsh
+        run: >
+          winget install --id JRSoftware.InnoSetup.7 --exact --source winget
+          --silent --accept-package-agreements --accept-source-agreements
+      - name: Build installer
+        shell: pwsh
+        run: >
+          ./windows-app/scripts/package.ps1
+          -IsccPath "${env:ProgramFiles}\Inno Setup 7\ISCC.exe"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: LocalMusicPlayer-Windows-x64
+          path: windows-app/artifacts/installer/LocalMusicPlayer-Setup.exe
+          if-no-files-found: error
