@@ -47,17 +47,12 @@ final class FileImportService {
             at: rootDirectory,
             withIntermediateDirectories: true
         )
-        let lyricFiles = Dictionary(
-            uniqueKeysWithValues: files
-                .filter { $0.kind == .lyrics }
-                .map {
-                    (
-                        $0.sourceURL.deletingPathExtension()
-                            .lastPathComponent.lowercased(),
-                        $0
-                    )
-                }
-        )
+        var lyricFiles: [String: ImportedFile] = [:]
+        for file in files where file.kind == .lyrics {
+            let key = file.sourceURL.deletingPathExtension()
+                .lastPathComponent.lowercased()
+            lyricFiles[key] = file
+        }
         var tracks: [TrackRecord] = []
         for file in files where file.kind == .audio {
             let ext = file.sourceURL.pathExtension.lowercased()

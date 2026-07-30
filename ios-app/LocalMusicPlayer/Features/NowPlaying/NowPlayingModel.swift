@@ -39,7 +39,7 @@ final class NowPlayingModel {
         }
     }
 
-    deinit {
+    isolated deinit {
         if let observerID {
             playback.removeStateObserver(observerID)
         }
@@ -76,6 +76,20 @@ final class NowPlayingModel {
         try playback.seek(
             to: state.duration * min(max(fraction, 0), 1)
         )
+    }
+
+    func setVolume(_ volume: Double) {
+        try? playback.setVolume(volume)
+    }
+
+    func cycleMode() {
+        let modes = PlaybackMode.allCases
+        let current = modes.firstIndex(of: state.mode) ?? 0
+        try? playback.setMode(modes[(current + 1) % modes.count])
+    }
+
+    func playQueueItem(at index: Int) async {
+        try? await playback.playQueueItem(at: index)
     }
 
     private func apply(_ state: PlaybackState) {

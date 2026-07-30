@@ -46,6 +46,15 @@ final class MusicStoreTests: XCTestCase {
             try store.playlistTracks(playlistID: playlist.id).map(\.id),
             ["two", "one"]
         )
+        try store.moveTracks(
+            in: playlist.id,
+            fromOffsets: IndexSet(integer: 0),
+            toOffset: 2
+        )
+        XCTAssertEqual(
+            try store.playlistTracks(playlistID: playlist.id).map(\.id),
+            ["one", "two"]
+        )
         XCTAssertTrue(try store.renamePlaylist(id: playlist.id, name: "深夜收藏"))
         XCTAssertFalse(
             try store.renamePlaylist(

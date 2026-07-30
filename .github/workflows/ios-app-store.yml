@@ -11,8 +11,8 @@ jobs:
     runs-on: macos-latest
     env:
       BUNDLE_ID: com.luolihao.musicalsystem
-      KEYCHAIN_PATH: ${{ runner.temp }}/local-music-signing.keychain-db
-      TEMP_SIGNING_DIR: ${{ runner.temp }}/local-music-signing
+      KEYCHAIN_PATH: /tmp/local-music-signing.keychain-db
+      TEMP_SIGNING_DIR: /tmp/local-music-signing
     steps:
       - uses: actions/checkout@v7
       - name: Install XcodeGen

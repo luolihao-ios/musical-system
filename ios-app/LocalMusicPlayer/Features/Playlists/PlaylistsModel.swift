@@ -75,6 +75,18 @@ final class PlaylistsModel {
         try store.remove(trackID: trackID, from: playlistID)
     }
 
+    func move(
+        in playlistID: String,
+        fromOffsets: IndexSet,
+        toOffset: Int
+    ) throws {
+        try store.moveTracks(
+            in: playlistID,
+            fromOffsets: fromOffsets,
+            toOffset: toOffset
+        )
+    }
+
     func play(
         _ track: TrackSnapshot,
         in playlist: PlaylistSnapshot

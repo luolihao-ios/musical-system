@@ -39,6 +39,7 @@ struct NowPlayingView: View {
                             }
                             progressControls
                             transportControls
+                            playbackOptions
                         }
                         .padding(.horizontal, 24)
                         .padding(.bottom, 28)
@@ -158,30 +159,64 @@ struct NowPlayingView: View {
         .buttonStyle(.plain)
     }
 
+    private var playbackOptions: some View {
+        HStack(spacing: 16) {
+            Button {
+                model.cycleMode()
+            } label: {
+                Label(modeLabel, systemImage: modeIcon)
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("播放模式：\(modeLabel)")
+
+            Image(systemName: "speaker.fill")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            Slider(
+                value: Binding(
+                    get: { model.state.volume },
+                    set: { model.setVolume($0) }
+                ),
+                in: 0...1
+            )
+            .tint(PlayerTheme.accent)
+            .accessibilityLabel("音量")
+            Image(systemName: "speaker.wave.3.fill")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+        }
+    }
+
     private var queueSheet: some View {
         NavigationStack {
             List(
                 Array(model.state.queue.enumerated()),
                 id: \.element.id
-            ) { index, track in
-                HStack {
-                    Image(
-                        systemName: index == model.state.currentIndex
-                            ? "speaker.wave.2.fill"
-                            : "music.note"
-                    )
-                    .foregroundStyle(
-                        index == model.state.currentIndex
-                            ? PlayerTheme.accent
-                            : Color.secondary
-                    )
-                    VStack(alignment: .leading) {
-                        Text(track.title)
-                        Text(track.artist)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+            ) { entry in
+                Button {
+                    Task { await model.playQueueItem(at: entry.offset) }
+                } label: {
+                    HStack {
+                        Image(
+                            systemName: entry.offset == model.state.currentIndex
+                                ? "speaker.wave.2.fill"
+                                : "music.note"
+                        )
+                        .foregroundStyle(
+                            entry.offset == model.state.currentIndex
+                                ? PlayerTheme.accent
+                                : Color.secondary
+                        )
+                        VStack(alignment: .leading) {
+                            Text(entry.element.title)
+                            Text(entry.element.artist)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
+                .buttonStyle(.plain)
             }
             .navigationTitle("播放队列")
             .navigationBarTitleDisplayMode(.inline)
@@ -193,5 +228,21 @@ struct NowPlayingView: View {
         guard seconds.isFinite else { return "00:00" }
         let value = max(Int(seconds), 0)
         return String(format: "%02d:%02d", value / 60, value % 60)
+    }
+
+    private var modeIcon: String {
+        switch model.state.mode {
+        case .repeatAll: "repeat"
+        case .repeatOne: "repeat.1"
+        case .shuffle: "shuffle"
+        }
+    }
+
+    private var modeLabel: String {
+        switch model.state.mode {
+        case .repeatAll: "列表循环"
+        case .repeatOne: "单曲循环"
+        case .shuffle: "随机播放"
+        }
     }
 }

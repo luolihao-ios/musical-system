@@ -40,6 +40,26 @@ final class MusicStore {
         }
     }
 
+    func refreshAvailability(fileManager: FileManager = .default) throws {
+        let records = try context.fetch(FetchDescriptor<TrackRecord>())
+        for record in records {
+            switch record.sourceKind {
+            case .importedFile:
+                record.isAvailable = fileManager.fileExists(
+                    atPath: record.sourceReference
+                )
+            case .mediaLibrary:
+                guard let url = URL(string: record.sourceReference) else {
+                    record.isAvailable = false
+                    continue
+                }
+                record.isAvailable = !url.isFileURL
+                    || fileManager.fileExists(atPath: url.path)
+            }
+        }
+        try context.save()
+    }
+
     func track(id: String) throws -> TrackRecord? {
         let trackID = id
         var descriptor = FetchDescriptor<TrackRecord>(
@@ -142,6 +162,36 @@ final class MusicStore {
             )
         )
         entries.forEach { context.delete($0) }
+        try context.save()
+    }
+
+    func moveTracks(
+        in playlistID: String,
+        fromOffsets: IndexSet,
+        toOffset: Int
+    ) throws {
+        guard playlistID != Self.likedPlaylistID else { return }
+        let requestedID = playlistID
+        let entries = try context.fetch(
+            FetchDescriptor<PlaylistEntryRecord>(
+                predicate: #Predicate { $0.playlistID == requestedID },
+                sortBy: [SortDescriptor(\.position)]
+            )
+        )
+        var reordered = entries
+        let moving = fromOffsets.sorted().map { reordered[$0] }
+        for index in fromOffsets.sorted(by: >) {
+            reordered.remove(at: index)
+        }
+        let removedBeforeTarget = fromOffsets.filter { $0 < toOffset }.count
+        let insertionIndex = min(
+            max(toOffset - removedBeforeTarget, 0),
+            reordered.count
+        )
+        reordered.insert(contentsOf: moving, at: insertionIndex)
+        for (position, entry) in reordered.enumerated() {
+            entry.position = position
+        }
         try context.save()
     }
 

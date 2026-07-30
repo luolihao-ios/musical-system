@@ -7,24 +7,29 @@ struct SyncedLyricsView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 18) {
-                    ForEach(Array(model.lyricLines.enumerated()), id: \.element.id) {
-                        index,
-                        line in
-                        Text(line.text.isEmpty ? " " : line.text)
+                    ForEach(
+                        Array(model.lyricLines.enumerated()),
+                        id: \.element.id
+                    ) { entry in
+                        Text(
+                            entry.element.text.isEmpty
+                                ? " "
+                                : entry.element.text
+                        )
                             .font(
-                                index == model.currentLyricIndex
+                                entry.offset == model.currentLyricIndex
                                     ? .title3.weight(.semibold)
                                     : .body
                             )
                             .foregroundStyle(
-                                index == model.currentLyricIndex
+                                entry.offset == model.currentLyricIndex
                                     ? PlayerTheme.accent
                                     : Color.secondary
                             )
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .id(index)
+                            .id(entry.offset)
                             .accessibilityAddTraits(
-                                index == model.currentLyricIndex
+                                entry.offset == model.currentLyricIndex
                                     ? .isSelected
                                     : []
                             )

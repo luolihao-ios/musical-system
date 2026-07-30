@@ -72,6 +72,26 @@ final class PlaybackControllerTests: XCTestCase {
         XCTAssertEqual(preferences.saved.lastPosition, 180)
     }
 
+    func testVolumeModeAndQueueSelectionAreApplied() async throws {
+        let engine = FakeAudioEngine()
+        let preferences = FakePreferencesStore()
+        let controller = PlaybackController(
+            engine: engine,
+            preferencesStore: preferences
+        )
+        try controller.loadQueue([track("one"), track("two")])
+
+        try controller.setVolume(0.25)
+        try controller.setMode(.shuffle)
+        try await controller.playQueueItem(at: 1)
+
+        XCTAssertEqual(controller.state.volume, 0.25)
+        XCTAssertEqual(controller.state.mode, .shuffle)
+        XCTAssertEqual(controller.state.currentTrack?.id, "two")
+        XCTAssertEqual(engine.volume, 0.25)
+        XCTAssertEqual(preferences.saved.lastTrackID, "two")
+    }
+
     private func track(
         _ id: String,
         available: Bool = true

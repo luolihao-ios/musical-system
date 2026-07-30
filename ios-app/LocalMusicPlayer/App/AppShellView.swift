@@ -3,6 +3,7 @@ import SwiftUI
 struct AppShellView: View {
     let container: AppContainer
 
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showNowPlaying = false
 
     var body: some View {
@@ -56,6 +57,11 @@ struct AppShellView: View {
         }
         .sheet(isPresented: $showNowPlaying) {
             NowPlayingView(model: container.nowPlayingModel)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active {
+                try? container.playback.persistCurrentState()
+            }
         }
     }
 }

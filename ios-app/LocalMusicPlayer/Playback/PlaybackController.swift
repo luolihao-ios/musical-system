@@ -122,6 +122,20 @@ final class PlaybackController: PlaybackControlling {
         try savePreferences()
     }
 
+    func persistCurrentState() throws {
+        state.position = engine.position
+        try savePreferences()
+    }
+
+    func playQueueItem(at index: Int) async throws {
+        guard state.queue.indices.contains(index),
+              state.queue[index].isAvailable else {
+            return
+        }
+        state.currentIndex = index
+        try await loadAndPlayCurrent()
+    }
+
     func next() async throws {
         guard moveToNextAvailable() else { return }
         try await loadAndPlayCurrent()

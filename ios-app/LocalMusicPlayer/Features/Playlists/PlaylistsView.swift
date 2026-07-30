@@ -80,33 +80,42 @@ private struct PlaylistDetailView: View {
                     description: Text("可从音乐库的歌曲菜单添加")
                 )
             } else {
-                List(tracks) { track in
-                    Button {
-                        Task { try? await model.play(track, in: playlist) }
-                    } label: {
-                        HStack(spacing: 12) {
-                            ArtworkView(path: track.artworkReference)
-                                .frame(width: 48, height: 48)
-                            VStack(alignment: .leading) {
-                                Text(track.title)
-                                    .foregroundStyle(.primary)
-                                Text(track.artist)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                List {
+                    ForEach(tracks) { track in
+                        Button {
+                            Task { try? await model.play(track, in: playlist) }
+                        } label: {
+                            HStack(spacing: 12) {
+                                ArtworkView(path: track.artworkReference)
+                                    .frame(width: 48, height: 48)
+                                VStack(alignment: .leading) {
+                                    Text(track.title)
+                                        .foregroundStyle(.primary)
+                                    Text(track.artist)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .swipeActions {
+                            if !playlist.isBuiltIn {
+                                Button("移除", role: .destructive) {
+                                    try? model.remove(
+                                        trackID: track.id,
+                                        from: playlist.id
+                                    )
+                                    reload()
+                                }
                             }
                         }
                     }
-                    .buttonStyle(.plain)
-                    .swipeActions {
-                        if !playlist.isBuiltIn {
-                            Button("移除", role: .destructive) {
-                                try? model.remove(
-                                    trackID: track.id,
-                                    from: playlist.id
-                                )
-                                reload()
-                            }
-                        }
+                    .onMove { fromOffsets, toOffset in
+                        guard !playlist.isBuiltIn else { return }
+                        move(
+                            fromOffsets: fromOffsets,
+                            toOffset: toOffset
+                        )
                     }
                 }
             }
@@ -114,6 +123,9 @@ private struct PlaylistDetailView: View {
         .navigationTitle(playlist.name)
         .toolbar {
             if !playlist.isBuiltIn {
+                ToolbarItem(placement: .topBarLeading) {
+                    EditButton()
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("改名") {
                         renameText = playlist.name
@@ -134,5 +146,14 @@ private struct PlaylistDetailView: View {
 
     private func reload() {
         tracks = (try? model.tracks(in: playlist)) ?? []
+    }
+
+    private func move(fromOffsets: IndexSet, toOffset: Int) {
+        try? model.move(
+            in: playlist.id,
+            fromOffsets: fromOffsets,
+            toOffset: toOffset
+        )
+        reload()
     }
 }

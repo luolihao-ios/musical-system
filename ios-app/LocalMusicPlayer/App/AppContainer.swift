@@ -18,6 +18,7 @@ final class AppContainer {
         let playback = PlaybackController(
             preferencesStore: store
         )
+        try store.refreshAvailability()
         try playback.initialize()
         let bridge = NowPlayingBridge(controller: playback)
         let libraryModel = LibraryModel(

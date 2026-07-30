@@ -24,7 +24,7 @@ final class AVPlayerEngine: AudioEngine {
         }
     }
 
-    deinit {
+    isolated deinit {
         if let periodicObserver {
             player.removeTimeObserver(periodicObserver)
         }

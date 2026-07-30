@@ -11,11 +11,20 @@ protocol PlaybackControlling: AnyObject {
     func next() async throws
     func previous() async throws
     func seek(to position: TimeInterval) throws
+    func setVolume(_ volume: Double) throws
+    func setMode(_ mode: PlaybackMode) throws
+    func playQueueItem(at index: Int) async throws
     @discardableResult
     func observeState(
         _ observer: @escaping (PlaybackState) -> Void
     ) -> UUID
     func removeStateObserver(_ id: UUID)
+}
+
+extension PlaybackControlling {
+    func setVolume(_ volume: Double) throws {}
+    func setMode(_ mode: PlaybackMode) throws {}
+    func playQueueItem(at index: Int) async throws {}
 }
 
 struct SystemNowPlayingInfo: Equatable, Sendable {
@@ -81,7 +90,7 @@ final class NowPlayingBridge {
         }
     }
 
-    deinit {
+    isolated deinit {
         if let stateObserverID {
             controller.removeStateObserver(stateObserverID)
         }
@@ -156,7 +165,7 @@ final class MPNowPlayingSession: SystemNowPlayingSession {
         }
     }
 
-    deinit {
+    isolated deinit {
         commandTargets.forEach { command, target in
             command.removeTarget(target)
         }

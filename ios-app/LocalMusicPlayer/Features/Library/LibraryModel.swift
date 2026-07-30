@@ -26,6 +26,36 @@ protocol LibraryPlaybackControlling: AnyObject {
 extension PlaybackController: LibraryPlaybackControlling {
 }
 
+enum LibraryGroupKind: String, CaseIterable, Identifiable, Sendable {
+    case albums
+    case artists
+    case folders
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .albums: "专辑"
+        case .artists: "歌手"
+        case .folders: "文件夹"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .albums: "square.stack"
+        case .artists: "music.mic"
+        case .folders: "folder"
+        }
+    }
+}
+
+struct LibraryTrackGroup: Identifiable, Equatable, Sendable {
+    let id: String
+    let title: String
+    let tracks: [TrackSnapshot]
+}
+
 @MainActor
 @Observable
 final class LibraryModel {
@@ -67,6 +97,44 @@ final class LibraryModel {
                     locale: .current
                 ).localizedStandardContains(query)
             }
+        }
+    }
+
+    var recentlyPlayed: [TrackSnapshot] {
+        tracks
+            .filter { $0.lastPlayedAt != nil }
+            .sorted {
+                ($0.lastPlayedAt ?? .distantPast)
+                    > ($1.lastPlayedAt ?? .distantPast)
+            }
+    }
+
+    func groups(for kind: LibraryGroupKind) -> [LibraryTrackGroup] {
+        let grouped = Dictionary(grouping: tracks) { track in
+            switch kind {
+            case .albums:
+                track.album.isEmpty ? "未知专辑" : track.album
+            case .artists:
+                track.artist.isEmpty ? "未知歌手" : track.artist
+            case .folders:
+                if track.sourceKind == .mediaLibrary {
+                    return "系统音乐资料库"
+                }
+                return "“文件”App 导入"
+            }
+        }
+        return grouped.map { key, value in
+            LibraryTrackGroup(
+                id: "\(kind.rawValue)|\(key)",
+                title: key,
+                tracks: value.sorted {
+                    $0.title.localizedStandardCompare($1.title)
+                        == .orderedAscending
+                }
+            )
+        }
+        .sorted {
+            $0.title.localizedStandardCompare($1.title) == .orderedAscending
         }
     }
 
