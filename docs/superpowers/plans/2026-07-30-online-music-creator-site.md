@@ -12,6 +12,7 @@
 
 - This is independent from the existing Windows/iOS local music-player plan.
 - Use deep gray, warm red accents, rounded cover art and translucent panels to match the Windows player.
+- The first-release interface uses Simplified Chinese for navigation, forms, errors, account, order, and player copy; centralize UI copy so future localization does not require component rewrites.
 - External music can use only licensed/official previews and source links. Never cache, download, proxy, or full-stream copyrighted third-party audio.
 - Provider and future payment secrets remain server-only environment variables.
 - PostgreSQL is the system of record. Store generated audio as authorized provider or object-storage URLs; do not store third-party external audio.
@@ -393,4 +394,3 @@ git commit -m "test: verify music creator website"
 - [ ] Search labels its source and plays only authorized previews.
 - [ ] Generated full works and previews coexist in the Windows-style queue.
 - [ ] Desktop sidebar/fixed player and mobile navigation/mini player respond correctly.
-
