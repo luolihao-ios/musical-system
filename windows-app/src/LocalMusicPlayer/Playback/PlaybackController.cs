@@ -2,7 +2,7 @@ using LocalMusicPlayer.Domain;
 
 namespace LocalMusicPlayer.Playback;
 
-public sealed class PlaybackController : IAsyncDisposable
+public sealed class PlaybackController : IPlaybackCommands, IAsyncDisposable
 {
     private readonly IAudioOutput _audioOutput;
     private readonly IPlaybackPreferences _preferences;
