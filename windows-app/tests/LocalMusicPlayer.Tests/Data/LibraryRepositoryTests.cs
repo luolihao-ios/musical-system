@@ -1,6 +1,7 @@
 using FluentAssertions;
 using LocalMusicPlayer.Data;
 using LocalMusicPlayer.Domain;
+using LocalMusicPlayer.Playback;
 
 namespace LocalMusicPlayer.Tests.Data;
 
@@ -69,6 +70,23 @@ public sealed class LibraryRepositoryTests : IDisposable
         await repository.RecordPlayAsync(track.Id, playedAt);
 
         (await repository.GetTracksAsync()).Single().LastPlayedAt.Should().Be(playedAt);
+    }
+
+    [Fact]
+    public async Task PlaybackPreferences_RoundTripThroughRepositorySettings()
+    {
+        Directory.CreateDirectory(_directory);
+        var repository = await CreateRepositoryAsync(Path.Combine(_directory, "library.sqlite"));
+        var preferences = new RepositoryPlaybackPreferences(repository);
+        var expected = new PlaybackPreferences(
+            0.35,
+            PlaybackMode.Shuffle,
+            "track-7",
+            TimeSpan.FromSeconds(73));
+
+        await preferences.SaveAsync(expected);
+
+        (await preferences.LoadAsync()).Should().Be(expected);
     }
 
     public void Dispose()
