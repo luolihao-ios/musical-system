@@ -1,5 +1,6 @@
 using LocalMusicPlayer.Data;
 using LocalMusicPlayer.Library;
+using LocalMusicPlayer.Lyrics;
 using LocalMusicPlayer.Playback;
 using LocalMusicPlayer.SystemMedia;
 using LocalMusicPlayer.ViewModels;
@@ -64,6 +65,7 @@ public sealed class AppServices : IAsyncDisposable
         var main = new MainViewModel(
             new LibraryViewModel(repository, scanner, playback),
             new PlaylistsViewModel(repository),
+            new NowPlayingViewModel(playback, new FileLyricsSource()),
             playback);
         await main.InitializeAsync(cancellationToken);
         return new AppServices(

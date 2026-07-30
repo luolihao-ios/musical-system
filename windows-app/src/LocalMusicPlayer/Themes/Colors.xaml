@@ -1,0 +1,19 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Color x:Key="WindowColor">#100F13</Color>
+    <Color x:Key="PanelColor">#19171D</Color>
+    <Color x:Key="AccentColor">#E94B5F</Color>
+    <Color x:Key="AccentDeepColor">#A91F3D</Color>
+    <Color x:Key="TextColor">#F7F3F4</Color>
+    <Color x:Key="MutedTextColor">#97909B</Color>
+    <SolidColorBrush x:Key="WindowBackgroundBrush"
+                     Color="{StaticResource WindowColor}" />
+    <SolidColorBrush x:Key="PanelBackgroundBrush"
+                     Color="{StaticResource PanelColor}" />
+    <SolidColorBrush x:Key="PlayerAccentBrush"
+                     Color="{StaticResource AccentColor}" />
+    <SolidColorBrush x:Key="PlayerTextBrush"
+                     Color="{StaticResource TextColor}" />
+    <SolidColorBrush x:Key="MutedTextBrush"
+                     Color="{StaticResource MutedTextColor}" />
+</ResourceDictionary>

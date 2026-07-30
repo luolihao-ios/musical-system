@@ -46,6 +46,9 @@
         <DataTemplate DataType="{x:Type vm:PlaylistsViewModel}">
             <views:PlaylistsView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:NowPlayingViewModel}">
+            <views:NowPlayingView />
+        </DataTemplate>
     </Window.Resources>
 
     <Grid>
@@ -67,6 +70,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="34" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
@@ -95,10 +99,15 @@
                         Content="♫   本地音乐"
                         Command="{Binding ShowLibraryCommand}" />
                 <Button Grid.Row="3"
+                        Margin="0,0,0,8"
                         HorizontalContentAlignment="Left"
                         Content="▤   我的歌单"
                         Command="{Binding ShowPlaylistsCommand}" />
-                <Border Grid.Row="5"
+                <Button Grid.Row="4"
+                        HorizontalContentAlignment="Left"
+                        Content="◉   正在播放"
+                        Command="{Binding ShowNowPlayingCommand}" />
+                <Border Grid.Row="6"
                         Padding="12"
                         Background="#201D24"
                         CornerRadius="10">

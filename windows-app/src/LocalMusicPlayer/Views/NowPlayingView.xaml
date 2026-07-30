@@ -1,0 +1,149 @@
+<UserControl x:Class="LocalMusicPlayer.Views.NowPlayingView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="clr-namespace:LocalMusicPlayer.Views"
+             Background="Transparent"
+             Foreground="#F7F3F4">
+    <Border CornerRadius="18">
+        <Border.Background>
+            <RadialGradientBrush Center="0.26,0.36"
+                                 GradientOrigin="0.26,0.36"
+                                 RadiusX="0.9"
+                                 RadiusY="0.9">
+                <GradientStop Color="#3B1723" Offset="0" />
+                <GradientStop Color="#19151C" Offset="0.44" />
+                <GradientStop Color="#111015" Offset="1" />
+            </RadialGradientBrush>
+        </Border.Background>
+        <Grid Margin="34,28">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="104" />
+            </Grid.RowDefinitions>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="46*" />
+                    <ColumnDefinition Width="54*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                    <views:RecordVisual />
+                    <TextBlock Margin="0,18,0,0"
+                               Text="{Binding CurrentTrack.Title,
+                                              TargetNullValue=选择一首本地音乐}"
+                               HorizontalAlignment="Center"
+                               FontSize="23"
+                               FontWeight="SemiBold" />
+                    <TextBlock Margin="0,7,0,0"
+                               Text="{Binding CurrentTrack.Artist,
+                                              TargetNullValue=暮色音乐}"
+                               HorizontalAlignment="Center"
+                               Foreground="#AAA2AD" />
+                </StackPanel>
+                <Grid Grid.Column="1"
+                      Margin="46,12,12,12">
+                    <Grid.Style>
+                        <Style TargetType="Grid">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasLyrics}"
+                                             Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Grid.Style>
+                    <views:SyncedLyricsView />
+                </Grid>
+                <Grid Grid.Column="1"
+                      Margin="46,12,12,12">
+                    <Grid.Style>
+                        <Style TargetType="Grid">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasLyrics}"
+                                             Value="False">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Grid.Style>
+                    <StackPanel HorizontalAlignment="Center"
+                                VerticalAlignment="Center">
+                        <TextBlock Text="◌"
+                                   FontSize="74"
+                                   Foreground="#E94B5F"
+                                   HorizontalAlignment="Center">
+                            <TextBlock.Effect>
+                                <DropShadowEffect Color="#E94B5F"
+                                                  BlurRadius="26"
+                                                  ShadowDepth="0"
+                                                  Opacity="0.7" />
+                            </TextBlock.Effect>
+                        </TextBlock>
+                        <TextBlock Margin="0,18,0,0"
+                                   Text="这一刻没有同步歌词"
+                                   FontSize="20"
+                                   FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" />
+                        <TextBlock Margin="0,8,0,0"
+                                   Text="让唱片和光影陪音乐继续旋转"
+                                   Foreground="#9C949F"
+                                   HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+            <Grid Grid.Row="1"
+                  Margin="50,12,50,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="34" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="50" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="50" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding PositionText}"
+                               Foreground="#98909B"
+                               VerticalAlignment="Center" />
+                    <Slider x:Name="ProgressSlider"
+                            Grid.Column="1"
+                            Margin="12,0"
+                            Minimum="0"
+                            Maximum="1"
+                            Value="{Binding Progress,
+                                            Mode=OneWay}"
+                            VerticalAlignment="Center"
+                            PreviewMouseLeftButtonUp="ProgressSlider_MouseLeftButtonUp" />
+                    <TextBlock Grid.Column="2"
+                               Text="{Binding DurationText}"
+                               Foreground="#98909B"
+                               HorizontalAlignment="Right"
+                               VerticalAlignment="Center" />
+                </Grid>
+                <StackPanel Grid.Row="1"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                    <Button Style="{StaticResource RoundPlayerButton}"
+                            Content="‹"
+                            FontSize="24"
+                            Command="{Binding PreviousCommand}" />
+                    <Button Margin="16,0"
+                            Style="{StaticResource RoundPlayerButton}"
+                            Width="62"
+                            Height="62"
+                            Background="#E94B5F"
+                            Content="▶ Ⅱ"
+                            Command="{Binding TogglePlaybackCommand}" />
+                    <Button Style="{StaticResource RoundPlayerButton}"
+                            Content="›"
+                            FontSize="24"
+                            Command="{Binding NextCommand}" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>

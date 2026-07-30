@@ -1,0 +1,54 @@
+<UserControl x:Class="LocalMusicPlayer.Views.SyncedLyricsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="Transparent">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <TextBlock Margin="0,0,0,18"
+                   Text="{Binding CurrentLyricText,
+                                  TargetNullValue=音乐正在流动}"
+                   Foreground="#F7F3F4"
+                   FontSize="24"
+                   FontWeight="SemiBold"
+                   TextWrapping="Wrap" />
+        <ListBox x:Name="LyricsList"
+                 Grid.Row="1"
+                 ItemsSource="{Binding LyricLines}"
+                 SelectedIndex="{Binding CurrentLyricIndex,
+                                         Mode=OneWay}"
+                 Background="Transparent"
+                 BorderThickness="0"
+                 IsHitTestVisible="False"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                 VirtualizingPanel.IsVirtualizing="True"
+                 VirtualizingPanel.VirtualizationMode="Recycling">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="Foreground" Value="#6F6873" />
+                    <Setter Property="FontSize" Value="15" />
+                    <Setter Property="Padding" Value="0,7" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="BorderThickness" Value="0" />
+                    <Style.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Foreground" Value="#E94B5F" />
+                            <Setter Property="FontSize" Value="18" />
+                            <Setter Property="FontWeight" Value="SemiBold" />
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding Text}"
+                               TextWrapping="Wrap" />
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </Grid>
+</UserControl>

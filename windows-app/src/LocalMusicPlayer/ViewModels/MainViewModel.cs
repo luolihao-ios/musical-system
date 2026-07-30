@@ -14,15 +14,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public MainViewModel(
         LibraryViewModel library,
         PlaylistsViewModel playlists,
+        NowPlayingViewModel nowPlaying,
         IPlaybackCommands playback)
     {
         Library = library;
         Playlists = playlists;
+        NowPlaying = nowPlaying;
         _playback = playback;
         _currentPage = library;
         _playbackSnapshot = playback.Snapshot;
         ShowLibraryCommand = new RelayCommand(ShowLibrary);
         ShowPlaylistsCommand = new RelayCommand(ShowPlaylists);
+        ShowNowPlayingCommand = new RelayCommand(ShowNowPlaying);
         TogglePlaybackCommand = new AsyncRelayCommand(TogglePlaybackAsync);
         NextCommand = new AsyncRelayCommand(() => _playback.NextAsync());
         PreviousCommand = new AsyncRelayCommand(() => _playback.PreviousAsync());
@@ -33,9 +36,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public PlaylistsViewModel Playlists { get; }
 
+    public NowPlayingViewModel NowPlaying { get; }
+
     public IRelayCommand ShowLibraryCommand { get; }
 
     public IRelayCommand ShowPlaylistsCommand { get; }
+
+    public IRelayCommand ShowNowPlayingCommand { get; }
 
     public IAsyncRelayCommand TogglePlaybackCommand { get; }
 
@@ -68,8 +75,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         await Playlists.InitializeAsync(cancellationToken);
     }
 
-    public void Dispose() =>
+    public void Dispose()
+    {
         _playback.SnapshotChanged -= HandleSnapshotChanged;
+        NowPlaying.Dispose();
+    }
 
     private void ShowLibrary()
     {
@@ -81,6 +91,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         CurrentPage = Playlists;
         CurrentTitle = "我的歌单";
+    }
+
+    private void ShowNowPlaying()
+    {
+        CurrentPage = NowPlaying;
+        CurrentTitle = "正在播放";
     }
 
     private Task TogglePlaybackAsync() =>
