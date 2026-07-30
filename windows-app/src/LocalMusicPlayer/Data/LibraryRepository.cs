@@ -102,6 +102,24 @@ public sealed class LibraryRepository(LibraryDatabase database) : ILibraryReposi
         return rows.Select(row => new Playlist(row.Id, row.Name, row.IsBuiltIn)).ToArray();
     }
 
+    public async Task<bool> RenamePlaylistAsync(
+        long playlistId,
+        string name,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        await using var connection = await database.OpenConnectionAsync(cancellationToken);
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE playlists
+            SET name = @Name
+            WHERE id = @PlaylistId AND is_built_in = 0;
+            """,
+            new { PlaylistId = playlistId, Name = name.Trim() },
+            cancellationToken: cancellationToken));
+        return affected == 1;
+    }
+
     public async Task<bool> DeletePlaylistAsync(
         long playlistId,
         CancellationToken cancellationToken = default)

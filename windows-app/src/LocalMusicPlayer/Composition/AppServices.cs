@@ -2,6 +2,7 @@ using LocalMusicPlayer.Data;
 using LocalMusicPlayer.Library;
 using LocalMusicPlayer.Playback;
 using LocalMusicPlayer.SystemMedia;
+using LocalMusicPlayer.ViewModels;
 
 namespace LocalMusicPlayer.Composition;
 
@@ -15,6 +16,7 @@ public sealed class AppServices : IAsyncDisposable
         ILibraryRepository library,
         LibraryScanner scanner,
         PlaybackController playback,
+        MainViewModel main,
         WindowsSystemMediaSession systemMediaSession,
         SystemMediaBridge systemMediaBridge)
     {
@@ -22,6 +24,7 @@ public sealed class AppServices : IAsyncDisposable
         Library = library;
         Scanner = scanner;
         Playback = playback;
+        Main = main;
         _systemMediaSession = systemMediaSession;
         _systemMediaBridge = systemMediaBridge;
     }
@@ -33,6 +36,8 @@ public sealed class AppServices : IAsyncDisposable
     public LibraryScanner Scanner { get; }
 
     public PlaybackController Playback { get; }
+
+    public MainViewModel Main { get; }
 
     public static async Task<AppServices> CreateAsync(
         CancellationToken cancellationToken = default)
@@ -56,17 +61,24 @@ public sealed class AppServices : IAsyncDisposable
         var systemMediaBridge = new SystemMediaBridge(
             playback,
             systemMediaSession);
+        var main = new MainViewModel(
+            new LibraryViewModel(repository, scanner, playback),
+            new PlaylistsViewModel(repository),
+            playback);
+        await main.InitializeAsync(cancellationToken);
         return new AppServices(
             paths,
             repository,
             scanner,
             playback,
+            main,
             systemMediaSession,
             systemMediaBridge);
     }
 
     public async ValueTask DisposeAsync()
     {
+        Main.Dispose();
         _systemMediaBridge.Dispose();
         _systemMediaSession.Dispose();
         await Playback.DisposeAsync();

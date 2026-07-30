@@ -35,7 +35,7 @@ public sealed class LibraryRepositoryTests : IDisposable
     }
 
     [Fact]
-    public async Task CustomPlaylist_PreservesOrder_AndBuiltInPlaylistCannotBeDeleted()
+    public async Task CustomPlaylist_PreservesOrder_AndProtectsBuiltInPlaylist()
     {
         Directory.CreateDirectory(_directory);
         var repository = await CreateRepositoryAsync(Path.Combine(_directory, "library.sqlite"));
@@ -52,6 +52,17 @@ public sealed class LibraryRepositoryTests : IDisposable
             .Select(track => track.Id)
             .Should()
             .Equal(second.Id, first.Id);
+        (await repository.RenamePlaylistAsync(playlist.Id, "深夜收藏"))
+            .Should()
+            .BeTrue();
+        (await repository.GetPlaylistsAsync())
+            .Should()
+            .ContainSingle(item => item.Id == playlist.Id && item.Name == "深夜收藏");
+        (await repository.RenamePlaylistAsync(
+            LibraryRepository.LikedPlaylistId,
+            "不能改名"))
+            .Should()
+            .BeFalse();
         (await repository.DeletePlaylistAsync(LibraryRepository.LikedPlaylistId))
             .Should()
             .BeFalse();

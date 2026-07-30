@@ -20,6 +20,11 @@ public interface ILibraryRepository
     Task<IReadOnlyList<Playlist>> GetPlaylistsAsync(
         CancellationToken cancellationToken = default);
 
+    Task<bool> RenamePlaylistAsync(
+        long playlistId,
+        string name,
+        CancellationToken cancellationToken = default);
+
     Task<bool> DeletePlaylistAsync(
         long playlistId,
         CancellationToken cancellationToken = default);

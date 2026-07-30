@@ -90,6 +90,10 @@ public sealed class SystemMediaBridgeTests
         public int PreviousCount { get; private set; }
         public TimeSpan? LastSeek { get; private set; }
 
+        public void LoadQueue(IReadOnlyList<Track> tracks, int startIndex = 0)
+        {
+        }
+
         public Task PlayAsync(CancellationToken cancellationToken = default)
         {
             PlayCount++;

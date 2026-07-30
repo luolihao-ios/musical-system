@@ -6,6 +6,8 @@ public interface IPlaybackCommands
 
     PlaybackSnapshot Snapshot { get; }
 
+    void LoadQueue(IReadOnlyList<Domain.Track> tracks, int startIndex = 0);
+
     Task PlayAsync(CancellationToken cancellationToken = default);
 
     Task PauseAsync(CancellationToken cancellationToken = default);

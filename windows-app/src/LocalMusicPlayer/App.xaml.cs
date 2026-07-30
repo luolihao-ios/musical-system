@@ -14,7 +14,7 @@ public partial class App : Application
         try
         {
             _services = await AppServices.CreateAsync();
-            var window = new MainWindow();
+            var window = new MainWindow(_services.Main);
             MainWindow = window;
             window.Show();
         }

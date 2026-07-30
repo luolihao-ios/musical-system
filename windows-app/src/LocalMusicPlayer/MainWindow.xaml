@@ -1,17 +1,206 @@
-﻿<Window x:Class="LocalMusicPlayer.MainWindow"
+<Window x:Class="LocalMusicPlayer.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:LocalMusicPlayer"
-        mc:Ignorable="d"
+        xmlns:vm="clr-namespace:LocalMusicPlayer.ViewModels"
+        xmlns:views="clr-namespace:LocalMusicPlayer.Views"
         Title="暮色音乐"
-        Height="720"
-        Width="1180"
-        MinHeight="620"
-        MinWidth="960"
+        Height="760"
+        Width="1240"
+        MinHeight="640"
+        MinWidth="980"
+        Background="#100F13"
+        Foreground="#F7F3F4"
         WindowStartupLocation="CenterScreen">
-    <Grid>
+    <Window.Resources>
+        <SolidColorBrush x:Key="AccentBrush" Color="#E94B5F" />
+        <SolidColorBrush x:Key="PanelBrush" Color="#19171D" />
+        <Style TargetType="Button">
+            <Setter Property="Foreground" Value="#F7F3F4" />
+            <Setter Property="Background" Value="#29262E" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="14,9" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Surface"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface"
+                                        Property="Background"
+                                        Value="#3A3540" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <DataTemplate DataType="{x:Type vm:LibraryViewModel}">
+            <views:LibraryView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:PlaylistsViewModel}">
+            <views:PlaylistsView />
+        </DataTemplate>
+    </Window.Resources>
 
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="88" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="196" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Row="0"
+                Grid.Column="0"
+                Background="#151318"
+                BorderBrush="#2B272E"
+                BorderThickness="0,0,1,0">
+            <Grid Margin="18,24">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="34" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="34"
+                            Height="34"
+                            CornerRadius="17"
+                            Background="{StaticResource AccentBrush}">
+                        <TextBlock Text="暮"
+                                   FontWeight="Bold"
+                                   FontSize="17"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Margin="10,0,0,0"
+                               Text="暮色音乐"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+                <Button Grid.Row="2"
+                        Margin="0,0,0,8"
+                        HorizontalContentAlignment="Left"
+                        Content="♫   本地音乐"
+                        Command="{Binding ShowLibraryCommand}" />
+                <Button Grid.Row="3"
+                        HorizontalContentAlignment="Left"
+                        Content="▤   我的歌单"
+                        Command="{Binding ShowPlaylistsCommand}" />
+                <Border Grid.Row="5"
+                        Padding="12"
+                        Background="#201D24"
+                        CornerRadius="10">
+                    <StackPanel>
+                        <TextBlock Text="完全离线"
+                                   FontWeight="SemiBold" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Text="只读取你选择的本地文件夹"
+                                   Foreground="#948E99"
+                                   FontSize="11"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="0"
+              Grid.Column="1"
+              Margin="30,22,30,18">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="54" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="{Binding CurrentTitle}"
+                       FontSize="25"
+                       FontWeight="SemiBold"
+                       VerticalAlignment="Center" />
+            <ContentControl Grid.Row="1"
+                            Content="{Binding CurrentPage}" />
+        </Grid>
+
+        <Border Grid.Row="1"
+                Grid.ColumnSpan="2"
+                Background="#1A171D"
+                BorderBrush="#302B33"
+                BorderThickness="0,1,0,0">
+            <Grid Margin="24,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="260" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <Border Width="56"
+                            Height="56"
+                            CornerRadius="28"
+                            Background="#2A252D">
+                        <Grid>
+                            <Ellipse Margin="7"
+                                     Fill="#0D0C0F" />
+                            <Ellipse Width="10"
+                                     Height="10"
+                                     Fill="{StaticResource AccentBrush}" />
+                        </Grid>
+                    </Border>
+                    <StackPanel Margin="13,0,0,0"
+                                VerticalAlignment="Center">
+                        <TextBlock Text="{Binding PlaybackSnapshot.CurrentTrack.Title,
+                                                  TargetNullValue=还没有播放音乐}"
+                                   FontSize="14"
+                                   FontWeight="SemiBold" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Text="{Binding PlaybackSnapshot.CurrentTrack.Artist,
+                                                  TargetNullValue=从本地音乐中选择一首}"
+                                   Foreground="#9B949E"
+                                   FontSize="12" />
+                    </StackPanel>
+                </StackPanel>
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                    <Button Width="48"
+                            Height="44"
+                            Padding="0"
+                            FontSize="18"
+                            Content="‹"
+                            Command="{Binding PreviousCommand}" />
+                    <Button Width="52"
+                            Height="52"
+                            Margin="10,0"
+                            Padding="0"
+                            Background="{StaticResource AccentBrush}"
+                            FontSize="16"
+                            Content="▶ Ⅱ"
+                            Command="{Binding TogglePlaybackCommand}" />
+                    <Button Width="48"
+                            Height="44"
+                            Padding="0"
+                            FontSize="18"
+                            Content="›"
+                            Command="{Binding NextCommand}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center">
+                    <TextBlock Text="本地播放 · 无网络下载"
+                               Foreground="#8F8892"
+                               FontSize="11" />
+                </StackPanel>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

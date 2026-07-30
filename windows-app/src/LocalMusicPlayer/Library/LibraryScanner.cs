@@ -6,7 +6,7 @@ namespace LocalMusicPlayer.Library;
 public sealed class LibraryScanner(
     IAudioFileDiscovery discovery,
     ITrackMetadataReader metadataReader,
-    ILibraryRepository repository)
+    ILibraryRepository repository) : ILibraryScanner
 {
     public async Task<ScanResult> ScanAsync(
         string root,

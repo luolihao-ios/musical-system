@@ -1,0 +1,119 @@
+<UserControl x:Class="LocalMusicPlayer.Views.LibraryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="Transparent"
+             Foreground="#F7F3F4">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="58" />
+            <RowDefinition Height="36" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Border Height="40"
+                    MaxWidth="480"
+                    HorizontalAlignment="Left"
+                    Background="#211E25"
+                    CornerRadius="10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="38" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="⌕"
+                               Foreground="#9D96A0"
+                               FontSize="18"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                    <TextBox Grid.Column="1"
+                             Width="370"
+                             Padding="0,9"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Foreground="#F7F3F4"
+                             CaretBrush="#E94B5F"
+                             Text="{Binding SearchText,
+                                            UpdateSourceTrigger=PropertyChanged}" />
+                </Grid>
+            </Border>
+            <Button Grid.Column="1"
+                    Margin="12,0,0,0"
+                    Background="#E94B5F"
+                    Content="＋ 添加音乐文件夹"
+                    Click="AddFolder_Click" />
+        </Grid>
+        <TextBlock Grid.Row="1"
+                   Text="{Binding StatusText}"
+                   Foreground="#97909B"
+                   FontSize="12"
+                   VerticalAlignment="Center" />
+        <Border Grid.Row="2"
+                Background="#17151A"
+                CornerRadius="12">
+            <DataGrid ItemsSource="{Binding FilteredTracks}"
+                      AutoGenerateColumns="False"
+                      HeadersVisibility="Column"
+                      GridLinesVisibility="None"
+                      RowHeaderWidth="0"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      IsReadOnly="True"
+                      Background="Transparent"
+                      Foreground="#ECE8ED"
+                      BorderThickness="0"
+                      RowBackground="Transparent"
+                      AlternatingRowBackground="#1C191F"
+                      HorizontalGridLinesBrush="Transparent"
+                      VerticalGridLinesBrush="Transparent">
+                <DataGrid.Resources>
+                    <Style TargetType="DataGridColumnHeader">
+                        <Setter Property="Background" Value="#201D23" />
+                        <Setter Property="Foreground" Value="#97909B" />
+                        <Setter Property="BorderThickness" Value="0" />
+                        <Setter Property="Padding" Value="12,10" />
+                    </Style>
+                    <Style TargetType="DataGridCell">
+                        <Setter Property="BorderThickness" Value="0" />
+                        <Setter Property="Padding" Value="12,8" />
+                        <Setter Property="Background" Value="Transparent" />
+                    </Style>
+                </DataGrid.Resources>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="歌曲"
+                                        Width="2*"
+                                        Binding="{Binding Title}" />
+                    <DataGridTextColumn Header="歌手"
+                                        Width="*"
+                                        Binding="{Binding Artist}" />
+                    <DataGridTextColumn Header="专辑"
+                                        Width="*"
+                                        Binding="{Binding Album}" />
+                    <DataGridTemplateColumn Header=""
+                                            Width="142">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Margin="0,0,6,0"
+                                            Padding="10,5"
+                                            Content="播放"
+                                            Command="{Binding DataContext.PlayCommand,
+                                                              RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" />
+                                    <Button Padding="10,5"
+                                            Content="喜欢"
+                                            Command="{Binding DataContext.ToggleLikeCommand,
+                                                              RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+    </Grid>
+</UserControl>
