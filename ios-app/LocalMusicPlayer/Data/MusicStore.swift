@@ -139,7 +139,9 @@ final class MusicStore {
         )
         descriptor.fetchLimit = 1
         let existing = try context.fetch(descriptor).first
-        let resolvedPosition = position ?? (try nextPosition(playlistID: playlistID))
+        let resolvedPosition = try (
+            position ?? nextPosition(playlistID: playlistID)
+        )
         if let existing {
             existing.position = resolvedPosition
         } else {

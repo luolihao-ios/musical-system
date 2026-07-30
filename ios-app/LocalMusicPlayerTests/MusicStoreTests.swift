@@ -83,6 +83,24 @@ final class MusicStoreTests: XCTestCase {
         XCTAssertTrue(stored.isLiked)
     }
 
+    func testAddingWithoutPositionAppendsToPlaylist() throws {
+        let container = try ModelContainerFactory.make(inMemory: true)
+        let store = try MusicStore(context: container.mainContext)
+        let first = makeTrack(id: "first", title: "第一首")
+        let second = makeTrack(id: "second", title: "第二首")
+        try store.upsert(first)
+        try store.upsert(second)
+        let playlist = try store.createPlaylist(name: "顺序测试")
+
+        try store.add(trackID: first.id, to: playlist.id)
+        try store.add(trackID: second.id, to: playlist.id)
+
+        XCTAssertEqual(
+            try store.playlistTracks(playlistID: playlist.id).map(\.id),
+            ["first", "second"]
+        )
+    }
+
     private func makeTrack(id: String, title: String) -> TrackRecord {
         TrackRecord(
             id: id,
