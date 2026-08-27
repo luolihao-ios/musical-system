@@ -23,8 +23,8 @@ targets:
         excludes:
           - Resources
           - Info.plist
-    resources:
       - path: LocalMusicPlayer/Resources
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.luolihao.musicalsystem
