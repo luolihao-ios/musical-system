@@ -19,8 +19,16 @@ extension SystemLibraryImporter: SystemLibraryImporting {
 
 @MainActor
 protocol LibraryPlaybackControlling: AnyObject {
-    func loadQueue(_ tracks: [TrackSnapshot], startIndex: Int) throws
-    func play() async throws
+    var state: PlaybackState { get }
+    func playTrack(
+        _ track: TrackSnapshot,
+        in queue: [TrackSnapshot]
+    ) async throws
+    @discardableResult
+    func observeState(
+        _ observer: @escaping (PlaybackState) -> Void
+    ) -> UUID
+    func removeStateObserver(_ id: UUID)
 }
 
 extension PlaybackController: LibraryPlaybackControlling {
@@ -64,6 +72,8 @@ final class LibraryModel {
     private(set) var isImporting = false
     var systemPermissionDenied = false
     private(set) var errorMessage: String?
+    private(set) var currentTrackID: String?
+    private(set) var isCurrentTrackPlaying = false
 
     let canImportFiles = true
 
@@ -71,6 +81,7 @@ final class LibraryModel {
     private let fileImporter: any FileImporting
     private let systemImporter: any SystemLibraryImporting
     private let playback: any LibraryPlaybackControlling
+    private var playbackObserverID: UUID?
 
     init(
         store: MusicStore,
@@ -82,6 +93,16 @@ final class LibraryModel {
         self.fileImporter = fileImporter
         self.systemImporter = systemImporter
         self.playback = playback
+        playbackObserverID = playback.observeState { [weak self] state in
+            self?.currentTrackID = state.currentTrack?.id
+            self?.isCurrentTrackPlaying = state.isPlaying
+        }
+    }
+
+    isolated deinit {
+        if let playbackObserverID {
+            playback.removeStateObserver(playbackObserverID)
+        }
     }
 
     var filteredTracks: [TrackSnapshot] {
@@ -175,12 +196,18 @@ final class LibraryModel {
     }
 
     func play(_ track: TrackSnapshot) async throws {
-        let queue = filteredTracks.filter(\.isAvailable)
-        guard let index = queue.firstIndex(where: { $0.id == track.id }) else {
+        try await play(track, in: filteredTracks)
+    }
+
+    func play(
+        _ track: TrackSnapshot,
+        in tracks: [TrackSnapshot]
+    ) async throws {
+        let queue = tracks.filter(\.isAvailable)
+        guard queue.contains(where: { $0.id == track.id }) else {
             return
         }
-        try playback.loadQueue(queue, startIndex: index)
-        try await playback.play()
+        try await playback.playTrack(track, in: queue)
         try store.recordPlay(trackID: track.id)
         try reload()
     }

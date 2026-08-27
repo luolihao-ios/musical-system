@@ -13,4 +13,5 @@ protocol AudioEngine: AnyObject {
     func play()
     func pause()
     func seek(to position: TimeInterval)
+    func unload()
 }

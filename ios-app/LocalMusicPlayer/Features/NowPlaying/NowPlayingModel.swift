@@ -2,13 +2,16 @@ import Foundation
 import Observation
 
 protocol LyricsReading: Sendable {
-    func read(path: String) throws -> String?
+    func read(path: String) async throws -> String?
 }
 
 struct FileLyricsReader: LyricsReading {
-    func read(path: String) throws -> String? {
-        guard FileManager.default.fileExists(atPath: path) else { return nil }
-        return try String(contentsOfFile: path, encoding: .utf8)
+    func read(path: String) async throws -> String? {
+        try await Task.detached(priority: .utility) {
+            let fileManager = FileManager()
+            guard fileManager.fileExists(atPath: path) else { return nil }
+            return try String(contentsOfFile: path, encoding: .utf8)
+        }.value
     }
 }
 
@@ -18,11 +21,13 @@ final class NowPlayingModel {
     private(set) var state: PlaybackState
     private(set) var lyricLines: [LyricLine] = []
     private(set) var currentLyricIndex: Int?
+    private(set) var lyricTrackID: String?
     var reduceMotion: Bool
 
     private let playback: any PlaybackControlling
     private let lyricsReader: any LyricsReading
-    private var loadedTrackID: String?
+    private var requestedLyricTrackID: String?
+    private var lyricsTask: Task<Void, Never>?
     private var observerID: UUID?
 
     init(
@@ -40,6 +45,7 @@ final class NowPlayingModel {
     }
 
     isolated deinit {
+        lyricsTask?.cancel()
         if let observerID {
             playback.removeStateObserver(observerID)
         }
@@ -78,6 +84,10 @@ final class NowPlayingModel {
         )
     }
 
+    func seek(to lyric: LyricLine) throws {
+        try playback.seek(to: lyric.timestamp)
+    }
+
     func setVolume(_ volume: Double) {
         try? playback.setVolume(volume)
     }
@@ -92,29 +102,59 @@ final class NowPlayingModel {
         try? await playback.playQueueItem(at: index)
     }
 
+    func moveQueue(fromOffsets: IndexSet, toOffset: Int) {
+        try? playback.moveQueue(
+            fromOffsets: fromOffsets,
+            toOffset: toOffset
+        )
+    }
+
+    func removeQueueItems(atOffsets: IndexSet) async {
+        try? await playback.removeQueueItems(atOffsets: atOffsets)
+    }
+
+    func clearQueue() {
+        try? playback.clearQueue()
+    }
+
     private func apply(_ state: PlaybackState) {
         self.state = state
-        if loadedTrackID != state.currentTrack?.id {
-            loadedTrackID = state.currentTrack?.id
-            loadLyrics(path: state.currentTrack?.lyricsReference)
+        if requestedLyricTrackID != state.currentTrack?.id {
+            loadLyrics(for: state.currentTrack)
         }
+        updateCurrentLyricIndex()
+    }
+
+    private func updateCurrentLyricIndex() {
         currentLyricIndex = LRCParser.currentIndex(
             lines: lyricLines,
             position: state.position
         )
     }
 
-    private func loadLyrics(path: String?) {
-        guard let path else {
-            lyricLines = []
+    private func loadLyrics(for track: TrackSnapshot?) {
+        lyricsTask?.cancel()
+        requestedLyricTrackID = track?.id
+        lyricTrackID = nil
+        lyricLines = []
+        currentLyricIndex = nil
+        guard let track,
+              let path = track.lyricsReference else {
             return
         }
-        do {
-            lyricLines = LRCParser.parse(
-                try lyricsReader.read(path: path) ?? ""
-            )
-        } catch {
-            lyricLines = []
+        let requestedID = track.id
+        let reader = lyricsReader
+        lyricsTask = Task { [weak self] in
+            let source = try? await reader.read(path: path)
+            guard !Task.isCancelled,
+                  let self,
+                  self.state.currentTrack?.id == requestedID,
+                  self.requestedLyricTrackID == requestedID else {
+                return
+            }
+            self.lyricLines = LRCParser.parse(source ?? "")
+            self.lyricTrackID = requestedID
+            self.updateCurrentLyricIndex()
         }
     }
 }

@@ -1,11 +1,17 @@
 import SwiftUI
 
+private enum NowPlayingContentMode {
+    case record
+    case lyrics
+}
+
 struct NowPlayingView: View {
     @Bindable var model: NowPlayingModel
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showQueue = false
+    @State private var contentMode: NowPlayingContentMode = .record
 
     var body: some View {
         NavigationStack {
@@ -24,19 +30,8 @@ struct NowPlayingView: View {
                 GeometryReader { geometry in
                     ScrollView {
                         VStack(spacing: 22) {
-                            RecordVisual(model: model)
-                                .frame(
-                                    width: min(geometry.size.width - 64, 340),
-                                    height: min(geometry.size.width - 64, 340)
-                                )
-                                .padding(.top, 12)
+                            mainContent(in: geometry.size)
                             trackIdentity
-                            if model.hasLyrics {
-                                SyncedLyricsView(model: model)
-                                    .frame(height: 210)
-                            } else {
-                                noLyrics
-                            }
                             progressControls
                             transportControls
                             playbackOptions
@@ -73,12 +68,79 @@ struct NowPlayingView: View {
         }
     }
 
+    @ViewBuilder
+    private func mainContent(in size: CGSize) -> some View {
+        let dimension = min(size.width - 48, 390)
+        let recordDimension = model.hasLyrics
+            ? dimension
+            : min(dimension, 280)
+        ZStack(alignment: .topTrailing) {
+            if contentMode == .lyrics, model.hasLyrics {
+                SyncedLyricsView(model: model)
+                    .transition(
+                        .opacity.combined(with: .scale(scale: 0.98))
+                    )
+                Button {
+                    switchContent(to: .record)
+                } label: {
+                    Label("唱片", systemImage: "opticaldisc")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 12)
+                        .frame(height: 36)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("切换到唱片")
+            } else {
+                VStack(spacing: 12) {
+                    RecordVisual(model: model)
+                        .frame(
+                            width: recordDimension,
+                            height: recordDimension
+                        )
+                        .contentShape(Circle())
+                        .onTapGesture {
+                            guard model.hasLyrics else { return }
+                            switchContent(to: .lyrics)
+                        }
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel(
+                            model.hasLyrics ? "查看歌词" : "唱片动画"
+                        )
+                    if !model.hasLyrics {
+                        noLyrics
+                    }
+                }
+                .transition(
+                    .opacity.combined(with: .scale(scale: 0.98))
+                )
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(
+            height: model.hasLyrics
+                ? max(dimension, 320)
+                : recordDimension + 150
+        )
+        .padding(.top, 12)
+    }
+
+    private func switchContent(to mode: NowPlayingContentMode) {
+        if model.reduceMotion {
+            contentMode = mode
+        } else {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                contentMode = mode
+            }
+        }
+    }
+
     private var trackIdentity: some View {
         VStack(spacing: 6) {
             Text(model.state.currentTrack?.title ?? "选择一首本地音乐")
                 .font(.title2.weight(.bold))
                 .lineLimit(1)
-            Text(model.state.currentTrack?.artist ?? "暮色音乐")
+            Text(model.state.currentTrack?.artist ?? "爱乐之城")
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
@@ -160,7 +222,8 @@ struct NowPlayingView: View {
     }
 
     private var playbackOptions: some View {
-        HStack(spacing: 16) {
+        HStack {
+            Spacer()
             Button {
                 model.cycleMode()
             } label: {
@@ -169,57 +232,71 @@ struct NowPlayingView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("播放模式：\(modeLabel)")
-
-            Image(systemName: "speaker.fill")
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            Slider(
-                value: Binding(
-                    get: { model.state.volume },
-                    set: { model.setVolume($0) }
-                ),
-                in: 0...1
-            )
-            .tint(PlayerTheme.accent)
-            .accessibilityLabel("音量")
-            Image(systemName: "speaker.wave.3.fill")
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
+            Spacer()
         }
     }
 
     private var queueSheet: some View {
         NavigationStack {
-            List(
-                Array(model.state.queue.enumerated()),
-                id: \.element.id
-            ) { entry in
-                Button {
-                    Task { await model.playQueueItem(at: entry.offset) }
-                } label: {
-                    HStack {
-                        Image(
-                            systemName: entry.offset == model.state.currentIndex
-                                ? "speaker.wave.2.fill"
-                                : "music.note"
-                        )
-                        .foregroundStyle(
-                            entry.offset == model.state.currentIndex
-                                ? PlayerTheme.accent
-                                : Color.secondary
-                        )
-                        VStack(alignment: .leading) {
-                            Text(entry.element.title)
-                            Text(entry.element.artist)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+            List {
+                ForEach(
+                    Array(model.state.queue.enumerated()),
+                    id: \.element.id
+                ) { entry in
+                    Button {
+                        Task { await model.playQueueItem(at: entry.offset) }
+                    } label: {
+                        HStack {
+                            Image(
+                                systemName: entry.offset
+                                    == model.state.currentIndex
+                                    ? "speaker.wave.2.fill"
+                                    : "music.note"
+                            )
+                            .foregroundStyle(
+                                entry.offset == model.state.currentIndex
+                                    ? PlayerTheme.accent
+                                    : Color.secondary
+                            )
+                            VStack(alignment: .leading) {
+                                Text(entry.element.title)
+                                    .foregroundStyle(
+                                        entry.offset == model.state.currentIndex
+                                            ? PlayerTheme.accent
+                                            : Color.primary
+                                    )
+                                Text(entry.element.artist)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .onMove { offsets, destination in
+                    model.moveQueue(
+                        fromOffsets: offsets,
+                        toOffset: destination
+                    )
+                }
+                .onDelete { offsets in
+                    Task { await model.removeQueueItems(atOffsets: offsets) }
+                }
             }
             .navigationTitle("播放队列")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("清空", role: .destructive) {
+                        model.clearQueue()
+                        showQueue = false
+                    }
+                    .disabled(model.state.queue.isEmpty)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    EditButton()
+                }
+            }
         }
         .presentationDetents([.medium, .large])
     }

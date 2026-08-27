@@ -93,11 +93,10 @@ final class PlaylistsModel {
     ) async throws {
         guard let playback else { return }
         let queue = try tracks(in: playlist).filter(\.isAvailable)
-        guard let index = queue.firstIndex(where: { $0.id == track.id }) else {
+        guard queue.contains(where: { $0.id == track.id }) else {
             return
         }
-        try playback.loadQueue(queue, startIndex: index)
-        try await playback.play()
+        try await playback.playTrack(track, in: queue)
         try store.recordPlay(trackID: track.id)
     }
 }

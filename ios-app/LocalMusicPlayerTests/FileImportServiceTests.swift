@@ -81,6 +81,65 @@ final class FileImportServiceTests: XCTestCase {
         )
     }
 
+    func testFilenameFallbackSeparatesTitleAndArtistAtLastHyphen() async throws {
+        let fixture = try Fixture()
+        let audio = try fixture.file(
+            name: "明天你好 (Live)-薛之谦,李玉刚.mp3",
+            contents: Data("audio".utf8)
+        )
+        let service = FileImportService(
+            rootDirectory: fixture.importRoot,
+            metadataReader: FakeMetadataReader(
+                metadata: ImportedMetadata(
+                    title: "",
+                    artist: "",
+                    album: "",
+                    duration: 180,
+                    artworkData: nil
+                )
+            )
+        )
+
+        let track = try XCTUnwrap(
+            try await service.importFiles([
+                ImportedFile(sourceURL: audio, kind: .audio)
+            ]).first
+        )
+
+        XCTAssertEqual(track.title, "明天你好 (Live)")
+        XCTAssertEqual(track.artist, "薛之谦,李玉刚")
+    }
+
+    func testEmbeddedMetadataTakesPriorityOverHyphenatedFilename() async throws {
+        let fixture = try Fixture()
+        let audio = try fixture.file(
+            name: "文件标题-文件歌手.m4a",
+            contents: Data("audio".utf8)
+        )
+        let service = FileImportService(
+            rootDirectory: fixture.importRoot,
+            metadataReader: FakeMetadataReader(
+                metadata: ImportedMetadata(
+                    title: "元数据标题",
+                    artist: "元数据歌手",
+                    album: "元数据专辑",
+                    duration: 180,
+                    artworkData: nil
+                )
+            )
+        )
+
+        let track = try XCTUnwrap(
+            try await service.importFiles([
+                ImportedFile(sourceURL: audio, kind: .audio)
+            ]).first
+        )
+
+        XCTAssertEqual(track.title, "元数据标题")
+        XCTAssertEqual(track.artist, "元数据歌手")
+        XCTAssertEqual(track.album, "元数据专辑")
+    }
+
     func testOggIsRejectedAndInterruptedImportCleansStagingDirectory() async throws {
         let fixture = try Fixture()
         let ogg = try fixture.file(name: "unsupported.ogg", contents: Data("ogg".utf8))

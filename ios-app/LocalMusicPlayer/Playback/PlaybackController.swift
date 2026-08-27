@@ -39,6 +39,8 @@ final class PlaybackController: PlaybackControlling {
     private var preferences = PlaybackPreferences()
     private var loadedTrackID: String?
     private var restoredPositionApplied = false
+    private var playbackGeneration = UUID()
+    private var acceptsPositionUpdates = true
 
     init(
         engine: any AudioEngine = AVPlayerEngine(),
@@ -52,6 +54,7 @@ final class PlaybackController: PlaybackControlling {
             try? await self?.handleCompletion()
         }
         engine.onPositionChanged = { [weak self] position in
+            guard self?.acceptsPositionUpdates == true else { return }
             self?.state.position = position
         }
     }
@@ -97,6 +100,41 @@ final class PlaybackController: PlaybackControlling {
         state.isPlaying = true
     }
 
+    func playTrack(
+        _ track: TrackSnapshot,
+        in queue: [TrackSnapshot]
+    ) async throws {
+        let availableQueue = queue.filter(\.isAvailable)
+        guard let index = availableQueue.firstIndex(where: {
+            $0.id == track.id
+        }) else {
+            return
+        }
+        let generation = UUID()
+        playbackGeneration = generation
+        acceptsPositionUpdates = false
+        engine.pause()
+        loadedTrackID = nil
+        restoredPositionApplied = true
+        state.queue = availableQueue
+        state.currentIndex = index
+        state.isPlaying = false
+        state.position = 0
+        state.duration = availableQueue[index].duration
+
+        try await loadCurrent(generation: generation)
+        guard playbackGeneration == generation,
+              state.currentTrack?.id == track.id else {
+            return
+        }
+        acceptsPositionUpdates = true
+        engine.seek(to: 0)
+        engine.play()
+        state.position = 0
+        state.isPlaying = true
+        try savePreferences()
+    }
+
     func pause() throws {
         engine.pause()
         state.isPlaying = false
@@ -132,8 +170,86 @@ final class PlaybackController: PlaybackControlling {
               state.queue[index].isAvailable else {
             return
         }
-        state.currentIndex = index
-        try await loadAndPlayCurrent()
+        try await playTrack(state.queue[index], in: state.queue)
+    }
+
+    func moveQueue(fromOffsets: IndexSet, toOffset: Int) throws {
+        guard !fromOffsets.isEmpty else { return }
+        let currentTrackID = state.currentTrack?.id
+        let moving = fromOffsets.sorted().compactMap { index in
+            state.queue.indices.contains(index) ? state.queue[index] : nil
+        }
+        let remaining = state.queue.enumerated().compactMap { index, track in
+            fromOffsets.contains(index) ? nil : track
+        }
+        let removedBeforeDestination = fromOffsets.filter {
+            $0 < toOffset
+        }.count
+        let insertionIndex = min(
+            max(toOffset - removedBeforeDestination, 0),
+            remaining.count
+        )
+        var reordered = remaining
+        reordered.insert(contentsOf: moving, at: insertionIndex)
+        state.queue = reordered
+        state.currentIndex = currentTrackID.flatMap { id in
+            reordered.firstIndex(where: { $0.id == id })
+        }
+        try savePreferences()
+    }
+
+    func removeQueueItems(atOffsets: IndexSet) async throws {
+        var validOffsets = IndexSet()
+        for offset in atOffsets where state.queue.indices.contains(offset) {
+            validOffsets.insert(offset)
+        }
+        guard !validOffsets.isEmpty else { return }
+        let oldCurrentIndex = state.currentIndex
+        let currentWasRemoved = oldCurrentIndex.map {
+            validOffsets.contains($0)
+        } ?? false
+        let currentTrackID = state.currentTrack?.id
+        var remaining = state.queue
+        for index in validOffsets.sorted(by: >) {
+            remaining.remove(at: index)
+        }
+        guard !remaining.isEmpty else {
+            try clearQueue()
+            return
+        }
+
+        if currentWasRemoved, let oldCurrentIndex {
+            let removedBeforeCurrent = validOffsets.filter {
+                $0 < oldCurrentIndex
+            }.count
+            let successorIndex = oldCurrentIndex - removedBeforeCurrent
+            let wrappedIndex = successorIndex < remaining.count
+                ? successorIndex
+                : 0
+            try await playTrack(remaining[wrappedIndex], in: remaining)
+            return
+        }
+
+        state.queue = remaining
+        state.currentIndex = currentTrackID.flatMap { id in
+            remaining.firstIndex(where: { $0.id == id })
+        }
+        try savePreferences()
+    }
+
+    func clearQueue() throws {
+        playbackGeneration = UUID()
+        acceptsPositionUpdates = false
+        engine.pause()
+        engine.unload()
+        loadedTrackID = nil
+        restoredPositionApplied = true
+        state.queue = []
+        state.currentIndex = nil
+        state.isPlaying = false
+        state.position = 0
+        state.duration = 0
+        try savePreferences()
     }
 
     func next() async throws {
@@ -183,6 +299,7 @@ final class PlaybackController: PlaybackControlling {
         guard let url = sourceURL(for: track) else {
             throw PlaybackError.invalidSource
         }
+        acceptsPositionUpdates = false
         try await engine.load(url: url)
         engine.volume = Float(state.volume)
         loadedTrackID = track.id
@@ -190,17 +307,41 @@ final class PlaybackController: PlaybackControlling {
         state.duration = engine.duration > 0
             ? engine.duration
             : track.duration
+        acceptsPositionUpdates = true
     }
 
     private func loadAndPlayCurrent() async throws {
+        let generation = UUID()
+        playbackGeneration = generation
+        acceptsPositionUpdates = false
         loadedTrackID = nil
         restoredPositionApplied = true
-        try await ensureCurrentLoaded()
+        try await loadCurrent(generation: generation)
+        guard playbackGeneration == generation else { return }
+        acceptsPositionUpdates = true
         engine.seek(to: 0)
         engine.play()
         state.position = 0
         state.isPlaying = true
         try savePreferences()
+    }
+
+    private func loadCurrent(generation: UUID) async throws {
+        guard let track = state.currentTrack,
+              let url = sourceURL(for: track) else {
+            throw PlaybackError.invalidSource
+        }
+        try await engine.load(url: url)
+        guard playbackGeneration == generation,
+              state.currentTrack?.id == track.id else {
+            return
+        }
+        engine.volume = Float(state.volume)
+        loadedTrackID = track.id
+        state.position = 0
+        state.duration = engine.duration > 0
+            ? engine.duration
+            : track.duration
     }
 
     private func selectAvailableTrack() -> Bool {

@@ -88,4 +88,13 @@ final class AVPlayerEngine: AudioEngine {
             toleranceAfter: .zero
         )
     }
+
+    func unload() {
+        player.pause()
+        if let completionObserver {
+            NotificationCenter.default.removeObserver(completionObserver)
+            self.completionObserver = nil
+        }
+        player.replaceCurrentItem(with: nil)
+    }
 }

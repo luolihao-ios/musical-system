@@ -13,7 +13,14 @@ protocol PlaybackControlling: AnyObject {
     func seek(to position: TimeInterval) throws
     func setVolume(_ volume: Double) throws
     func setMode(_ mode: PlaybackMode) throws
+    func playTrack(
+        _ track: TrackSnapshot,
+        in queue: [TrackSnapshot]
+    ) async throws
     func playQueueItem(at index: Int) async throws
+    func moveQueue(fromOffsets: IndexSet, toOffset: Int) throws
+    func removeQueueItems(atOffsets: IndexSet) async throws
+    func clearQueue() throws
     @discardableResult
     func observeState(
         _ observer: @escaping (PlaybackState) -> Void
@@ -24,7 +31,14 @@ protocol PlaybackControlling: AnyObject {
 extension PlaybackControlling {
     func setVolume(_ volume: Double) throws {}
     func setMode(_ mode: PlaybackMode) throws {}
+    func playTrack(
+        _ track: TrackSnapshot,
+        in queue: [TrackSnapshot]
+    ) async throws {}
     func playQueueItem(at index: Int) async throws {}
+    func moveQueue(fromOffsets: IndexSet, toOffset: Int) throws {}
+    func removeQueueItems(atOffsets: IndexSet) async throws {}
+    func clearQueue() throws {}
 }
 
 struct SystemNowPlayingInfo: Equatable, Sendable {

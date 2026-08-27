@@ -135,22 +135,50 @@ final class FileImportService {
         let finalArtwork = stagedArtwork.map {
             destination.appending(path: $0.lastPathComponent).path
         }
-        let fallbackTitle = audio.sourceURL.deletingPathExtension()
-            .lastPathComponent
-        let resolvedTitle = metadata.title
+        let fallback = fallbackMetadata(
+            filename: audio.sourceURL.deletingPathExtension()
+                .lastPathComponent
+        )
+        let embeddedTitle = metadata.title
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let embeddedArtist = metadata.artist
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let embeddedAlbum = metadata.album
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         return TrackRecord(
             id: identifier,
-            title: resolvedTitle.isEmpty ? fallbackTitle : resolvedTitle,
-            artist: metadata.artist,
-            album: metadata.album,
+            title: embeddedTitle.isEmpty ? fallback.title : embeddedTitle,
+            artist: embeddedArtist.isEmpty ? fallback.artist : embeddedArtist,
+            album: embeddedAlbum,
             duration: metadata.duration,
             sourceKind: .importedFile,
             sourceReference: finalAudio.path,
             artworkReference: finalArtwork,
             lyricsReference: finalLyrics
         )
+    }
+
+    private func fallbackMetadata(
+        filename: String
+    ) -> (title: String, artist: String) {
+        let trimmed = filename.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard let separator = trimmed.lastIndex(of: "-") else {
+            return (trimmed, "")
+        }
+        let title = String(trimmed[..<separator]).trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        let artistStart = trimmed.index(after: separator)
+        let artist = String(trimmed[artistStart...]).trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard !title.isEmpty, !artist.isEmpty else {
+            return (trimmed, "")
+        }
+        return (title, artist)
     }
 
     private func fingerprint(_ url: URL) throws -> String {

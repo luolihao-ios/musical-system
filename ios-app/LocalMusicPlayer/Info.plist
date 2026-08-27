@@ -5,7 +5,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>zh_CN</string>
     <key>CFBundleDisplayName</key>
-    <string>暮色音乐</string>
+    <string>爱乐之城</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -23,7 +23,7 @@
     <key>LSRequiresIPhoneOS</key>
     <true/>
     <key>NSAppleMusicUsageDescription</key>
-    <string>暮色音乐只读取这台设备上已有且可本地播放的音乐，不会下载或上传歌曲。</string>
+    <string>爱乐之城只读取这台设备上已有且可本地播放的音乐，不会下载或上传歌曲。</string>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
