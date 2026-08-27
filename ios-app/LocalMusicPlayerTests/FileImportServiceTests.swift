@@ -100,11 +100,10 @@ final class FileImportServiceTests: XCTestCase {
             )
         )
 
-        let track = try XCTUnwrap(
-            try await service.importFiles([
-                ImportedFile(sourceURL: audio, kind: .audio)
-            ]).first
-        )
+        let tracks = try await service.importFiles([
+            ImportedFile(sourceURL: audio, kind: .audio)
+        ])
+        let track = try XCTUnwrap(tracks.first)
 
         XCTAssertEqual(track.title, "明天你好 (Live)")
         XCTAssertEqual(track.artist, "薛之谦,李玉刚")
@@ -129,11 +128,10 @@ final class FileImportServiceTests: XCTestCase {
             )
         )
 
-        let track = try XCTUnwrap(
-            try await service.importFiles([
-                ImportedFile(sourceURL: audio, kind: .audio)
-            ]).first
-        )
+        let tracks = try await service.importFiles([
+            ImportedFile(sourceURL: audio, kind: .audio)
+        ])
+        let track = try XCTUnwrap(tracks.first)
 
         XCTAssertEqual(track.title, "元数据标题")
         XCTAssertEqual(track.artist, "元数据歌手")
