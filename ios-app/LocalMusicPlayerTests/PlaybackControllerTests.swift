@@ -11,6 +11,8 @@ final class PlaybackControllerTests: XCTestCase {
             engine: engine,
             preferencesStore: FakePreferencesStore(
                 value: PlaybackPreferences(
+                    volume: 1,
+                    mode: .repeatAll,
                     lastTrackID: "one",
                     lastPosition: 37
                 )
@@ -55,6 +57,29 @@ final class PlaybackControllerTests: XCTestCase {
 
         XCTAssertEqual(controller.state.currentTrack?.id, "two")
         XCTAssertEqual(engine.playedURLs.map(\.lastPathComponent), ["two.m4a"])
+    }
+
+    func testPlayTrackPublishesOnlyConsistentTargetSnapshots() async throws {
+        let controller = PlaybackController(
+            engine: FakeAudioEngine(),
+            preferencesStore: FakePreferencesStore()
+        )
+        let queue = [track("one"), track("two")]
+        try await controller.playTrack(queue[0], in: queue)
+        var snapshots: [PlaybackState] = []
+        let observerID = controller.observeState { snapshots.append($0) }
+        snapshots.removeAll()
+
+        try await controller.playTrack(queue[1], in: queue)
+
+        XCTAssertFalse(snapshots.isEmpty)
+        XCTAssertTrue(snapshots.allSatisfy { snapshot in
+            guard snapshot.currentTrack?.id == "two" else { return false }
+            return snapshot.currentIndex == 1
+                && snapshot.position == 0
+                && snapshot.duration == 180
+        })
+        controller.removeStateObserver(observerID)
     }
 
     func testNextWrapsAndRepeatOneReplaysCurrentTrack() async throws {
@@ -114,7 +139,7 @@ final class PlaybackControllerTests: XCTestCase {
         )
 
         try controller.initialize()
-        try controller.loadQueue([track("one"), track("two")])
+        try controller.restoreQueueIfPossible([track("one"), track("two")])
         try await controller.play()
         try controller.seek(to: 999)
 
@@ -123,6 +148,19 @@ final class PlaybackControllerTests: XCTestCase {
         XCTAssertEqual(controller.state.mode, .shuffle)
         XCTAssertEqual(engine.lastSeek, 180)
         XCTAssertEqual(preferences.saved.lastPosition, 180)
+    }
+
+    func testRestoreQueueDoesNothingWithoutSavedTrack() throws {
+        let controller = PlaybackController(
+            engine: FakeAudioEngine(),
+            preferencesStore: FakePreferencesStore()
+        )
+        try controller.initialize()
+
+        try controller.restoreQueueIfPossible([track("one")])
+
+        XCTAssertNil(controller.state.currentTrack)
+        XCTAssertTrue(controller.state.queue.isEmpty)
     }
 
     func testVolumeModeAndQueueSelectionAreApplied() async throws {
@@ -180,6 +218,28 @@ final class PlaybackControllerTests: XCTestCase {
         XCTAssertEqual(controller.state.currentTrack?.id, "three")
         XCTAssertEqual(engine.loadedURLs.last?.lastPathComponent, "three.m4a")
         XCTAssertTrue(controller.state.isPlaying)
+    }
+
+    func testRemovingCurrentTrackSkipsUnavailableSuccessor() async throws {
+        let engine = FakeAudioEngine()
+        let controller = PlaybackController(
+            engine: engine,
+            preferencesStore: FakePreferencesStore()
+        )
+        try controller.loadQueue([
+            track("one"),
+            track("missing", available: false),
+            track("three")
+        ])
+        try await controller.play()
+
+        try await controller.removeQueueItems(
+            atOffsets: IndexSet(integer: 0)
+        )
+
+        XCTAssertEqual(controller.state.currentTrack?.id, "three")
+        XCTAssertEqual(controller.state.queue.map(\.id), ["three"])
+        XCTAssertEqual(engine.loadedURLs.last?.lastPathComponent, "three.m4a")
     }
 
     func testRemovingLastCurrentTrackWrapsToFirstTrack() async throws {

@@ -63,6 +63,9 @@ struct NowPlayingView: View {
         .onChange(of: reduceMotion) { _, value in
             model.reduceMotion = value
         }
+        .onChange(of: model.state.currentTrack?.id) { _, _ in
+            contentMode = .record
+        }
         .sheet(isPresented: $showQueue) {
             queueSheet
         }

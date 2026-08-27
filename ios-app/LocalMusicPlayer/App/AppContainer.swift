@@ -20,7 +20,6 @@ final class AppContainer {
         )
         try store.refreshAvailability()
         try playback.initialize()
-        let bridge = NowPlayingBridge(controller: playback)
         let libraryModel = LibraryModel(
             store: store,
             fileImporter: FileImportService(),
@@ -31,9 +30,11 @@ final class AppContainer {
             store: store,
             playback: playback
         )
-        let nowPlayingModel = NowPlayingModel(playback: playback)
         try libraryModel.reload()
         try playlistsModel.reload()
+        try playback.restoreQueueIfPossible(libraryModel.tracks)
+        let bridge = NowPlayingBridge(controller: playback)
+        let nowPlayingModel = NowPlayingModel(playback: playback)
 
         self.modelContainer = modelContainer
         self.store = store

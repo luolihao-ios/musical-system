@@ -196,6 +196,16 @@ private final class FakeNowPlayingController: PlaybackControlling {
         lastSeek = position
     }
 
+    func setVolume(_ volume: Double) throws {}
+    func setMode(_ mode: PlaybackMode) throws {}
+
+    func playTrack(
+        _ track: TrackSnapshot,
+        in queue: [TrackSnapshot]
+    ) async throws {}
+
+    func playQueueItem(at index: Int) async throws {}
+
     func moveQueue(fromOffsets: IndexSet, toOffset: Int) throws {
         lastMoveOffsets = fromOffsets
         lastMoveDestination = toOffset
