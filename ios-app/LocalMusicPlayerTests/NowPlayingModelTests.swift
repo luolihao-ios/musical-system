@@ -1,8 +1,29 @@
 import XCTest
+import SwiftUI
 @testable import LocalMusicPlayer
 
 @MainActor
 final class NowPlayingModelTests: XCTestCase {
+    func testMiniPlayerKeepsCompactHeightWhenGivenFullScreenProposal() {
+        let playback = FakeNowPlayingController(
+            state: state(position: 10, isPlaying: true)
+        )
+        let model = NowPlayingModel(
+            playback: playback,
+            lyricsReader: FakeLyricsReader(source: nil)
+        )
+        let controller = UIHostingController(
+            rootView: MiniPlayerView(model: model, openNowPlaying: {})
+        )
+
+        let size = controller.sizeThatFits(
+            in: CGSize(width: 390, height: 844)
+        )
+
+        XCTAssertGreaterThanOrEqual(size.height, 56)
+        XCTAssertLessThanOrEqual(size.height, 72)
+    }
+
     func testLyricsSwitchAndRotationFollowPlaybackAndReduceMotion() async {
         let playback = FakeNowPlayingController(
             state: state(position: 5, isPlaying: true)
