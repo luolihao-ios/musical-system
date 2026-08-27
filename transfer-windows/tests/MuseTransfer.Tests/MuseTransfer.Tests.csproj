@@ -14,6 +14,7 @@
     <Using Include="Xunit" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\src\MuseTransfer.Core\MuseTransfer.Core.csproj" />
     <ProjectReference Include="..\..\src\MuseTransfer.Protocol\MuseTransfer.Protocol.csproj" />
   </ItemGroup>
 </Project>
