@@ -37,6 +37,8 @@
 - `ios-app/LocalMusicPlayer/Features/NowPlaying/SyncedLyricsView.swift`: tap-to-seek and manual-browsing auto-follow suppression.
 - `ios-app/LocalMusicPlayer/Features/NowPlaying/NowPlayingView.swift`: mutually exclusive record/lyrics modes, streamlined controls, editable queue.
 - `ios-app/LocalMusicPlayer/Features/Shared/MiniPlayerView.swift`: full-strip navigation hit area with independent transport controls.
+- `ios-app/LocalMusicPlayer/Info.plist`: changes the visible app name and permission copy without changing the bundle identifier.
+- `ios-app/LocalMusicPlayer/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png`: final 1024×1024 “爱乐之城” music-player icon.
 - `ios-app/LocalMusicPlayerTests/*.swift`: behavior-focused regression tests for every state transition.
 
 ---
@@ -565,7 +567,70 @@ git commit -m "feat: complete iOS queue and mini player controls"
 
 ---
 
-### Task 7: Final Consistency Audit and CI Handoff
+### Task 7: “爱乐之城” Display Name and App Icon
+
+**Files:**
+- Modify: `ios-app/LocalMusicPlayer/Info.plist`
+- Replace: `ios-app/LocalMusicPlayer/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png`
+- Verify: `ios-app/LocalMusicPlayer/Resources/Assets.xcassets/AppIcon.appiconset/Contents.json`
+
+**Interfaces:**
+- Consumes: existing `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon` and bundle identifier `com.luolihao.musicalsystem`.
+- Produces: desktop-visible name `爱乐之城` and the approved dark-red vinyl music-player icon.
+
+- [ ] **Step 1: Generate the icon master**
+
+Use the built-in image generation tool with this production prompt:
+
+```text
+Use case: logo-brand
+Asset type: iOS music player app icon, 1024×1024 square master
+Primary request: Create a premium, immediately recognizable music-player icon for an app named 爱乐之城.
+Scene/backdrop: seamless deep burgundy-to-black gradient filling the square
+Subject: one centered glossy black vinyl record; its center label integrates one simple warm gold-red musical note and subtle audio-wave motif
+Style/medium: polished modern 3D illustration, elegant and restrained, Apple App Store quality
+Composition/framing: centered, bold silhouette, generous safe margin for iOS rounded-corner cropping, readable at very small size
+Lighting/mood: soft cinematic rim light, warm highlight, refined night-time music atmosphere
+Constraints: no text, no letters, no watermark, no external border, square image, opaque background
+Avoid: UI mockup, phone frame, headphones, people, clutter, multiple records, tiny decorative details, copyrighted brand marks
+```
+
+- [ ] **Step 2: Inspect and install the selected image**
+
+Visually confirm the output has no text/watermark, a centered record, sufficient edge clearance, and clear small-size contrast. Copy the selected final image into `AppIcon.appiconset/AppIcon-1024.png`, replacing the existing placeholder icon, and verify it is exactly 1024×1024 PNG with an opaque background.
+
+- [ ] **Step 3: Change only the visible app name**
+
+Set:
+
+```xml
+<key>CFBundleDisplayName</key>
+<string>爱乐之城</string>
+```
+
+Replace the old name in `NSAppleMusicUsageDescription` with `爱乐之城`. Keep `CFBundleName`, target name, product name, development team setting, and `PRODUCT_BUNDLE_IDENTIFIER` unchanged.
+
+- [ ] **Step 4: Verify branding assets and settings**
+
+Run on Windows:
+
+```powershell
+Select-String -Path ios-app/LocalMusicPlayer/Info.plist -Pattern '爱乐之城|暮色音乐'
+Get-Content -Raw ios-app/LocalMusicPlayer/Resources/Assets.xcassets/AppIcon.appiconset/Contents.json
+```
+
+Expected: `爱乐之城` appears in display name and permission description, `暮色音乐` does not appear in the plist, and `Contents.json` still references `AppIcon-1024.png` as the universal iOS 1024×1024 icon.
+
+- [ ] **Step 5: Commit the approved branding**
+
+```bash
+git add ios-app/LocalMusicPlayer/Info.plist ios-app/LocalMusicPlayer/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
+git commit -m "feat: brand iOS app as 爱乐之城"
+```
+
+---
+
+### Task 8: Final Consistency Audit and CI Handoff
 
 **Files:**
 - Modify only files required by failures found in this task.
