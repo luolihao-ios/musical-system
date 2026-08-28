@@ -1,0 +1,46 @@
+name: Muse Transfer iOS
+
+on:
+  push:
+    branches:
+      - "codex/muse-transfer"
+    paths:
+      - "transfer-ios/**"
+      - "docs/transfer-protocol/vectors/**"
+      - ".github/workflows/muse-transfer-ios.yml"
+  pull_request:
+    paths:
+      - "transfer-ios/**"
+      - "docs/transfer-protocol/vectors/**"
+      - ".github/workflows/muse-transfer-ios.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        working-directory: transfer-ios
+        run: xcodegen generate
+      - name: Run iOS simulator tests
+        working-directory: transfer-ios
+        run: >-
+          xcodebuild test
+          -project MuseTransfer.xcodeproj
+          -scheme MuseTransferCore
+          -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest'
+          CODE_SIGNING_ALLOWED=NO
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: MuseTransfer-iOS-test-results
+          path: ~/Library/Developer/Xcode/DerivedData/**/Logs/Test/*.xcresult
+          if-no-files-found: ignore
