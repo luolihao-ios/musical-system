@@ -12,7 +12,7 @@ public sealed class TransferViewModelTests
         var model = CreateModel(out _, out _);
         Assert.False(model.CanSend);
 
-        model.SelectedDevice = new NearbyDevice("phone", "iPhone", new Uri("https://127.0.0.1:5000"), "fingerprint");
+        model.SelectedDevice = new NearbyDevice("phone", "iPhone", new Uri("http://127.0.0.1:5000"), new byte[65]);
         Assert.False(model.CanSend);
 
         model.SelectedFiles = [new SelectedFile("f1", "C:\\song.mp3", "song.mp3", 3)];

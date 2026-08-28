@@ -1,0 +1,17 @@
+{
+  "manifest": {
+    "protocolVersion": 2,
+    "senderId": "sender-a",
+    "items": [
+      {
+        "id": "f1",
+        "relativePath": "Album/song.mp3",
+        "size": 3,
+        "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+      }
+    ],
+    "musicGroups": []
+  },
+  "canonicalUtf8": "{\"protocolVersion\":2,\"senderId\":\"sender-a\",\"items\":[{\"id\":\"f1\",\"relativePath\":\"Album/song.mp3\",\"size\":3,\"sha256\":\"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\"}],\"musicGroups\":[]}",
+  "canonicalSha256": "97101364c8d30ee1f04f5e03fbb1d96c34a6e6a7efcb53624d2c160cfa52d6a1"
+}

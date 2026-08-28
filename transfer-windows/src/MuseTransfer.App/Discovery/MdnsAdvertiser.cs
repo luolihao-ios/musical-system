@@ -3,7 +3,7 @@ using System.Net;
 
 namespace MuseTransfer.App.Discovery;
 
-public sealed record MdnsService(string DeviceId, string DeviceName, int Port, string CertificateSha256, string Platform = "windows", string ProtocolVersion = "1");
+public sealed record MdnsService(string DeviceId, string DeviceName, int Port, string PublicKey, string KeyId, string Platform = "windows", string ProtocolVersion = "2");
 
 public interface IMdnsAdvertiser
 {
@@ -25,7 +25,8 @@ public sealed class MdnsAdvertiser : IMdnsAdvertiser, IDisposable
         profile.AddProperty("name", service.DeviceName);
         profile.AddProperty("platform", service.Platform);
         profile.AddProperty("v", service.ProtocolVersion);
-        profile.AddProperty("fp", service.CertificateSha256);
+        profile.AddProperty("pk", service.PublicKey);
+        profile.AddProperty("kid", service.KeyId);
         discovery.Advertise(profile);
         multicast.Start();
         return Task.CompletedTask;
@@ -46,7 +47,7 @@ public sealed class MdnsAdvertiser : IMdnsAdvertiser, IDisposable
     }
 }
 
-public sealed record DiscoveredService(string Id, string Name, IPAddress Address, int Port, string CertificateSha256);
+public sealed record DiscoveredService(string Id, string Name, IPAddress Address, int Port, byte[] PublicKey, string KeyId);
 
 public sealed class MdnsDeviceBrowser : IDisposable
 {
@@ -77,8 +78,8 @@ public sealed class MdnsDeviceBrowser : IDisposable
             if (address is null) return;
             var properties = text.Strings.Select(value => value.Split('=', 2)).Where(parts => parts.Length == 2).ToDictionary(parts => parts[0], parts => parts[1], StringComparer.Ordinal);
             if (!properties.TryGetValue("id", out var id) || !properties.TryGetValue("name", out var name)) return;
-            properties.TryGetValue("fp", out var fingerprint);
-            DeviceDiscovered?.Invoke(new DiscoveredService(id, name, address, service.Port, fingerprint ?? string.Empty));
+            if (!properties.TryGetValue("pk", out var encodedKey) || !properties.TryGetValue("kid", out var keyId)) return;
+            DeviceDiscovered?.Invoke(new DiscoveredService(id, name, address, service.Port, Convert.FromBase64String(encodedKey), keyId));
         }
         catch (OperationCanceledException) { }
     }

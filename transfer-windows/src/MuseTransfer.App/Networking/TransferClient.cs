@@ -4,14 +4,15 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using MuseTransfer.Core.Music;
 using MuseTransfer.Protocol;
 
 namespace MuseTransfer.App.Networking;
 
-public sealed record NearbyDevice(string Id, string Name, Uri BaseAddress, string CertificateSha256);
+public sealed record NearbyDevice(string Id, string Name, Uri BaseAddress, byte[] ReceiverPublicKey);
 public sealed record TransferProgress(long TransferredBytes, long TotalBytes, string CurrentFileName, double BytesPerSecond, TimeSpan? Remaining);
-internal sealed record SessionStatusResponse(string Status, string? Token, Dictionary<string, int[]> VerifiedChunks);
 
 public interface ITransferClient
 {
@@ -21,16 +22,24 @@ public interface ITransferClient
 public sealed class TransferClient : ITransferClient
 {
     private const int ChunkSize = 1024 * 1024;
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task SendAsync(NearbyDevice device, IReadOnlyList<SelectedFile> files, IProgress<TransferProgress> progress, CancellationToken cancellationToken)
     {
-        using var client = CreateClient(device);
+        if (device.ReceiverPublicKey.Length != 65) throw new InvalidOperationException("The receiver public key is required.");
+        using var client = new HttpClient { BaseAddress = device.BaseAddress };
+        using var senderKey = P256KeyPair.Generate();
+        var key = TransferCrypto.DeriveSessionKey(senderKey, device.ReceiverPublicKey, device.ReceiverPublicKey, senderKey.PublicKeyX963);
         var manifest = await BuildManifestAsync(files, cancellationToken);
-        var proposalResponse = await client.PostAsJsonAsync("/v1/sessions", manifest, cancellationToken);
+        var manifestEnvelope = TransferCrypto.Encrypt(key, JsonSerializer.SerializeToUtf8Bytes(manifest, JsonOptions), "proposal|v2"u8.ToArray());
+        var proposalResponse = await client.PostAsJsonAsync("/v2/sessions", new EncryptedProposalRequest(senderKey.PublicKeyX963, manifestEnvelope), cancellationToken);
         proposalResponse.EnsureSuccessStatusCode();
-        var proposal = await proposalResponse.Content.ReadFromJsonAsync<SessionProposalResponse>(cancellationToken)
+        var wire = await proposalResponse.Content.ReadFromJsonAsync<SessionProposalEnvelopeResponse>(cancellationToken)
             ?? throw new InvalidDataException("Receiver returned an empty proposal.");
-        var decision = await WaitForAcceptanceAsync(client, proposal, cancellationToken);
+        var proposal = JsonSerializer.Deserialize<SessionProposalResponse>(
+            TransferCrypto.Decrypt(key, wire.Envelope, Encoding.UTF8.GetBytes($"proposal-response|{wire.SessionId}")), JsonOptions)
+            ?? throw new InvalidDataException("Receiver returned invalid proposal details.");
+        var decision = await WaitForAcceptanceAsync(client, proposal, key, cancellationToken);
         var token = decision.Token ?? throw new InvalidDataException("Accepted session did not include an upload token.");
 
         var total = files.Sum(file => file.Size);
@@ -42,32 +51,29 @@ public sealed class TransferClient : ITransferClient
             var buffer = new byte[ChunkSize];
             var chunkIndex = 0;
             int read;
-            while ((read = await input.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken)) > 0)
+            while ((read = await input.ReadAsync(buffer.AsMemory(), cancellationToken)) > 0)
             {
-                if (decision.VerifiedChunks.TryGetValue(file.Id, out var verified) && verified.Contains(chunkIndex))
-                {
-                    transferred += read;
-                    chunkIndex++;
-                    continue;
-                }
-                using var request = new HttpRequestMessage(HttpMethod.Put, $"/v1/sessions/{proposal.SessionId}/files/{file.Id}/chunks/{chunkIndex}");
+                if (decision.VerifiedChunks.TryGetValue(file.Id, out var verified) && verified.Contains(chunkIndex)) { transferred += read; chunkIndex++; continue; }
+                var offset = input.Position - read;
+                var aad = Encoding.UTF8.GetBytes($"{proposal.SessionId}|{file.Id}|{chunkIndex}|{offset}|{file.Size}|{proposal.ManifestDigest}");
+                var packed = TransferCrypto.PackEnvelope(TransferCrypto.Encrypt(key, buffer[..read], aad));
+                using var request = new HttpRequestMessage(HttpMethod.Put, $"/v2/sessions/{proposal.SessionId}/files/{file.Id}/chunks/{chunkIndex}");
                 request.Headers.Add("X-Muse-Session-Token", token);
                 request.Headers.Add("X-Muse-Manifest-Digest", proposal.ManifestDigest);
-                request.Content = new ByteArrayContent(buffer, 0, read);
-                request.Content.Headers.ContentRange = new ContentRangeHeaderValue(input.Position - read, input.Position - 1, file.Size);
+                request.Content = new ByteArrayContent(packed);
+                request.Content.Headers.ContentRange = new ContentRangeHeaderValue(offset, input.Position - 1, file.Size);
                 using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
                 response.EnsureSuccessStatusCode();
-                transferred += read;
-                chunkIndex++;
+                transferred += read; chunkIndex++;
                 Report(progress, transferred, total, file.RelativePath, stopwatch.Elapsed);
             }
         }
-
-        using var complete = new HttpRequestMessage(HttpMethod.Post, $"/v1/sessions/{proposal.SessionId}/complete");
+        using var complete = new HttpRequestMessage(HttpMethod.Post, $"/v2/sessions/{proposal.SessionId}/complete");
         complete.Headers.Add("X-Muse-Session-Token", token);
         complete.Headers.Add("X-Muse-Manifest-Digest", proposal.ManifestDigest);
         using var completion = await client.SendAsync(complete, cancellationToken);
         completion.EnsureSuccessStatusCode();
+        CryptographicOperations.ZeroMemory(key);
     }
 
     private static async Task<TransferManifest> BuildManifestAsync(IReadOnlyList<SelectedFile> files, CancellationToken cancellationToken)
@@ -76,42 +82,27 @@ public sealed class TransferClient : ITransferClient
         foreach (var file in files)
         {
             await using var input = new FileStream(file.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
-            var hash = Convert.ToHexString(await SHA256.HashDataAsync(input, cancellationToken)).ToLowerInvariant();
-            items.Add(new TransferItem(file.Id, file.RelativePath, file.Size, hash));
+            items.Add(new TransferItem(file.Id, file.RelativePath, file.Size, Convert.ToHexString(await SHA256.HashDataAsync(input, cancellationToken)).ToLowerInvariant()));
         }
         var groups = MusicGrouper.Group(files).Select(group => new MusicGroup(group.Id, group.Files.Select(file => file.Id).ToArray())).ToArray();
-        return new TransferManifest(1, Environment.MachineName, items, groups);
+        return new TransferManifest(2, Environment.MachineName, items, groups);
     }
 
-    private static async Task<SessionStatusResponse> WaitForAcceptanceAsync(HttpClient client, SessionProposalResponse proposal, CancellationToken cancellationToken)
+    private static async Task<SessionStatusResponse> WaitForAcceptanceAsync(HttpClient client, SessionProposalResponse proposal, byte[] key, CancellationToken cancellationToken)
     {
         while (true)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"/v1/sessions/{proposal.SessionId}");
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"/v2/sessions/{proposal.SessionId}");
             request.Headers.Add("X-Muse-Proposal-Key", proposal.ProposalKey);
             using var response = await client.SendAsync(request, cancellationToken);
             response.EnsureSuccessStatusCode();
-            var status = await response.Content.ReadFromJsonAsync<SessionStatusResponse>(cancellationToken)
-                ?? throw new InvalidDataException("Receiver returned an empty session status.");
-            if (status.Status == "accepted" || status.Status == "transferring") return status;
+            var wire = await response.Content.ReadFromJsonAsync<EncryptedStatusResponse>(cancellationToken) ?? throw new InvalidDataException("Receiver returned empty status.");
+            var status = JsonSerializer.Deserialize<SessionStatusResponse>(TransferCrypto.Decrypt(key, wire.Envelope, Encoding.UTF8.GetBytes($"status|{proposal.SessionId}")), JsonOptions)
+                ?? throw new InvalidDataException("Receiver returned invalid status.");
+            if (status.Status is "accepted" or "transferring") return status;
             if (status.Status is "rejected" or "cancelled" or "failed") throw new TransferRejectedException(status.Status);
             await Task.Delay(250, cancellationToken);
         }
-    }
-
-    private static HttpClient CreateClient(NearbyDevice device)
-    {
-        var handler = new HttpClientHandler
-        {
-            ServerCertificateCustomValidationCallback = (_, certificate, _, _) =>
-            {
-                if (certificate is null) return false;
-                var fingerprint = Convert.ToHexString(SHA256.HashData(certificate.GetRawCertData())).ToLowerInvariant();
-                return string.IsNullOrWhiteSpace(device.CertificateSha256)
-                    || fingerprint.Equals(device.CertificateSha256, StringComparison.OrdinalIgnoreCase);
-            }
-        };
-        return new HttpClient(handler) { BaseAddress = device.BaseAddress };
     }
 
     private static void Report(IProgress<TransferProgress> progress, long transferred, long total, string file, TimeSpan elapsed)

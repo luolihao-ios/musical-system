@@ -10,7 +10,7 @@
     <Grid Grid.Column="1" Margin="20,0">
       <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
       <TextBlock Text="附近设备" FontSize="24" FontWeight="SemiBold"/>
-      <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,14"><TextBox x:Name="AddressBox" Width="260" Padding="10" Text="https://192.168.1.2:53317"/><Button Content="手动连接" Click="OnAddAddress"/></StackPanel>
+      <StackPanel Grid.Row="1" Margin="0,14"><StackPanel Orientation="Horizontal"><TextBox x:Name="AddressBox" Width="260" Padding="10" Text="http://192.168.1.2:53317"/><Button Content="手动连接" Click="OnAddAddress"/></StackPanel><TextBox x:Name="PublicKeyBox" Margin="0,6,0,0" Padding="10" ToolTip="接收端显示的 P-256 公钥（Base64）" AutomationProperties.Name="接收端公钥"/></StackPanel>
       <ListBox Grid.Row="2" ItemsSource="{Binding NearbyDevices}" SelectedItem="{Binding SelectedDevice}" Background="Transparent" BorderThickness="0">
         <ListBox.ItemTemplate><DataTemplate><Border Background="{StaticResource PanelBrush}" Padding="16" Margin="0,5" CornerRadius="10"><StackPanel><TextBlock Text="{Binding Name}" FontSize="17"/><TextBlock Text="{Binding BaseAddress}" Foreground="#A9A3AD"/></StackPanel></Border></DataTemplate></ListBox.ItemTemplate>
       </ListBox>

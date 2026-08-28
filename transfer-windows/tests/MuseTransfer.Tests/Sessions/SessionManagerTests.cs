@@ -86,7 +86,7 @@ public sealed class SessionManagerTests
     private SessionManager CreateManager() => new(clock, new SessionTokenService());
 
     private static TransferManifest Manifest() => new(
-        1,
+        2,
         "sender-a",
         [new TransferItem("f1", "song.mp3", 3, new string('a', 64))],
         []);

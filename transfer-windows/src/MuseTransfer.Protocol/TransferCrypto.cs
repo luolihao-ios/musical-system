@@ -72,6 +72,18 @@ public static class TransferCrypto
         return plaintext;
     }
 
+    public static byte[] PackEnvelope(EncryptedEnvelope envelope)
+    {
+        if (envelope.Nonce.Length != 12 || envelope.Tag.Length != 16) throw new CryptographicException("Invalid AES-GCM envelope sizes.");
+        return [.. envelope.Nonce, .. envelope.Tag, .. envelope.Ciphertext];
+    }
+
+    public static EncryptedEnvelope UnpackEnvelope(byte[] packed)
+    {
+        if (packed.Length < 28) throw new CryptographicException("Encrypted envelope is truncated.");
+        return new EncryptedEnvelope(packed[..12], packed[28..], packed[12..28]);
+    }
+
     public static string VerificationCode(byte[] sessionKey, string manifestDigest)
     {
         var digest = HMACSHA256.HashData(sessionKey, Encoding.UTF8.GetBytes(manifestDigest));

@@ -22,7 +22,7 @@ public partial class App : System.Windows.Application
         services.Browser.DeviceDiscovered += device => Dispatcher.Invoke(() =>
         {
             if (device.Id == LoadDeviceId(dataRoot) || model.NearbyDevices.Any(item => item.Id == device.Id)) return;
-            model.NearbyDevices.Add(new NearbyDevice(device.Id, device.Name, new Uri($"https://{device.Address}:{device.Port}"), device.CertificateSha256));
+            model.NearbyDevices.Add(new NearbyDevice(device.Id, device.Name, new Uri($"http://{device.Address}:{device.Port}"), device.PublicKey));
         });
         var window = new MainWindow();
         window.Attach(model);

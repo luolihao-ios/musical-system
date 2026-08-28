@@ -8,7 +8,7 @@ public static class ManifestCanonicalizer
     public static byte[] Canonicalize(TransferManifest manifest)
     {
         ArgumentNullException.ThrowIfNull(manifest);
-        if (manifest.ProtocolVersion != 1)
+        if (manifest.ProtocolVersion != 2)
         {
             throw new NotSupportedException($"Protocol version {manifest.ProtocolVersion} is not supported.");
         }

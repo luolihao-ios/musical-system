@@ -22,7 +22,7 @@ public sealed class ManifestVectorTests
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null)
         {
-            var candidate = Path.Combine(directory.FullName, "docs", "transfer-protocol", "vectors", "manifest-v1.json");
+            var candidate = Path.Combine(directory.FullName, "docs", "transfer-protocol", "vectors", "manifest-v2.json");
             if (File.Exists(candidate))
             {
                 return JsonSerializer.Deserialize<ManifestVector>(File.ReadAllText(candidate), JsonOptions)
@@ -32,7 +32,7 @@ public sealed class ManifestVectorTests
             directory = directory.Parent;
         }
 
-        throw new FileNotFoundException("Could not locate manifest-v1.json from the test output directory.");
+        throw new FileNotFoundException("Could not locate manifest-v2.json from the test output directory.");
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

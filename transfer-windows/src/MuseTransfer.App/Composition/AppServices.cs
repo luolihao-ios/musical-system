@@ -14,7 +14,7 @@ public sealed class AppServices : IAsyncDisposable
         Sessions = new SessionManager(TimeProvider.System, new SessionTokenService());
         Browser = new MdnsDeviceBrowser();
         Receiver = new ReceiverHost(Sessions, new IncomingFileStore(Path.Combine(applicationDataRoot, "Incoming")), new MdnsAdvertiser(),
-            new ReceiverOptions(destinationRoot, GetPrivateAddresses(), 53317, deviceId, deviceName, Path.Combine(applicationDataRoot, "receiver.pfx")));
+            new ReceiverOptions(destinationRoot, GetPrivateAddresses(), 53317, deviceId, deviceName));
     }
 
     public SessionManager Sessions { get; }

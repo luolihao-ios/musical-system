@@ -11,7 +11,7 @@ public sealed class SessionManager(
     private readonly Dictionary<string, TransferSession> sessions = new(StringComparer.Ordinal);
     public event Action<TransferSession>? SessionProposed;
 
-    public TransferSession Propose(TransferManifest manifest, string remoteEndpoint)
+    public TransferSession Propose(TransferManifest manifest, string remoteEndpoint, string? verificationCode = null)
     {
         ArgumentNullException.ThrowIfNull(manifest);
         if (manifest.Items.Count > 10_000)
@@ -24,7 +24,7 @@ public sealed class SessionManager(
             manifest,
             ManifestCanonicalizer.ComputeSha256(manifest),
             remoteEndpoint,
-            RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6"),
+            verificationCode ?? RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6"),
             Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant(),
             clock.GetUtcNow());
         sessions.Add(session.Id, session);

@@ -28,8 +28,9 @@
 
 ```text
 docs/transfer-protocol/
-  v1.md                         # 协议线格式、状态码和安全约束
-  vectors/manifest-v1.json      # 两端共享的规范化与摘要测试向量
+  v2.md                         # 协议线格式、状态码和安全约束
+  vectors/manifest-v2.json      # 两端共享的规范化与摘要测试向量
+  vectors/crypto-v2.json        # 两端共享的密钥派生与加密测试向量
 
 transfer-windows/
   MuseTransfer.slnx
@@ -52,11 +53,12 @@ transfer-ios/
   scripts/verify.sh
 ```
 
-## Task 1: Freeze Protocol v1 and Cross-Language Vectors
+## Task 1: Freeze Protocol v2 and Cross-Language Vectors
 
 **Files:**
 - Create: `docs/transfer-protocol/v2.md`
-- Create: `docs/transfer-protocol/vectors/manifest-v1.json`
+- Create: `docs/transfer-protocol/vectors/manifest-v2.json`
+- Create: `docs/transfer-protocol/vectors/crypto-v2.json`
 - Create: `transfer-windows/src/MuseTransfer.Protocol/MuseTransfer.Protocol.csproj`
 - Create: `transfer-windows/src/MuseTransfer.Protocol/TransferManifest.cs`
 - Create: `transfer-windows/src/MuseTransfer.Protocol/ManifestCanonicalizer.cs`
@@ -66,7 +68,7 @@ transfer-ios/
 
 **Interfaces:**
 - Produces: `TransferManifest`, `TransferItem`, `MusicGroup`, `ManifestCanonicalizer.Canonicalize(TransferManifest)`, `ManifestCanonicalizer.ComputeSha256(TransferManifest)`.
-- Produces wire endpoints: `POST /v1/sessions`, `POST /v1/sessions/{id}/decision`, `PUT /v1/sessions/{id}/files/{fileId}/chunks/{index}`, `POST /v1/sessions/{id}/complete`, `GET /v1/sessions/{id}`.
+- Produces wire endpoints: `POST /v2/sessions`, `PUT /v2/sessions/{id}/files/{fileId}/chunks/{index}`, `POST /v2/sessions/{id}/complete`, `GET /v2/sessions/{id}`.
 
 - [ ] **Step 1: Write the canonicalization vector and failing xUnit test**
 
@@ -75,15 +77,15 @@ Use this vector shape and exact canonical field order:
 ```json
 {
   "manifest": {
-    "protocolVersion": 1,
+    "protocolVersion": 2,
     "senderId": "sender-a",
     "items": [
       {"id":"f1","relativePath":"Album/song.mp3","size":3,"sha256":"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"}
     ],
     "musicGroups": []
   },
-  "canonicalUtf8": "{\"protocolVersion\":1,\"senderId\":\"sender-a\",\"items\":[{\"id\":\"f1\",\"relativePath\":\"Album/song.mp3\",\"size\":3,\"sha256\":\"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\"}],\"musicGroups\":[]}",
-  "canonicalSha256": "7990c2d1e1d48a2c724041fd490a3d23df966a589b5000dc48c993a6197ef7d6"
+  "canonicalUtf8": "{\"protocolVersion\":2,\"senderId\":\"sender-a\",\"items\":[{\"id\":\"f1\",\"relativePath\":\"Album/song.mp3\",\"size\":3,\"sha256\":\"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\"}],\"musicGroups\":[]}",
+  "canonicalSha256": "97101364c8d30ee1f04f5e03fbb1d96c34a6e6a7efcb53624d2c160cfa52d6a1"
 }
 ```
 
@@ -112,7 +114,7 @@ public static class ManifestCanonicalizer
 }
 ```
 
-Document request/response JSON, status lifecycle (`pending`, `accepted`, `rejected`, `transferring`, `completed`, `failed`, `cancelled`), `X-Muse-Session-Token`, maximum default limits, chunk `Content-Range`, and error envelope `{ "code": "...", "message": "..." }` in `v1.md`.
+Document request/response JSON, P-256/HKDF/AES-GCM envelopes, status lifecycle (`pending`, `accepted`, `rejected`, `transferring`, `completed`, `failed`, `cancelled`), `X-Muse-Session-Token`, maximum default limits, chunk `Content-Range`, and error envelope `{ "code": "...", "message": "..." }` in `v2.md`.
 
 - [ ] **Step 4: Run protocol tests and repository formatting checks**
 
@@ -124,7 +126,7 @@ Expected: PASS.
 
 ```powershell
 git add docs/transfer-protocol transfer-windows/MuseTransfer.slnx transfer-windows/src/MuseTransfer.Protocol transfer-windows/tests/MuseTransfer.Tests
-git commit -m "feat: define muse transfer protocol v1"
+git commit -m "feat: define muse transfer protocol v2"
 ```
 
 ## Task 2: Secure Paths, Duplicate Names, and Atomic File Commit
@@ -226,7 +228,7 @@ git add transfer-windows/src/MuseTransfer.Core/Sessions transfer-windows/tests/M
 git commit -m "feat: require approval for transfer sessions"
 ```
 
-## Task 4: Windows HTTPS Receiver and Local Discovery
+## Task 4: Windows Encrypted Receiver and Local Discovery
 
 **Files:**
 - Create: `transfer-windows/src/MuseTransfer.App/MuseTransfer.App.csproj`
@@ -252,7 +254,7 @@ Expected: FAIL because the receiver project is absent.
 
 - [ ] **Step 3: Implement Kestrel endpoints and mDNS lifecycle**
 
-Use a per-install self-signed certificate stored in the current-user application data directory. Bind only private/local interfaces plus loopback. Enforce JSON body, file-count and total-size limits before creating a session. Stream request bodies directly to `IncomingFileStore`; never call `ReadToEndAsync` or buffer full files.
+Generate a short-lived P-256 receiver key, advertise its X9.63 public key, and require AES-GCM envelopes before parsing manifests or writing chunks. Bind only private/local interfaces plus loopback. Enforce JSON body, file-count, chunk and total-size limits. Buffer at most one 1 MiB authenticated chunk; never buffer a complete file.
 
 Register `_musetransfer._tcp.local` after Kestrel binds and unregister before host disposal. Keep discovery behind `IMdnsAdvertiser` so tests use a fake.
 
@@ -329,7 +331,7 @@ git commit -m "feat: complete windows local transfer flow"
 - Create: `transfer-ios/MuseTransferTests/IncomingFileStoreTests.swift`
 
 **Interfaces:**
-- Consumes: `docs/transfer-protocol/vectors/manifest-v1.json` and Task 1 wire format.
+- Consumes: `docs/transfer-protocol/vectors/manifest-v2.json`, `crypto-v2.json` and Task 1 wire format.
 - Produces: Swift `TransferManifest`, `TransferItem`, `MusicGroup`, `ManifestCanonicalizer.canonicalData`, `IncomingFileStore.writeChunk`, `commit`.
 
 - [ ] **Step 1: Write XCTest parity and path-security tests**
@@ -396,7 +398,7 @@ Expected: FAIL because discovery and transport types do not exist.
 
 - [ ] **Step 3: Implement Network.framework transport**
 
-Use `NWBrowser` and `NWListener` for `_musetransfer._tcp`, and `NWConnection` with TLS for requests. Expose transport events through `AsyncStream`. Parse headers with strict size caps, stream bodies to the actor store, cancel work when background time expires, and restart listening when the app returns active. Validate the receiver certificate fingerprint shown by discovery/session metadata for the current connection.
+Use `NWBrowser` and `NWListener` for `_musetransfer._tcp`, with `NWConnection` carrying protocol v2 HTTP/TCP frames. Expose transport events through `AsyncStream`. Derive P-256 session keys through CryptoKit, verify AES-GCM before parsing or writing, enforce strict header/body caps, cancel work when background time expires, and restart listening when the app returns active.
 
 - [ ] **Step 4: Run complete iOS tests**
 
@@ -444,7 +446,7 @@ Expected: FAIL because UI model/history types are absent.
 
 Use Transfer/History/Settings tabs, a nearby-device grid, file importer, manual address form, mandatory receive sheet, per-task progress, and explicit cancel. Respect Dynamic Type, VoiceOver labels, high contrast and Reduce Motion. The share extension copies security-scoped inputs into an App Group inbox and opens the main app; it must release every security-scoped resource.
 
-Persist history as versioned Codable records containing device display name, timestamp, relative file name, size, result and destination bookmark only. Exclude session tokens, verification codes and certificate private material.
+Persist history as versioned Codable records containing device display name, timestamp, relative file name, size, result and destination bookmark only. Exclude session tokens, verification codes and private key material.
 
 - [ ] **Step 4: Run iOS tests and static verification**
 

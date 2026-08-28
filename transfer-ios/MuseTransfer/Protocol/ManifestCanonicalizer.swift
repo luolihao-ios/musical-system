@@ -5,7 +5,7 @@ public enum ManifestCanonicalizationError: Error { case unsupportedVersion(Int) 
 
 public enum ManifestCanonicalizer {
     public static func canonicalData(_ manifest: TransferManifest) throws -> Data {
-        guard manifest.protocolVersion == 1 else { throw ManifestCanonicalizationError.unsupportedVersion(manifest.protocolVersion) }
+        guard manifest.protocolVersion == 2 else { throw ManifestCanonicalizationError.unsupportedVersion(manifest.protocolVersion) }
         var json = "{\"protocolVersion\":\(manifest.protocolVersion),\"senderId\":\(quoted(manifest.senderId)),\"items\":["
         json += manifest.items.map { item in
             "{\"id\":\(quoted(item.id)),\"relativePath\":\(quoted(item.relativePath)),\"size\":\(item.size),\"sha256\":\(quoted(item.sha256))}"

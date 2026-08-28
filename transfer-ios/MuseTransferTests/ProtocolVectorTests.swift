@@ -4,7 +4,7 @@ import XCTest
 
 final class ProtocolVectorTests: XCTestCase {
     func testCanonicalManifestMatchesSharedVectorByteForByte() throws {
-        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "manifest-v1", withExtension: "json"))
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "manifest-v2", withExtension: "json"))
         let vector = try JSONDecoder().decode(ManifestVector.self, from: Data(contentsOf: url))
 
         let canonical = try ManifestCanonicalizer.canonicalData(vector.manifest)
