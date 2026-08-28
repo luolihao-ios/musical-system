@@ -34,7 +34,7 @@ targets:
     sources:
       - path: MuseTransferTests
     resources:
-      - path: ../docs/transfer-protocol/vectors/manifest-v1.json
+      - path: ../docs/transfer-protocol/vectors
     dependencies:
       - target: MuseTransferCore
     settings:

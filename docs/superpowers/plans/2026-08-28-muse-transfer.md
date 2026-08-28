@@ -4,9 +4,9 @@
 
 **Goal:** 构建可在同一局域网内发现、人工确认并安全互传任意文件的 Windows 与 iOS 原生应用，并为音乐内容提供导入暮色音乐的入口。
 
-**Architecture:** 先用版本化协议规范和跨语言测试向量锁定互操作边界，再分别实现 C#/WPF 与 Swift/SwiftUI 客户端。两端采用 mDNS 发现、HTTPS 控制与分块上传、临时目录提交、SHA-256 校验；音乐交接作为传输成功后的显式操作，不侵入播放器数据库。
+**Architecture:** 先用版本化协议规范和跨语言测试向量锁定互操作边界，再分别实现 C#/WPF 与 Swift/SwiftUI 客户端。两端采用 mDNS 发现、P-256/HKDF/AES-GCM 应用层加密、HTTP/TCP 分块承载、临时目录提交和 SHA-256 文件校验；音乐交接作为传输成功后的显式操作，不侵入播放器数据库。
 
-**Tech Stack:** C# 14、.NET 10、WPF、ASP.NET Core/Kestrel、xUnit、Swift 6、SwiftUI、Network.framework、CryptoKit、XCTest、Bonjour/mDNS、JSON、HTTPS、SHA-256。
+**Tech Stack:** C# 14、.NET 10、WPF、ASP.NET Core/Kestrel、xUnit、Swift 6、SwiftUI、Network.framework、CryptoKit、XCTest、Bonjour/mDNS、JSON、P-256、HKDF-SHA256、AES-GCM、SHA-256。
 
 **Spec:** `docs/superpowers/specs/2026-08-28-muse-transfer-design.md`
 
@@ -55,7 +55,7 @@ transfer-ios/
 ## Task 1: Freeze Protocol v1 and Cross-Language Vectors
 
 **Files:**
-- Create: `docs/transfer-protocol/v1.md`
+- Create: `docs/transfer-protocol/v2.md`
 - Create: `docs/transfer-protocol/vectors/manifest-v1.json`
 - Create: `transfer-windows/src/MuseTransfer.Protocol/MuseTransfer.Protocol.csproj`
 - Create: `transfer-windows/src/MuseTransfer.Protocol/TransferManifest.cs`
