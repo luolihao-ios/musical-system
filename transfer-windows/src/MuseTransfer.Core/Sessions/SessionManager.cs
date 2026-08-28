@@ -54,20 +54,7 @@ public sealed class SessionManager(
             throw new SessionNotAcceptedException();
         }
 
-        if (session.AuthorizationExpiresAt is null || clock.GetUtcNow() > session.AuthorizationExpiresAt.Value)
-        {
-            throw new SessionExpiredException();
-        }
-
-        if (!tokenService.TryValidate(token, out var claims)
-            || claims is null
-            || claims.SessionId != session.Id
-            || claims.SenderId != session.Manifest.SenderId
-            || claims.ManifestDigest != session.ManifestDigest
-            || claims.ExpiresAt != session.AuthorizationExpiresAt)
-        {
-            throw new InvalidSessionTokenException();
-        }
+        ValidateAuthorization(session, token);
 
         if (chunkIndex < 0 || !session.Manifest.Items.Any(item => item.Id == fileId))
         {
@@ -95,6 +82,26 @@ public sealed class SessionManager(
         }
 
         chunks.Add(chunkIndex);
+    }
+
+    public void AuthorizeCompletion(string sessionId, string token)
+    {
+        var session = Get(sessionId);
+        ValidateAuthorization(session, token);
+        if (session.Status is not TransferSessionStatus.Accepted and not TransferSessionStatus.Transferring)
+        {
+            throw new SessionNotAcceptedException();
+        }
+    }
+
+    public void Complete(string sessionId)
+    {
+        var session = Get(sessionId);
+        if (session.Status == TransferSessionStatus.Accepted)
+        {
+            Transition(session, TransferSessionStatus.Transferring);
+        }
+        Transition(session, TransferSessionStatus.Completed);
     }
 
     public IReadOnlyDictionary<string, IReadOnlyList<int>> GetResumeMap(string sessionId) =>
@@ -140,5 +147,23 @@ public sealed class SessionManager(
         }
 
         session.Status = target;
+    }
+
+    private void ValidateAuthorization(TransferSession session, string token)
+    {
+        if (session.AuthorizationExpiresAt is null || clock.GetUtcNow() > session.AuthorizationExpiresAt.Value)
+        {
+            throw new SessionExpiredException();
+        }
+
+        if (!tokenService.TryValidate(token, out var claims)
+            || claims is null
+            || claims.SessionId != session.Id
+            || claims.SenderId != session.Manifest.SenderId
+            || claims.ManifestDigest != session.ManifestDigest
+            || claims.ExpiresAt != session.AuthorizationExpiresAt)
+        {
+            throw new InvalidSessionTokenException();
+        }
     }
 }
