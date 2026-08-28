@@ -30,11 +30,13 @@ public sealed class ReceiverHost(SessionManager sessions, IncomingFileStore file
     private ListenOptions? firstEndpoint;
 
     public int BoundPort { get; private set; }
+    public string CertificateSha256 { get; private set; } = string.Empty;
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         if (application is not null) throw new InvalidOperationException("The receiver is already running.");
         certificate = ReceiverCertificateStore.GetOrCreate(options.CertificatePath ?? Path.Combine(Path.GetTempPath(), "MuseTransfer", "receiver.pfx"));
+        CertificateSha256 = Convert.ToHexString(SHA256.HashData(certificate.RawData)).ToLowerInvariant();
         var builder = WebApplication.CreateSlimBuilder();
         builder.WebHost.ConfigureKestrel(kestrel =>
         {
@@ -55,7 +57,7 @@ public sealed class ReceiverHost(SessionManager sessions, IncomingFileStore file
         await application.StartAsync(cancellationToken);
         var boundEndpoint = firstEndpoint ?? throw new InvalidOperationException("Kestrel did not bind an endpoint.");
         BoundPort = boundEndpoint.IPEndPoint?.Port ?? throw new InvalidOperationException("Kestrel endpoint has no TCP port.");
-        await advertiser.StartAsync(new MdnsService(options.DeviceId, options.DeviceName, BoundPort), cancellationToken);
+        await advertiser.StartAsync(new MdnsService(options.DeviceId, options.DeviceName, BoundPort, CertificateSha256), cancellationToken);
     }
 
     public HttpClient CreateLoopbackClientForTests()

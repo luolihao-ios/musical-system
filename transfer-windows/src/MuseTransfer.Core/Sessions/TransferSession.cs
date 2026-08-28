@@ -21,6 +21,7 @@ public sealed class TransferSession
         string manifestDigest,
         string remoteEndpoint,
         string verificationCode,
+        string proposalKey,
         DateTimeOffset createdAt)
     {
         Id = id;
@@ -28,6 +29,7 @@ public sealed class TransferSession
         ManifestDigest = manifestDigest;
         RemoteEndpoint = remoteEndpoint;
         VerificationCode = verificationCode;
+        ProposalKey = proposalKey;
         CreatedAt = createdAt;
     }
 
@@ -36,14 +38,17 @@ public sealed class TransferSession
     public string ManifestDigest { get; }
     public string RemoteEndpoint { get; }
     public string VerificationCode { get; }
+    public string ProposalKey { get; }
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset? AuthorizationExpiresAt { get; internal set; }
     public TransferSessionStatus Status { get; internal set; } = TransferSessionStatus.Pending;
+    internal string? AcceptedToken { get; set; }
 
     internal Dictionary<string, SortedSet<int>> VerifiedChunks { get; } = new(StringComparer.Ordinal);
 }
 
 public sealed record AcceptedSession(TransferSession Session, string Token);
+public sealed record SessionDecision(TransferSessionStatus Status, string? Token, IReadOnlyDictionary<string, IReadOnlyList<int>> VerifiedChunks);
 
 public sealed class SessionNotFoundException(string id) : KeyNotFoundException($"Transfer session '{id}' was not found.");
 public sealed class SessionNotAcceptedException() : InvalidOperationException("The receiver has not accepted this session.");

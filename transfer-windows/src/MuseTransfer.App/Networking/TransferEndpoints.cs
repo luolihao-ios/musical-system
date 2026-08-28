@@ -8,7 +8,7 @@ using MuseTransfer.Protocol;
 
 namespace MuseTransfer.App.Networking;
 
-public sealed record SessionProposalResponse(string SessionId, string VerificationCode, string ManifestDigest, string Status);
+public sealed record SessionProposalResponse(string SessionId, string VerificationCode, string ManifestDigest, string ProposalKey, string Status);
 
 public static partial class TransferEndpoints
 {
@@ -29,7 +29,7 @@ public static partial class TransferEndpoints
         try
         {
             var session = sessions.Propose(manifest, context.Connection.RemoteIpAddress?.ToString() ?? "unknown");
-            return Results.Accepted($"/v1/sessions/{session.Id}", new SessionProposalResponse(session.Id, session.VerificationCode, session.ManifestDigest, "pending"));
+            return Results.Accepted($"/v1/sessions/{session.Id}", new SessionProposalResponse(session.Id, session.VerificationCode, session.ManifestDigest, session.ProposalKey, "pending"));
         }
         catch (Exception exception) when (exception is NotSupportedException or ArgumentException)
         {
@@ -73,14 +73,15 @@ public static partial class TransferEndpoints
         catch (InvalidSessionTokenException exception) { return Error(HttpStatusCode.Unauthorized, "invalid_token", exception.Message); }
     }
 
-    private static IResult GetStatus(string sessionId, SessionManager sessions)
+    private static IResult GetStatus(HttpContext context, string sessionId, SessionManager sessions)
     {
         try
         {
-            var session = sessions.Get(sessionId);
-            return Results.Ok(new { status = session.Status.ToString().ToLowerInvariant(), verifiedChunks = sessions.GetResumeMap(sessionId) });
+            var decision = sessions.ReadDecision(sessionId, context.Request.Headers["X-Muse-Proposal-Key"].ToString());
+            return Results.Ok(new { status = decision.Status.ToString().ToLowerInvariant(), token = decision.Token, verifiedChunks = decision.VerifiedChunks });
         }
         catch (SessionNotFoundException exception) { return Error(HttpStatusCode.NotFound, "session_not_found", exception.Message); }
+        catch (InvalidSessionTokenException exception) { return Error(HttpStatusCode.Unauthorized, "invalid_proposal_key", exception.Message); }
     }
 
     private static bool DigestMatches(HttpContext context, TransferSession session) =>

@@ -12,13 +12,15 @@ public sealed class AppServices : IAsyncDisposable
     public AppServices(string applicationDataRoot, string destinationRoot, string deviceId, string deviceName)
     {
         Sessions = new SessionManager(TimeProvider.System, new SessionTokenService());
+        Browser = new MdnsDeviceBrowser();
         Receiver = new ReceiverHost(Sessions, new IncomingFileStore(Path.Combine(applicationDataRoot, "Incoming")), new MdnsAdvertiser(),
             new ReceiverOptions(destinationRoot, GetPrivateAddresses(), 53317, deviceId, deviceName, Path.Combine(applicationDataRoot, "receiver.pfx")));
     }
 
     public SessionManager Sessions { get; }
     public ReceiverHost Receiver { get; }
-    public ValueTask DisposeAsync() => Receiver.DisposeAsync();
+    public MdnsDeviceBrowser Browser { get; }
+    public async ValueTask DisposeAsync() { Browser.Dispose(); await Receiver.DisposeAsync(); }
 
     private static IReadOnlyList<IPAddress> GetPrivateAddresses() =>
         Dns.GetHostAddresses(Dns.GetHostName())

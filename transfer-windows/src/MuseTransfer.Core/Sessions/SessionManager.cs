@@ -9,6 +9,7 @@ public sealed class SessionManager(
 {
     private static readonly TimeSpan AuthorizationLifetime = TimeSpan.FromMinutes(5);
     private readonly Dictionary<string, TransferSession> sessions = new(StringComparer.Ordinal);
+    public event Action<TransferSession>? SessionProposed;
 
     public TransferSession Propose(TransferManifest manifest, string remoteEndpoint)
     {
@@ -24,8 +25,10 @@ public sealed class SessionManager(
             ManifestCanonicalizer.ComputeSha256(manifest),
             remoteEndpoint,
             RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6"),
+            Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant(),
             clock.GetUtcNow());
         sessions.Add(session.Id, session);
+        SessionProposed?.Invoke(session);
         return session;
     }
 
@@ -39,6 +42,7 @@ public sealed class SessionManager(
             session.Manifest.SenderId,
             session.ManifestDigest,
             session.AuthorizationExpiresAt.Value);
+        session.AcceptedToken = token;
         return new AcceptedSession(session, token);
     }
 
@@ -110,6 +114,16 @@ public sealed class SessionManager(
             entry => (IReadOnlyList<int>)entry.Value.ToArray(),
             StringComparer.Ordinal);
 
+    public SessionDecision ReadDecision(string sessionId, string proposalKey)
+    {
+        var session = Get(sessionId);
+        if (!FixedTimeEquals(session.ProposalKey, proposalKey))
+        {
+            throw new InvalidSessionTokenException();
+        }
+        return new SessionDecision(session.Status, session.AcceptedToken, GetResumeMap(sessionId));
+    }
+
     public TransferSession Get(string sessionId) =>
         sessions.TryGetValue(sessionId, out var session)
             ? session
@@ -123,6 +137,7 @@ public sealed class SessionManager(
             persistedSession.ManifestDigest,
             persistedSession.RemoteEndpoint,
             persistedSession.VerificationCode,
+            persistedSession.ProposalKey,
             persistedSession.CreatedAt)
         {
             Status = persistedSession.Status,
@@ -165,5 +180,13 @@ public sealed class SessionManager(
         {
             throw new InvalidSessionTokenException();
         }
+    }
+
+    private static bool FixedTimeEquals(string expected, string actual)
+    {
+        var expectedBytes = System.Text.Encoding.UTF8.GetBytes(expected);
+        var actualBytes = System.Text.Encoding.UTF8.GetBytes(actual);
+        return expectedBytes.Length == actualBytes.Length
+            && CryptographicOperations.FixedTimeEquals(expectedBytes, actualBytes);
     }
 }

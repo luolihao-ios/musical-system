@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using MuseTransfer.App.Discovery;
 using MuseTransfer.App.Networking;
 using MuseTransfer.Core.Files;
+using MuseTransfer.Core.Music;
 using MuseTransfer.Core.Sessions;
 using MuseTransfer.Protocol;
 
@@ -72,6 +73,27 @@ public sealed class ReceiverHostTests : IAsyncLifetime, IDisposable
         Assert.Equal(HttpStatusCode.OK, complete.StatusCode);
         Assert.Equal("abc", await File.ReadAllTextAsync(Path.Combine(Destination, "song.mp3")));
         Assert.Equal(TransferSessionStatus.Completed, sessions.Get(proposal.SessionId).Status);
+    }
+
+    [Fact]
+    public async Task TransferClient_sends_a_file_after_receiver_accepts_the_matching_proposal()
+    {
+        var source = Path.Combine(testRoot, "source.txt");
+        await File.WriteAllTextAsync(source, "round trip");
+        var proposed = new TaskCompletionSource<TransferSession>(TaskCreationOptions.RunContinuationsAsynchronously);
+        sessions!.SessionProposed += session => proposed.TrySetResult(session);
+        var sender = new TransferClient();
+        var send = sender.SendAsync(
+            new NearbyDevice("receiver", "Receiver", client!.BaseAddress!, string.Empty),
+            [new SelectedFile("f1", source, "nested/source.txt", new FileInfo(source).Length)],
+            new Progress<TransferProgress>(),
+            CancellationToken.None);
+
+        var session = await proposed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        sessions.Accept(session.Id);
+        await send.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal("round trip", await File.ReadAllTextAsync(Path.Combine(Destination, "nested", "source.txt")));
     }
 
     public async Task InitializeAsync()
