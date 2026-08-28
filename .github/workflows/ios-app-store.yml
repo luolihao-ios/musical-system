@@ -43,6 +43,8 @@ jobs:
           echo "Distribution certificate diagnostics (no certificate content):"
           wc -c < "$TEMP_SIGNING_DIR/distribution.p12"
           shasum -a 256 "$TEMP_SIGNING_DIR/distribution.p12"
+          echo -n "$P12_PASSWORD" | wc -c
+          echo -n "$P12_PASSWORD" | shasum -a 256
           echo "Provisioning profile diagnostics (no profile content):"
           wc -c < "$TEMP_SIGNING_DIR/appstore.mobileprovision"
           shasum -a 256 "$TEMP_SIGNING_DIR/appstore.mobileprovision"
