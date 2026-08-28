@@ -1,5 +1,6 @@
 using System.Windows;
 using LocalMusicPlayer.Composition;
+using LocalMusicPlayer.Import;
 
 namespace LocalMusicPlayer;
 
@@ -14,6 +15,9 @@ public partial class App : Application
         try
         {
             _services = await AppServices.CreateAsync();
+            var handoffRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "luolihao", "MuseTransfer", "MusicHandoff");
+            var importer = new TransferHandoffImporter(_services.Scanner, handoffRoot, Path.Combine(_services.Paths.DataDirectory, "ProcessedHandoffs"));
+            foreach (var argument in e.Args.Where(value => value.StartsWith("musemusic:", StringComparison.OrdinalIgnoreCase))) await importer.ImportAsync(argument);
             var window = new MainWindow(_services.Main);
             MainWindow = window;
             window.Show();

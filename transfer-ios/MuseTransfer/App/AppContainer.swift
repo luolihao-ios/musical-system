@@ -6,6 +6,7 @@ final class AppContainer {
     let sender = TransferClient()
     let receiver: ReceiverServer
     let history: TransferHistoryStore
+    let musicHandoff = MuseMusicHandoff()
 
     init() {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "MuseTransfer", directoryHint: .isDirectory)

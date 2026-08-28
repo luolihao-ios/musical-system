@@ -9,6 +9,7 @@ final class AppContainer {
     let libraryModel: LibraryModel
     let playlistsModel: PlaylistsModel
     let nowPlayingModel: NowPlayingModel
+    let transferHandoffImporter: TransferHandoffImporter
 
     private let nowPlayingBridge: NowPlayingBridge
 
@@ -42,6 +43,7 @@ final class AppContainer {
         self.libraryModel = libraryModel
         self.playlistsModel = playlistsModel
         self.nowPlayingModel = nowPlayingModel
+        self.transferHandoffImporter = TransferHandoffImporter(importer: FileImportService(), store: store)
     }
 }
 

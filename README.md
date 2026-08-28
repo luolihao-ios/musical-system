@@ -2,6 +2,19 @@
 
 一款只整理和播放设备本地音频的音乐播放器，不接入在线曲库，也不下载或上传音乐。Windows 与 iOS 使用独立的原生工程和本地数据库。
 
+## 暮色互传
+
+仓库同时包含独立的 Windows 与 iOS 局域网传输工具，支持任意文件和文件夹，并对音乐、同名歌词、封面及播放列表进行识别。两端仅使用自有 Muse Transfer v2 协议互通：Bonjour/mDNS 发现、P-256 密钥协商、HKDF-SHA256、AES-256-GCM、1 MiB 分块和 SHA-256 最终校验。每批接收都必须由用户明确接受，拒绝前不会上传文件正文。
+
+- Windows 工程：`transfer-windows/MuseTransfer.slnx`
+- iOS 工程定义：`transfer-ios/project.yml`
+- 协议：`docs/transfer-protocol/v2.md`
+- 真机验收：`docs/transfer-protocol/acceptance-checklist.md`
+
+音乐传输完成后，用户可以显式选择“导入暮色音乐”。交接清单会再次校验路径和文件摘要，并通过 `handoffId` 防止重复导入；普通文件不会进入播放器资料库。
+
+Windows 安装包和 iOS 模拟器构建分别由 `Muse Transfer Windows`、`Muse Transfer iOS` GitHub Actions 工作流生成。目前工作流保留为手动触发，以便功能完整后集中验证。
+
 ## Windows 原生版
 
 - C# 14、.NET 10、WPF，支持 Windows 10/11 x64。

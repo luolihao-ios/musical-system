@@ -3,6 +3,7 @@ using System.Windows;
 using MuseTransfer.App.Composition;
 using MuseTransfer.App.Networking;
 using MuseTransfer.App.ViewModels;
+using MuseTransfer.App.History;
 
 namespace MuseTransfer.App;
 
@@ -16,7 +17,7 @@ public partial class App : System.Windows.Application
         var dataRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "luolihao", "MuseTransfer");
         var destination = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "暮色互传");
         services = new AppServices(dataRoot, destination, LoadDeviceId(dataRoot), Environment.MachineName);
-        var model = new TransferViewModel(new TransferClient(), new SessionDecisionService(services.Sessions));
+        var model = new TransferViewModel(new TransferClient(), new SessionDecisionService(services.Sessions), new TransferHistoryStore(Path.Combine(dataRoot, "history-v1.json")));
         services.Sessions.SessionProposed += session => Dispatcher.Invoke(() => model.PresentReceiveRequest(new ReceiveRequest(
             session.Id, session.Manifest.SenderId, session.Manifest.Items.Count, session.Manifest.Items.Sum(item => item.Size), session.VerificationCode)));
         services.Browser.DeviceDiscovered += device => Dispatcher.Invoke(() =>
@@ -28,7 +29,7 @@ public partial class App : System.Windows.Application
         window.Attach(model);
         MainWindow = window;
         window.Show();
-        try { await services.Receiver.StartAsync(CancellationToken.None); services.Browser.Start(); }
+        try { await services.Receiver.StartAsync(CancellationToken.None); model.SetReceiverInfo(services.Receiver.BoundPort, services.Receiver.ReceiverPublicKey); await model.LoadHistoryAsync(); services.Browser.Start(); }
         catch (Exception exception) { System.Windows.MessageBox.Show($"接收服务启动失败：{exception.Message}", "暮色互传", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 

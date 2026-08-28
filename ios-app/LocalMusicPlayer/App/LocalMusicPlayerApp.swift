@@ -9,6 +9,7 @@ struct LocalMusicPlayerApp: App {
         WindowGroup {
             BootstrapView(bootstrap: bootstrap)
                 .preferredColorScheme(.dark)
+                .onOpenURL { url in Task { try? await bootstrap.container?.transferHandoffImporter.importURL(url) } }
         }
     }
 }

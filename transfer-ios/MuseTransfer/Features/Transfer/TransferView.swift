@@ -19,6 +19,13 @@ struct TransferView: View {
                 Section("待发送") {
                     ForEach(model.selectedFiles) { Text($0.relativePath) }.onDelete(perform: model.removeFiles)
                     Button("选择文件", systemImage: "plus") { importing = true }
+                    Button("导入暮色音乐", systemImage: "music.note") { model.importSelectedIntoMusic() }
+                        .disabled(model.selectedFiles.isEmpty)
+                }
+                Section("手动连接") {
+                    TextField("192.168.1.2:53317", text: $model.manualAddress).textInputAutocapitalization(.never).keyboardType(.numbersAndPunctuation)
+                    TextField("接收端 Base64 公钥", text: $model.manualPublicKey).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    Button("连接并发送", action: model.sendManual).disabled(model.selectedFiles.isEmpty || model.isSending)
                 }
                 Section("状态") {
                     Text(model.statusText)

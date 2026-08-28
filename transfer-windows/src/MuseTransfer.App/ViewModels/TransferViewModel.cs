@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using MuseTransfer.App.Networking;
+using MuseTransfer.App.History;
 using MuseTransfer.Core.Music;
 using MuseTransfer.Core.Sessions;
 
@@ -21,7 +22,7 @@ public sealed class SessionDecisionService(SessionManager sessions) : IReceiveDe
     public Task RejectAsync(string sessionId) { sessions.Reject(sessionId); return Task.CompletedTask; }
 }
 
-public sealed class TransferViewModel(ITransferClient transferClient, IReceiveDecisionService decisions) : INotifyPropertyChanged
+public sealed class TransferViewModel(ITransferClient transferClient, IReceiveDecisionService decisions, ITransferHistoryStore? historyStore = null) : INotifyPropertyChanged
 {
     private NearbyDevice? selectedDevice;
     private IReadOnlyList<SelectedFile> selectedFiles = [];
@@ -30,8 +31,13 @@ public sealed class TransferViewModel(ITransferClient transferClient, IReceiveDe
     private string currentFileName = string.Empty;
     private double progress;
     private CancellationTokenSource? sendCancellation;
+    private string localPublicKey = string.Empty;
+    private string localAddress = "正在启动接收服务";
 
     public ObservableCollection<NearbyDevice> NearbyDevices { get; } = [];
+    public ObservableCollection<TransferHistoryEntry> History { get; } = [];
+    public string LocalPublicKey { get => localPublicKey; private set => Set(ref localPublicKey, value); }
+    public string LocalAddress { get => localAddress; private set => Set(ref localAddress, value); }
 
     public NearbyDevice? SelectedDevice
     {
@@ -81,6 +87,7 @@ public sealed class TransferViewModel(ITransferClient transferClient, IReceiveDe
             await transferClient.SendAsync(SelectedDevice!, SelectedFiles, reporter, sendCancellation.Token);
             Progress = 1;
             StatusText = "传输完成";
+            if (historyStore is not null) await historyStore.AppendAsync(new TransferHistoryEntry(Guid.NewGuid(), DateTimeOffset.Now, SelectedDevice!.Name, "sent", "completed", SelectedFiles.Select(file => file.RelativePath).ToArray(), SelectedFiles.Sum(file => file.Size)));
         }
         catch (OperationCanceledException)
         {
@@ -95,6 +102,8 @@ public sealed class TransferViewModel(ITransferClient transferClient, IReceiveDe
     }
 
     public void Cancel() => sendCancellation?.Cancel();
+    public void SetReceiverInfo(int port, byte[] publicKey) { LocalAddress = $"本机端口 {port}"; LocalPublicKey = Convert.ToBase64String(publicKey); }
+    public async Task LoadHistoryAsync() { if (historyStore is null) return; History.Clear(); foreach (var item in await historyStore.LoadAsync()) History.Add(item); }
 
     public void ReportProgress(TransferProgress update)
     {

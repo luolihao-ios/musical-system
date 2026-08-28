@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using Microsoft.Win32;
 using MuseTransfer.App.Networking;
+using MuseTransfer.App.Music;
 using MuseTransfer.App.ViewModels;
 using MuseTransfer.Core.Music;
 
@@ -55,4 +56,11 @@ public partial class MainWindow : Window
     private async void OnAccept(object sender, RoutedEventArgs e) { if (model is not null) await model.AcceptAsync(); }
     private async void OnReject(object sender, RoutedEventArgs e) { if (model is not null) await model.RejectAsync(); }
     private void OnCancel(object sender, RoutedEventArgs e) => model?.Cancel();
+    private async void OnImportMusic(object sender, RoutedEventArgs e)
+    {
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var source = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "暮色互传");
+        var handoff = new MuseMusicHandoff(Path.Combine(local, "luolihao", "MuseTransfer", "MusicHandoff"));
+        if (!await handoff.CreateAndLaunchAsync(source)) System.Windows.MessageBox.Show("接收目录中没有可导入的音乐，或暮色音乐尚未安装。", "暮色互传");
+    }
 }
