@@ -14,7 +14,7 @@ permissions:
 jobs:
   test:
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - name: Install XcodeGen
@@ -22,13 +22,20 @@ jobs:
       - name: Generate Xcode project
         working-directory: transfer-ios
         run: xcodegen generate
+      - name: Prepare iOS simulator runtime
+        run: |
+          xcodebuild -downloadPlatform iOS
+          RUNTIME=$(xcrun simctl list runtimes -j | python3 -c 'import json,sys; print(next(x["identifier"] for x in json.load(sys.stdin)["runtimes"] if ".iOS-" in x["identifier"] and x.get("isAvailable",False)))')
+          DEVICE=$(xcrun simctl list devicetypes -j | python3 -c 'import json,sys; print(next(x["identifier"] for x in json.load(sys.stdin)["devicetypes"] if x["name"].startswith("iPhone")))')
+          echo "SIMULATOR_UDID=$(xcrun simctl create MuseTransferCI "$DEVICE" "$RUNTIME")" >> "$GITHUB_ENV"
       - name: Run iOS simulator tests
         working-directory: transfer-ios
         run: >-
           xcodebuild test
           -project MuseTransfer.xcodeproj
           -scheme MuseTransfer
-          -destination 'platform=macOS,arch=arm64'
+          -destination "platform=iOS Simulator,id=${SIMULATOR_UDID}"
+          CODE_SIGNING_ALLOWED=NO
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
