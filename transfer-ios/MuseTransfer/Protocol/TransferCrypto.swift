@@ -43,5 +43,5 @@ public enum TransferCrypto {
         return String(format: "%06u", value % 1_000_000)
     }
 
-    public static func data(of key: SymmetricKey) -> Data { key.withUnsafeBytes(Data.init) }
+    public static func data(of key: SymmetricKey) -> Data { key.withUnsafeBytes { Data($0) } }
 }
