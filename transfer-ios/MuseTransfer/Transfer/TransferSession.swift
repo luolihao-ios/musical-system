@@ -107,6 +107,21 @@ public final class TransferSessionStore: @unchecked Sendable {
         }
     }
 
+    public func authorizeCompletion(sessionID: String, token: String) throws -> TransferSessionSnapshot {
+        try lock.withLock {
+            guard let session = sessions[sessionID] else { throw TransferSessionError.notFound }
+            guard session.snapshot.status == .accepted || session.snapshot.status == .transferring else { throw TransferSessionError.notAccepted }
+            let claims = try validateToken(token)
+            guard claims.sessionID == sessionID, claims.senderID == session.snapshot.manifest.senderId,
+                  claims.manifestDigest == session.snapshot.manifestDigest else { throw TransferSessionError.invalidToken }
+            return session.snapshot
+        }
+    }
+
+    public func complete(sessionID: String) throws {
+        try transition(sessionID: sessionID, from: [.accepted, .transferring], to: .completed)
+    }
+
     public func recordPersistedChunk(sessionID: String, fileID: String, chunkIndex: Int) throws {
         try lock.withLock {
             guard var session = sessions[sessionID] else { throw TransferSessionError.notFound }
