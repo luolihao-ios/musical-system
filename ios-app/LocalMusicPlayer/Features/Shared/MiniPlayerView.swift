@@ -56,6 +56,7 @@ struct MiniPlayerView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
+        .frame(height: 60)
         .background(.ultraThinMaterial)
         .overlay(alignment: .top) {
             Rectangle()
