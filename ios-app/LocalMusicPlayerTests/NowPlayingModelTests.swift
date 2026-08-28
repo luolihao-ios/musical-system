@@ -20,8 +20,7 @@ final class NowPlayingModelTests: XCTestCase {
             in: CGSize(width: 390, height: 844)
         )
 
-        XCTAssertGreaterThanOrEqual(size.height, 56)
-        XCTAssertLessThanOrEqual(size.height, 72)
+        XCTAssertEqual(size.height, 60, accuracy: 0.5)
     }
 
     func testLyricsSwitchAndRotationFollowPlaybackAndReduceMotion() async {

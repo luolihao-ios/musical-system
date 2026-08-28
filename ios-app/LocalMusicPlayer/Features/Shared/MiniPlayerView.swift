@@ -53,9 +53,9 @@ struct MiniPlayerView: View {
                 }
                 .accessibilityLabel("下一首")
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
         .frame(height: 60)
         .background(.ultraThinMaterial)
         .overlay(alignment: .top) {
@@ -67,6 +67,7 @@ struct MiniPlayerView: View {
                     alignment: .leading
                 )
                 .scaleEffect(x: model.progress, anchor: .leading)
+                .allowsHitTesting(false)
         }
     }
 }
