@@ -1,6 +1,13 @@
 name: Muse Transfer Windows
 
 on:
+  push:
+    branches:
+      - "codex/muse-transfer"
+    paths:
+      - "transfer-windows/**"
+      - "docs/transfer-protocol/**"
+      - ".github/workflows/muse-transfer-windows.yml"
   workflow_dispatch:
   pull_request:
     paths:
