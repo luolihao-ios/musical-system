@@ -85,7 +85,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.luolihao.musetransfer.testhost
         PRODUCT_NAME: MuseTransferTestHost
         GENERATE_INFOPLIST_FILE: YES
-        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
 
   MuseTransferTests:
     type: bundle.unit-test

@@ -29,7 +29,6 @@ jobs:
           -project MuseTransfer.xcodeproj
           -scheme MuseTransfer
           -destination 'platform=macOS,arch=arm64'
-          CODE_SIGNING_ALLOWED=NO
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
