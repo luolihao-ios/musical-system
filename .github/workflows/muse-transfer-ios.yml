@@ -1,13 +1,6 @@
 name: Muse Transfer iOS
 
 on:
-  push:
-    branches:
-      - "codex/muse-transfer"
-    paths:
-      - "transfer-ios/**"
-      - "docs/transfer-protocol/vectors/**"
-      - ".github/workflows/muse-transfer-ios.yml"
   pull_request:
     paths:
       - "transfer-ios/**"

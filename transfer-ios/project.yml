@@ -19,6 +19,7 @@ targets:
     sources:
       - path: MuseTransfer/Protocol
       - path: MuseTransfer/Transfer
+      - path: MuseTransfer/Discovery
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.luolihao.musetransfer.core
