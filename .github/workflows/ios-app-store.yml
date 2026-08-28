@@ -38,8 +38,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$TEMP_SIGNING_DIR" "$HOME/Library/MobileDevice/Provisioning Profiles"
-          echo "$P12_BASE64" | base64 --decode > "$TEMP_SIGNING_DIR/distribution.p12"
-          echo "$PROFILE_BASE64" | base64 --decode > "$TEMP_SIGNING_DIR/appstore.mobileprovision"
+          echo "$P12_BASE64" | base64 -D > "$TEMP_SIGNING_DIR/distribution.p12"
+          echo "$PROFILE_BASE64" | base64 -D > "$TEMP_SIGNING_DIR/appstore.mobileprovision"
           echo "Provisioning profile diagnostics (no profile content):"
           wc -c < "$TEMP_SIGNING_DIR/appstore.mobileprovision"
           shasum -a 256 "$TEMP_SIGNING_DIR/appstore.mobileprovision"
@@ -112,7 +112,7 @@ jobs:
           set -euo pipefail
           mkdir -p "$HOME/.appstoreconnect/private_keys"
           API_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8"
-          echo "$API_PRIVATE_KEY_BASE64" | base64 --decode > "$API_KEY_PATH"
+          echo "$API_PRIVATE_KEY_BASE64" | base64 -D > "$API_KEY_PATH"
           IPA_PATH=$(find ios-app/build/AppStore/export -maxdepth 1 -name '*.ipa' -print -quit)
           test -n "$IPA_PATH"
           xcrun altool --validate-app --type ios -f "$IPA_PATH" \
