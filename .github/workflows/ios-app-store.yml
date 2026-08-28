@@ -40,6 +40,10 @@ jobs:
           mkdir -p "$TEMP_SIGNING_DIR" "$HOME/Library/MobileDevice/Provisioning Profiles"
           echo "$P12_BASE64" | base64 --decode > "$TEMP_SIGNING_DIR/distribution.p12"
           echo "$PROFILE_BASE64" | base64 --decode > "$TEMP_SIGNING_DIR/appstore.mobileprovision"
+          echo "Provisioning profile diagnostics (no profile content):"
+          wc -c < "$TEMP_SIGNING_DIR/appstore.mobileprovision"
+          shasum -a 256 "$TEMP_SIGNING_DIR/appstore.mobileprovision"
+          xxd -l 8 -p "$TEMP_SIGNING_DIR/appstore.mobileprovision"
 
           security cms -D -i "$TEMP_SIGNING_DIR/appstore.mobileprovision" \
             > "$TEMP_SIGNING_DIR/profile.plist"
