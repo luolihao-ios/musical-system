@@ -73,6 +73,20 @@ targets:
         SKIP_INSTALL: YES
         APPLICATION_EXTENSION_API_ONLY: YES
 
+  MuseTransferTestHost:
+    type: application
+    platform: iOS
+    sources:
+      - path: MuseTransferTestHost
+    dependencies:
+      - target: MuseTransferCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.luolihao.musetransfer.testhost
+        PRODUCT_NAME: MuseTransferTestHost
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGNING_ALLOWED: NO
+
   MuseTransferTests:
     type: bundle.unit-test
     platform: iOS
@@ -82,10 +96,10 @@ targets:
       - path: ../docs/transfer-protocol/vectors
     dependencies:
       - target: MuseTransferCore
-      - target: MuseTransfer
+      - target: MuseTransferTestHost
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.luolihao.musetransfer.tests
         GENERATE_INFOPLIST_FILE: YES
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/MuseTransfer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MuseTransfer"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/MuseTransferTestHost.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MuseTransferTestHost"
         BUNDLE_LOADER: "$(TEST_HOST)"
