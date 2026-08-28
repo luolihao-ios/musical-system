@@ -1,4 +1,5 @@
 import Foundation
+import MuseTransferCore
 import Observation
 
 @MainActor @Observable

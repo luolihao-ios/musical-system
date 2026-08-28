@@ -1,4 +1,5 @@
 import SwiftUI
+import MuseTransferCore
 
 struct ReceiveRequestSheet: View {
     let request: IncomingTransferRequest

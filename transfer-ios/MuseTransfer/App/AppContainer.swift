@@ -1,4 +1,5 @@
 import Foundation
+import MuseTransferCore
 
 @MainActor
 final class AppContainer {
