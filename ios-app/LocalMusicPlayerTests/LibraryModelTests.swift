@@ -24,8 +24,7 @@ final class LibraryModelTests: XCTestCase {
 
         XCTAssertEqual(model.filteredTracks.map(\.id), ["one"])
         XCTAssertEqual(playback.queue.map(\.id), ["one"])
-        XCTAssertEqual(playback.startIndex, 0)
-        XCTAssertEqual(playback.playCount, 1)
+        XCTAssertEqual(playback.selectedTrack?.id, "one")
     }
 
     func testDeniedSystemPermissionLeavesFilesImportAvailable() async throws {
@@ -141,16 +140,29 @@ private struct FakeSystemImporter: SystemLibraryImporting {
 
 @MainActor
 private final class FakeLibraryPlayback: LibraryPlaybackControlling {
+    var state = PlaybackState()
     private(set) var queue: [TrackSnapshot] = []
-    private(set) var startIndex = 0
-    private(set) var playCount = 0
+    private(set) var selectedTrack: TrackSnapshot?
+    private var observers: [UUID: (PlaybackState) -> Void] = [:]
 
-    func loadQueue(_ tracks: [TrackSnapshot], startIndex: Int) throws {
-        queue = tracks
-        self.startIndex = startIndex
+    func playTrack(
+        _ track: TrackSnapshot,
+        in queue: [TrackSnapshot]
+    ) async throws {
+        selectedTrack = track
+        self.queue = queue
     }
 
-    func play() async throws {
-        playCount += 1
+    func observeState(
+        _ observer: @escaping (PlaybackState) -> Void
+    ) -> UUID {
+        let id = UUID()
+        observers[id] = observer
+        observer(state)
+        return id
+    }
+
+    func removeStateObserver(_ id: UUID) {
+        observers[id] = nil
     }
 }

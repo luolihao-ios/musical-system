@@ -106,7 +106,7 @@ struct LibraryView: View {
                         LibraryEntranceCard(
                             title: kind.title,
                             systemImage: kind.systemImage,
-                            count: model.groups(for: kind).count
+                            countText: "\(model.groups(for: kind).count)"
                         )
                     }
                     .buttonStyle(.plain)
@@ -122,7 +122,7 @@ struct LibraryView: View {
                     LibraryEntranceCard(
                         title: "最近播放",
                         systemImage: "clock.arrow.circlepath",
-                        count: model.recentlyPlayed.count
+                        countText: "\(model.recentlyPlayed.count) 首"
                     )
                 }
                 .buttonStyle(.plain)
@@ -134,7 +134,11 @@ struct LibraryView: View {
 
     @ViewBuilder
     private func trackRow(_ track: TrackSnapshot) -> some View {
-        TrackRow(track: track) {
+        TrackRow(
+            track: track,
+            isCurrent: model.currentTrackID == track.id,
+            isPlaying: model.isCurrentTrackPlaying
+        ) {
             Task { try? await model.play(track) }
         } toggleLike: {
             try? model.toggleLike(track)
@@ -149,7 +153,7 @@ struct LibraryView: View {
 private struct LibraryEntranceCard: View {
     let title: String
     let systemImage: String
-    let count: Int
+    let countText: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -158,7 +162,7 @@ private struct LibraryEntranceCard: View {
                 .foregroundStyle(PlayerTheme.accent)
             Text(title)
                 .font(.headline)
-            Text("\(count) 项")
+            Text(countText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -215,8 +219,12 @@ private struct LibraryTracksView: View {
 
     var body: some View {
         List(tracks) { track in
-            TrackRow(track: track) {
-                Task { try? await model.play(track) }
+            TrackRow(
+                track: track,
+                isCurrent: model.currentTrackID == track.id,
+                isPlaying: model.isCurrentTrackPlaying
+            ) {
+                Task { try? await model.play(track, in: tracks) }
             } toggleLike: {
                 try? model.toggleLike(track)
             } addToPlaylist: { playlistID in
@@ -239,6 +247,8 @@ private struct LibraryTracksView: View {
 
 private struct TrackRow: View {
     let track: TrackSnapshot
+    let isCurrent: Bool
+    let isPlaying: Bool
     let play: () -> Void
     let toggleLike: () -> Void
     let addToPlaylist: (String) -> Void
@@ -250,9 +260,26 @@ private struct TrackRow: View {
                 HStack(spacing: 12) {
                     ArtworkView(path: track.artworkReference)
                         .frame(width: 52, height: 52)
+                        .overlay(alignment: .bottomTrailing) {
+                            if isCurrent {
+                                Image(
+                                    systemName: isPlaying
+                                        ? "speaker.wave.2.fill"
+                                        : "pause.fill"
+                                )
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.white)
+                                .padding(5)
+                                .background(PlayerTheme.accent, in: Circle())
+                                .accessibilityHidden(true)
+                            }
+                        }
                     VStack(alignment: .leading, spacing: 4) {
                         Text(track.title)
                             .font(.body.weight(.semibold))
+                            .foregroundStyle(
+                                isCurrent ? PlayerTheme.accent : Color.primary
+                            )
                             .lineLimit(1)
                         Text(
                             [track.artist, track.album]

@@ -5,6 +5,11 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ios_root="$repo_root/ios-app"
 
 cd "$repo_root"
+/usr/bin/python3 -m unittest discover \
+  -s "$ios_root/scripts/tests" \
+  -p "test_*.py" \
+  -v
+
 xcodegen generate --spec "$ios_root/project.yml"
 
 simulator_id="$(

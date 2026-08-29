@@ -23,6 +23,7 @@ xcodebuild build \
   COMPILER_INDEX_STORE_ENABLE=NO
 
 test -d "$app_path"
+/usr/bin/python3 "$ios_root/scripts/validate_app_bundle.py" "$app_path"
 rm -rf "$build_root/ipa"
 mkdir -p "$payload_root"
 cp -R "$app_path" "$payload_root/"

@@ -1,9 +1,29 @@
 import XCTest
+import SwiftUI
 @testable import LocalMusicPlayer
 
 @MainActor
 final class NowPlayingModelTests: XCTestCase {
-    func testLyricsSwitchAndRotationFollowPlaybackAndReduceMotion() {
+    func testMiniPlayerKeepsCompactHeightWhenGivenFullScreenProposal() {
+        let playback = FakeNowPlayingController(
+            state: state(position: 10, isPlaying: true)
+        )
+        let model = NowPlayingModel(
+            playback: playback,
+            lyricsReader: FakeLyricsReader(source: nil)
+        )
+        let controller = UIHostingController(
+            rootView: MiniPlayerView(model: model, openNowPlaying: {})
+        )
+
+        let size = controller.sizeThatFits(
+            in: CGSize(width: 390, height: 844)
+        )
+
+        XCTAssertEqual(size.height, 60, accuracy: 0.5)
+    }
+
+    func testLyricsSwitchAndRotationFollowPlaybackAndReduceMotion() async {
         let playback = FakeNowPlayingController(
             state: state(position: 5, isPlaying: true)
         )
@@ -14,6 +34,7 @@ final class NowPlayingModelTests: XCTestCase {
             ),
             reduceMotion: false
         )
+        await Task.yield()
         XCTAssertEqual(model.currentLyricIndex, 0)
         XCTAssertTrue(model.isRecordRotating)
 
@@ -48,21 +69,95 @@ final class NowPlayingModelTests: XCTestCase {
         XCTAssertEqual(playback.lastSeek, 120)
     }
 
+    func testSeekLyricForwardsExactTimestampWithoutChangingPlayback() throws {
+        let playback = FakeNowPlayingController(
+            state: state(position: 0, isPlaying: false)
+        )
+        let model = NowPlayingModel(
+            playback: playback,
+            lyricsReader: FakeLyricsReader(source: nil)
+        )
+
+        try model.seek(
+            to: LyricLine(timestamp: 42, text: "副歌")
+        )
+
+        XCTAssertEqual(playback.lastSeek, 42)
+        XCTAssertFalse(playback.state.isPlaying)
+    }
+
+    func testStaleLyricsCannotReplaceCurrentTrackLyrics() async {
+        let playback = FakeNowPlayingController(
+            state: state(
+                trackID: "A",
+                position: 0,
+                isPlaying: true
+            )
+        )
+        let reader = DelayedLyricsReader(
+            responses: [
+                "/music/A.lrc": .init(
+                    delay: .milliseconds(120),
+                    source: "[00:01.00]A歌词"
+                ),
+                "/music/B.lrc": .init(
+                    delay: .milliseconds(10),
+                    source: "[00:01.00]B歌词"
+                )
+            ]
+        )
+        let model = NowPlayingModel(
+            playback: playback,
+            lyricsReader: reader
+        )
+
+        playback.publish(
+            state(trackID: "B", position: 0, isPlaying: true)
+        )
+        XCTAssertTrue(model.lyricLines.isEmpty)
+        XCTAssertNil(model.currentLyricIndex)
+        try? await Task.sleep(for: .milliseconds(160))
+
+        XCTAssertEqual(model.lyricTrackID, "B")
+        XCTAssertEqual(model.lyricLines.map(\.text), ["B歌词"])
+    }
+
+    func testQueueEditingForwardsExactArguments() async {
+        let playback = FakeNowPlayingController(
+            state: state(position: 0, isPlaying: true)
+        )
+        let model = NowPlayingModel(
+            playback: playback,
+            lyricsReader: FakeLyricsReader(source: nil)
+        )
+        let offsets = IndexSet(integer: 0)
+
+        model.moveQueue(fromOffsets: offsets, toOffset: 2)
+        await model.removeQueueItems(atOffsets: offsets)
+        model.clearQueue()
+
+        XCTAssertEqual(playback.lastMoveOffsets, offsets)
+        XCTAssertEqual(playback.lastMoveDestination, 2)
+        XCTAssertEqual(playback.lastRemovedOffsets, offsets)
+        XCTAssertEqual(playback.clearQueueCount, 1)
+    }
+
     private func state(
+        trackID: String = "night",
         position: TimeInterval,
         isPlaying: Bool
     ) -> PlaybackState {
         PlaybackState(
             queue: [
                 TrackSnapshot(
-                    id: "night",
+                    id: trackID,
                     title: "夜航星",
                     artist: "测试歌手",
                     album: "测试专辑",
                     duration: 240,
                     sourceKind: .importedFile,
-                    sourceReference: "/music/night.m4a",
-                    lyricsReference: "/music/night.lrc"
+                    sourceReference: "/music/\(trackID).m4a",
+                    lyricsReference: "/music/\(trackID).lrc"
                 )
             ],
             currentIndex: 0,
@@ -78,8 +173,23 @@ final class NowPlayingModelTests: XCTestCase {
 private struct FakeLyricsReader: LyricsReading {
     let source: String?
 
-    func read(path: String) throws -> String? {
+    func read(path: String) async throws -> String? {
         source
+    }
+}
+
+private struct DelayedLyricsReader: LyricsReading {
+    struct Response: Sendable {
+        let delay: Duration
+        let source: String
+    }
+
+    let responses: [String: Response]
+
+    func read(path: String) async throws -> String? {
+        guard let response = responses[path] else { return nil }
+        try await Task.sleep(for: response.delay)
+        return response.source
     }
 }
 
@@ -88,6 +198,10 @@ private final class FakeNowPlayingController: PlaybackControlling {
     var state: PlaybackState
     private var observers: [UUID: (PlaybackState) -> Void] = [:]
     private(set) var lastSeek: TimeInterval?
+    private(set) var lastMoveOffsets: IndexSet?
+    private(set) var lastMoveDestination: Int?
+    private(set) var lastRemovedOffsets: IndexSet?
+    private(set) var clearQueueCount = 0
 
     init(state: PlaybackState) {
         self.state = state
@@ -100,6 +214,29 @@ private final class FakeNowPlayingController: PlaybackControlling {
 
     func seek(to position: TimeInterval) throws {
         lastSeek = position
+    }
+
+    func setVolume(_ volume: Double) throws {}
+    func setMode(_ mode: PlaybackMode) throws {}
+
+    func playTrack(
+        _ track: TrackSnapshot,
+        in queue: [TrackSnapshot]
+    ) async throws {}
+
+    func playQueueItem(at index: Int) async throws {}
+
+    func moveQueue(fromOffsets: IndexSet, toOffset: Int) throws {
+        lastMoveOffsets = fromOffsets
+        lastMoveDestination = toOffset
+    }
+
+    func removeQueueItems(atOffsets: IndexSet) async throws {
+        lastRemovedOffsets = atOffsets
+    }
+
+    func clearQueue() throws {
+        clearQueueCount += 1
     }
 
     func observeState(

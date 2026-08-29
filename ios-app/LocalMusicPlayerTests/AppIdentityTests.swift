@@ -3,6 +3,6 @@ import XCTest
 
 final class AppIdentityTests: XCTestCase {
     func testDisplayName() {
-        XCTAssertEqual(AppIdentity.displayName, "暮色音乐")
+        XCTAssertEqual(AppIdentity.displayName, "爱乐之城-musicPlayer")
     }
 }
