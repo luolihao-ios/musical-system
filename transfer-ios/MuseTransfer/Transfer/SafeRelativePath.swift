@@ -21,7 +21,8 @@ public struct SafeRelativePath: Equatable, Sendable {
     public func resolved(below root: URL) throws -> URL {
         let standardRoot = root.standardizedFileURL
         let candidate = standardRoot.appending(path: value).standardizedFileURL
-        guard candidate.path.hasPrefix(standardRoot.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/") else {
+        let rootPath = standardRoot.path.hasSuffix("/") ? String(standardRoot.path.dropLast()) : standardRoot.path
+        guard candidate.path.hasPrefix(rootPath + "/") else {
             throw UnsafePathError(path: value)
         }
         return candidate

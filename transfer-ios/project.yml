@@ -93,7 +93,8 @@ targets:
     sources:
       - path: MuseTransferTests
     resources:
-      - path: ../docs/transfer-protocol/vectors
+      - path: ../docs/transfer-protocol/vectors/manifest-v2.json
+      - path: ../docs/transfer-protocol/vectors/crypto-v2.json
     dependencies:
       - target: MuseTransferCore
       - target: MuseTransferTestHost
