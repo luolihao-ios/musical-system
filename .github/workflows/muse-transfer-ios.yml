@@ -1,0 +1,48 @@
+name: Muse Transfer iOS
+
+on:
+  pull_request:
+    paths:
+      - "transfer-ios/**"
+      - "docs/transfer-protocol/vectors/**"
+      - ".github/workflows/muse-transfer-ios.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        working-directory: transfer-ios
+        run: xcodegen generate
+      - name: Prepare iOS simulator runtime
+        run: |
+          xcodebuild -downloadPlatform iOS
+          RUNTIME=$(xcrun simctl list runtimes -j | python3 -c 'import json,sys; print(next(x["identifier"] for x in json.load(sys.stdin)["runtimes"] if ".iOS-" in x["identifier"] and x.get("isAvailable",False)))')
+          DEVICE=$(xcrun simctl list devicetypes -j | python3 -c 'import json,sys; print(next(x["identifier"] for x in json.load(sys.stdin)["devicetypes"] if x["name"].startswith("iPhone")))')
+          SIMULATOR_UDID=$(xcrun simctl create MuseTransferCI "$DEVICE" "$RUNTIME")
+          echo "SIMULATOR_UDID=$SIMULATOR_UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIMULATOR_UDID"
+          xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+      - name: Run iOS simulator tests
+        working-directory: transfer-ios
+        run: >-
+          xcodebuild test
+          -project MuseTransfer.xcodeproj
+          -scheme MuseTransfer
+          -destination "platform=iOS Simulator,id=${SIMULATOR_UDID}"
+          CODE_SIGNING_ALLOWED=NO
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: MuseTransfer-iOS-test-results
+          path: ~/Library/Developer/Xcode/DerivedData/**/Logs/Test/*.xcresult
+          if-no-files-found: ignore

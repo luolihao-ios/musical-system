@@ -38,5 +38,10 @@ Source: "..\artifacts\publish\*"; DestDir: "{app}"; Flags: ignoreversion recurse
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
+[Registry]
+Root: HKCU; Subkey: "Software\Classes\musemusic"; ValueType: string; ValueName: ""; ValueData: "URL:暮色音乐导入协议"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\musemusic"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\musemusic\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"" ""%1"""
+
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "启动 {#AppName}"; Flags: nowait postinstall skipifsilent

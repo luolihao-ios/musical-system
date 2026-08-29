@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MuseTransfer.App/MuseTransfer.App.csproj" />
+    <Project Path="src/MuseTransfer.Core/MuseTransfer.Core.csproj" />
+    <Project Path="src/MuseTransfer.Protocol/MuseTransfer.Protocol.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MuseTransfer.Tests/MuseTransfer.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,106 @@
+name: MuseTransfer
+
+options:
+  bundleIdPrefix: com.luolihao
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "16.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+
+targets:
+  MuseTransferCore:
+    type: framework
+    platform: iOS
+    sources:
+      - path: MuseTransfer/Protocol
+      - path: MuseTransfer/Transfer
+      - path: MuseTransfer/Discovery
+      - path: MuseTransfer/Music
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.luolihao.musetransfer.core
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGNING_ALLOWED: NO
+
+  MuseTransfer:
+    type: application
+    platform: iOS
+    sources:
+      - path: MuseTransfer/App
+      - path: MuseTransfer/Features
+    dependencies:
+      - target: MuseTransferCore
+      - target: MuseTransferShare
+        embed: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.luolihao.musetransfer
+        PRODUCT_NAME: MuseTransfer
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_ENTITLEMENTS: MuseTransfer/MuseTransfer.entitlements
+        INFOPLIST_KEY_CFBundleDisplayName: 暮色互传
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: 暮色互传需要访问局域网，以发现并连接您确认的附近设备。
+        INFOPLIST_KEY_NSBonjourServices: "_musetransfer._tcp"
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        SUPPORTS_MACCATALYST: NO
+    scheme:
+      testTargets:
+        - MuseTransferTests
+
+  MuseTransferShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: MuseTransferShare
+        excludes:
+          - Info.plist
+          - MuseTransferShare.entitlements
+    info:
+      path: MuseTransferShare/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.luolihao.musetransfer.share
+        CODE_SIGN_ENTITLEMENTS: MuseTransferShare/MuseTransferShare.entitlements
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+
+  MuseTransferTestHost:
+    type: application
+    platform: iOS
+    sources:
+      - path: MuseTransferTestHost
+    dependencies:
+      - target: MuseTransferCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.luolihao.musetransfer.testhost
+        PRODUCT_NAME: MuseTransferTestHost
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGNING_ALLOWED: NO
+
+  MuseTransferTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: MuseTransferTests
+    resources:
+      - path: MuseTransferTests/Resources/manifest-v2.json
+      - path: MuseTransferTests/Resources/crypto-v2.json
+    dependencies:
+      - target: MuseTransferCore
+      - target: MuseTransferTestHost
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.luolihao.musetransfer.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/MuseTransferTestHost.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MuseTransferTestHost"
+        BUNDLE_LOADER: "$(TEST_HOST)"

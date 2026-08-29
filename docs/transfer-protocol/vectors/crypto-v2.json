@@ -1,0 +1,14 @@
+{
+  "receiverPrivate": "CxWPOiia8tRJ5D+ReaIizs254saj9gHfxq3OGsr9Qig=",
+  "receiverPublic": "BOoAPMZJIGOQr+/7jN6bptb+Yw+SBJjx9wig2nQUXND+25jni5vESKCZHtb7RK0j5mqUH+obR7ko8gnKB/cgc2o=",
+  "senderPrivate": "AVA9YQqx+wOZbRf4wyrBJJxYxoycpwmVUHSe5V9rVds=",
+  "senderPublic": "BLwvLJxxHaVR98LpWneq5QPZJhPwHGSi0cVBVlMu9A20NXSFNqCkf6GUuW2oY1LNe2dgub0H0qcL3ywpr6eiMlI=",
+  "salt": "MDIsHtpHNaYCRbjyXj11MquAT58ljbptpuILrEt65kI=",
+  "derivedKey": "ZxWrwJdAM7+U+GdSGx8/eVNVCGI8tNaG4uVn2X35IyA=",
+  "nonce": "AAECAwQFBgcICQoL",
+  "plaintext": "TXVzZSBUcmFuc2ZlciBlbmNyeXB0ZWQgdmVjdG9y",
+  "associatedData": "cHJvcG9zYWx8djI=",
+  "ciphertext": "L+jnvYpCsq9ght3WJrc+HtT+E+ebo7RbpBm5jec6",
+  "tag": "lJnwZRCypGFbKOuXqpWU1Q==",
+  "verificationCode": "767560"
+}
