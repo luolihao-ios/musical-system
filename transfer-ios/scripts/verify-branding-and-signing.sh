@@ -18,5 +18,11 @@ grep -q 'AIYUE_TRANSFER_APP_PROFILE_BASE64' "$RELEASE_WORKFLOW"
 grep -q 'AIYUE_TRANSFER_SHARE_PROFILE_BASE64' "$RELEASE_WORKFLOW"
 grep -q 'AiYueTransfer-signed.ipa' "$RELEASE_WORKFLOW"
 grep -q 'AiYueTransfer-Setup.exe' "$RELEASE_WORKFLOW"
+grep -q 'CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"' "$RELEASE_WORKFLOW"
+grep -q 'APP_STORE_CONNECT_KEY_ID' "$RELEASE_WORKFLOW"
+grep -q 'APP_STORE_CONNECT_ISSUER_ID' "$RELEASE_WORKFLOW"
+grep -q 'APP_STORE_CONNECT_PRIVATE_KEY_BASE64' "$RELEASE_WORKFLOW"
+grep -q -- '--validate-app' "$RELEASE_WORKFLOW"
+grep -q -- '--upload-app' "$RELEASE_WORKFLOW"
 test ! -e ../.github/workflows/aiyue-transfer-ios-package.yml
 test ! -e ../.github/workflows/muse-transfer-windows.yml
