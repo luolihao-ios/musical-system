@@ -12,6 +12,8 @@ grep -q 'PROVISIONING_PROFILE_SPECIFIER: "$(AIYUE_SHARE_PROFILE_NAME)"' project.
 grep -q 'group.com.luolihao.aiyuetransfer' MuseTransfer/MuseTransfer.entitlements
 grep -q 'group.com.luolihao.aiyuetransfer' MuseTransferShare/MuseTransferShare.entitlements
 grep -q '<key>NSExtensionPointIdentifier</key>' MuseTransferShare/Info.plist
+grep -q '<key>NSExtensionActivationSupportsFileWithMaxCount</key>' MuseTransferShare/Info.plist
+! grep -q 'TRUEPREDICATE' MuseTransferShare/Info.plist
 test -f MuseTransfer/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
 grep -q 'group.com.luolihao.aiyuetransfer' ../ios-app/LocalMusicPlayer/LocalMusicPlayer.entitlements
 RELEASE_WORKFLOW=../.github/workflows/aiyue-transfer-release.yml

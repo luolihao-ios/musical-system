@@ -16,7 +16,10 @@
     <key>NSExtensionPointIdentifier</key><string>com.apple.share-services</string>
     <key>NSExtensionPrincipalClass</key><string>$(PRODUCT_MODULE_NAME).ShareViewController</string>
     <key>NSExtensionAttributes</key>
-    <dict><key>NSExtensionActivationRule</key><string>TRUEPREDICATE</string></dict>
+    <dict>
+      <key>NSExtensionActivationRule</key>
+      <dict><key>NSExtensionActivationSupportsFileWithMaxCount</key><integer>100</integer></dict>
+    </dict>
   </dict>
 </dict>
 </plist>
