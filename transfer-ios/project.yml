@@ -35,6 +35,8 @@ targets:
     sources:
       - path: MuseTransfer/App
       - path: MuseTransfer/Features
+      - path: MuseTransfer/Resources
+        buildPhase: resources
     dependencies:
       - target: MuseTransferCore
       - target: MuseTransferShare
@@ -54,6 +56,8 @@ targets:
         INFOPLIST_KEY_NSBonjourServices: "_musetransfer._tcp"
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SUPPORTS_MACCATALYST: NO
     scheme:
       testTargets:
@@ -67,8 +71,6 @@ targets:
         excludes:
           - Info.plist
           - MuseTransferShare.entitlements
-    info:
-      path: MuseTransferShare/Info.plist
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.luolihao.aiyuetransfer.share
@@ -76,6 +78,8 @@ targets:
         CODE_SIGN_STYLE: Manual
         PROVISIONING_PROFILE_SPECIFIER: "$(AIYUE_SHARE_PROFILE_NAME)"
         CODE_SIGN_ENTITLEMENTS: MuseTransferShare/MuseTransferShare.entitlements
+        INFOPLIST_FILE: MuseTransferShare/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES
         APPLICATION_EXTENSION_API_ONLY: YES
 
