@@ -1,19 +1,46 @@
-name: AiYue Transfer signed IPA
+name: AiYue Transfer Release
 
 on:
   push:
     branches:
-      - "codex/aiyue-transfer-signing"
+      - "codex/aiyue-unified-release"
     paths:
       - "transfer-ios/**"
-      - ".github/workflows/aiyue-transfer-ios-package.yml"
+      - "transfer-windows/**"
+      - "docs/transfer-protocol/**"
+      - ".github/workflows/aiyue-transfer-release.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  package:
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+      - name: Verify and publish
+        shell: pwsh
+        run: ./transfer-windows/scripts/verify.ps1
+      - name: Install Inno Setup
+        shell: pwsh
+        run: winget install --id JRSoftware.InnoSetup.7 --exact --source winget --silent --accept-package-agreements --accept-source-agreements
+      - name: Build installer
+        shell: pwsh
+        run: ./transfer-windows/scripts/package.ps1
+      - uses: actions/upload-artifact@v7
+        with:
+          name: AiYueTransfer-Windows-x64
+          path: transfer-windows/artifacts/installer/AiYueTransfer-Setup.exe
+          if-no-files-found: error
+
+  ios:
+    name: iOS signed IPA
     runs-on: macos-latest
     timeout-minutes: 45
     env:
