@@ -14,8 +14,8 @@ public partial class App : System.Windows.Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-        var dataRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "luolihao", "MuseTransfer");
-        var destination = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "暮色互传");
+        var dataRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "luolihao", "AiYueTransfer");
+        var destination = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "爱乐互传");
         services = new AppServices(dataRoot, destination, LoadDeviceId(dataRoot), Environment.MachineName);
         var model = new TransferViewModel(new TransferClient(), new SessionDecisionService(services.Sessions), new TransferHistoryStore(Path.Combine(dataRoot, "history-v1.json")));
         services.Sessions.SessionProposed += session => Dispatcher.Invoke(() => model.PresentReceiveRequest(new ReceiveRequest(
@@ -30,7 +30,7 @@ public partial class App : System.Windows.Application
         MainWindow = window;
         window.Show();
         try { await services.Receiver.StartAsync(CancellationToken.None); model.SetReceiverInfo(services.Receiver.BoundPort, services.Receiver.ReceiverPublicKey); await model.LoadHistoryAsync(); services.Browser.Start(); }
-        catch (Exception exception) { System.Windows.MessageBox.Show($"接收服务启动失败：{exception.Message}", "暮色互传", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        catch (Exception exception) { System.Windows.MessageBox.Show($"接收服务启动失败：{exception.Message}", "爱乐互传", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 
     protected override async void OnExit(ExitEventArgs e)

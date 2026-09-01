@@ -19,8 +19,8 @@ public partial class MainWindow : Window
         if (model is null || !Uri.TryCreate(AddressBox.Text, UriKind.Absolute, out var uri)) return;
         byte[] publicKey;
         try { publicKey = Convert.FromBase64String(PublicKeyBox.Text.Trim()); }
-        catch (FormatException) { System.Windows.MessageBox.Show("请输入接收端显示的 Base64 公钥。", "暮色互传"); return; }
-        if (publicKey.Length != 65) { System.Windows.MessageBox.Show("接收端公钥长度无效。", "暮色互传"); return; }
+        catch (FormatException) { System.Windows.MessageBox.Show("请输入接收端显示的 Base64 公钥。", "爱乐互传"); return; }
+        if (publicKey.Length != 65) { System.Windows.MessageBox.Show("接收端公钥长度无效。", "爱乐互传"); return; }
         var device = new NearbyDevice(uri.Host, uri.Host, uri, publicKey);
         if (!model.NearbyDevices.Any(item => item.BaseAddress == uri)) model.NearbyDevices.Add(device);
         model.SelectedDevice = device;
@@ -59,8 +59,8 @@ public partial class MainWindow : Window
     private async void OnImportMusic(object sender, RoutedEventArgs e)
     {
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var source = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "暮色互传");
-        var handoff = new MuseMusicHandoff(Path.Combine(local, "luolihao", "MuseTransfer", "MusicHandoff"));
-        if (!await handoff.CreateAndLaunchAsync(source)) System.Windows.MessageBox.Show("接收目录中没有可导入的音乐，或暮色音乐尚未安装。", "暮色互传");
+        var source = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "爱乐互传");
+        var handoff = new MuseMusicHandoff(Path.Combine(local, "luolihao", "AiYueTransfer", "MusicHandoff"));
+        if (!await handoff.CreateAndLaunchAsync(source)) System.Windows.MessageBox.Show("接收目录中没有可导入的音乐，或暮色音乐尚未安装。", "爱乐互传");
     }
 }

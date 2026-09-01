@@ -24,7 +24,7 @@ public final class MuseMusicHandoff {
         let supported = Set(["mp3", "m4a", "aac", "flac", "wav", "aif", "aiff", "lrc"])
         let selected = files.filter { supported.contains($0.url.pathExtension.lowercased()) }
         guard selected.contains(where: { $0.url.pathExtension.lowercased() != "lrc" }) else { return false }
-        guard let group = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.com.luolihao.musetransfer") else { return false }
+        guard let group = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.com.luolihao.aiyuetransfer") else { return false }
         let id = UUID().uuidString.lowercased()
         let root = group.appending(path: "MusicHandoff/\(id)", directoryHint: .isDirectory)
         try fileManager.createDirectory(at: root, withIntermediateDirectories: true)

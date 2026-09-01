@@ -14,8 +14,8 @@
 }
 ```
 
-- iOS 使用 App Group `group.com.luolihao.musetransfer` 下的 `MusicHandoff/<handoffId>`。
-- Windows 使用当前用户本地应用数据下的 `MuseTransfer/MusicHandoff/<handoffId>`。
+- iOS 使用 App Group `group.com.luolihao.aiyuetransfer` 下的 `MusicHandoff/<handoffId>`。
+- Windows 使用当前用户本地应用数据下的 `AiYueTransfer/MusicHandoff/<handoffId>`。
 - 播放器必须拒绝绝对路径、`..`、符号链接逃逸和摘要不符的项目。
 - 播放器以 `handoffId` 记录幂等处理状态，成功或终止失败后清理一次性交接目录。
 - URI 为 `musemusic://import?handoff=<handoffId>`；Windows 还允许同用户范围的 `manifest=<escaped absolute path>`。

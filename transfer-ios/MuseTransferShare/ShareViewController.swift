@@ -7,7 +7,7 @@ final class ShareViewController: UIViewController {
         Task { await copyAttachments(); extensionContext?.completeRequest(returningItems: nil) }
     }
     private func copyAttachments() async {
-        guard let inbox = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.luolihao.musetransfer")?.appending(path: "ShareInbox", directoryHint: .isDirectory) else { return }
+        guard let inbox = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.luolihao.aiyuetransfer")?.appending(path: "ShareInbox", directoryHint: .isDirectory) else { return }
         try? FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
         for item in extensionContext?.inputItems.compactMap({ $0 as? NSExtensionItem }) ?? [] {
             for provider in item.attachments ?? [] where provider.hasItemConformingToTypeIdentifier(UTType.item.identifier) {

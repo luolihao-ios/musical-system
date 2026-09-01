@@ -1,4 +1,4 @@
-#define AppName "暮色互传"
+#define AppName "爱乐互传"
 #define AppVersion "0.1.0"
 #define AppExeName "MuseTransfer.App.exe"
 
@@ -7,13 +7,13 @@ AppId={{EE29DC05-B4A6-481D-97FB-AB059DC17747}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher=luolihao
-DefaultDirName={localappdata}\Programs\MuseTransfer
+DefaultDirName={localappdata}\Programs\AiYueTransfer
 DefaultGroupName={#AppName}
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\artifacts\installer
-OutputBaseFilename=MuseTransfer-Setup
+OutputBaseFilename=AiYueTransfer-Setup
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern

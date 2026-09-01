@@ -102,7 +102,7 @@ final class TransferModel {
     }
 
     private func importShareInbox() {
-        guard let root = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.luolihao.musetransfer")?.appending(path: "ShareInbox") else { return }
+        guard let root = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.luolihao.aiyuetransfer")?.appending(path: "ShareInbox") else { return }
         let urls = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
         addFiles(urls)
     }

@@ -33,7 +33,7 @@ struct TransferView: View {
                     if model.isSending { Button("取消发送", role: .destructive) { model.cancelSend() } }
                 }
             }
-            .navigationTitle("暮色互传")
+            .navigationTitle("爱乐互传")
             .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in if case let .success(urls) = result { model.addFiles(urls) } }
             .sheet(item: $model.pendingRequest, onDismiss: model.dismissPending) { ReceiveRequestSheet(request: $0, accept: model.acceptPending, reject: model.rejectPending) }
             .alert("操作失败", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) { Button("好") {} } message: { Text(model.errorMessage ?? "") }

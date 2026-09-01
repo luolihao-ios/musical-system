@@ -1,0 +1,131 @@
+name: AiYue Transfer signed IPA
+
+on:
+  push:
+    branches:
+      - "codex/aiyue-transfer-signing"
+    paths:
+      - "transfer-ios/**"
+      - ".github/workflows/aiyue-transfer-ios-package.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      APP_BUNDLE_ID: com.luolihao.aiyuetransfer
+      SHARE_BUNDLE_ID: com.luolihao.aiyuetransfer.share
+      KEYCHAIN_PATH: /tmp/aiyue-transfer-signing.keychain-db
+      TEMP_SIGNING_DIR: /tmp/aiyue-transfer-signing
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Validate signing secrets
+        env:
+          P12: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          APP_PROFILE: ${{ secrets.AIYUE_TRANSFER_APP_PROFILE_BASE64 }}
+          SHARE_PROFILE: ${{ secrets.AIYUE_TRANSFER_SHARE_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          for value in "$P12" "$P12_PASSWORD" "$APP_PROFILE" "$SHARE_PROFILE"; do
+            test -n "$value"
+          done
+      - name: Import certificate and provisioning profiles
+        env:
+          P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          APP_PROFILE_BASE64: ${{ secrets.AIYUE_TRANSFER_APP_PROFILE_BASE64 }}
+          SHARE_PROFILE_BASE64: ${{ secrets.AIYUE_TRANSFER_SHARE_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$TEMP_SIGNING_DIR" "$HOME/Library/MobileDevice/Provisioning Profiles"
+          echo "$P12_BASE64" | base64 -D > "$TEMP_SIGNING_DIR/distribution.p12"
+          echo "$APP_PROFILE_BASE64" | base64 -D > "$TEMP_SIGNING_DIR/app.mobileprovision"
+          echo "$SHARE_PROFILE_BASE64" | base64 -D > "$TEMP_SIGNING_DIR/share.mobileprovision"
+
+          security cms -D -i "$TEMP_SIGNING_DIR/app.mobileprovision" > "$TEMP_SIGNING_DIR/app.plist"
+          security cms -D -i "$TEMP_SIGNING_DIR/share.mobileprovision" > "$TEMP_SIGNING_DIR/share.plist"
+          APP_PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' "$TEMP_SIGNING_DIR/app.plist")
+          APP_PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print Name' "$TEMP_SIGNING_DIR/app.plist")
+          SHARE_PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' "$TEMP_SIGNING_DIR/share.plist")
+          SHARE_PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print Name' "$TEMP_SIGNING_DIR/share.plist")
+          TEAM_ID=$(/usr/libexec/PlistBuddy -c 'Print TeamIdentifier:0' "$TEMP_SIGNING_DIR/app.plist")
+          SHARE_TEAM_ID=$(/usr/libexec/PlistBuddy -c 'Print TeamIdentifier:0' "$TEMP_SIGNING_DIR/share.plist")
+          APP_IDENTIFIER=$(/usr/libexec/PlistBuddy -c 'Print Entitlements:application-identifier' "$TEMP_SIGNING_DIR/app.plist")
+          SHARE_IDENTIFIER=$(/usr/libexec/PlistBuddy -c 'Print Entitlements:application-identifier' "$TEMP_SIGNING_DIR/share.plist")
+          test "$SHARE_TEAM_ID" = "$TEAM_ID"
+          test "$APP_IDENTIFIER" = "$TEAM_ID.$APP_BUNDLE_ID"
+          test "$SHARE_IDENTIFIER" = "$TEAM_ID.$SHARE_BUNDLE_ID"
+          cp "$TEMP_SIGNING_DIR/app.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/$APP_PROFILE_UUID.mobileprovision"
+          cp "$TEMP_SIGNING_DIR/share.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/$SHARE_PROFILE_UUID.mobileprovision"
+
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 24)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$TEMP_SIGNING_DIR/distribution.p12" -k "$KEYCHAIN_PATH" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+
+          {
+            echo "APP_PROFILE_UUID=$APP_PROFILE_UUID"
+            echo "APP_PROFILE_NAME=$APP_PROFILE_NAME"
+            echo "SHARE_PROFILE_UUID=$SHARE_PROFILE_UUID"
+            echo "SHARE_PROFILE_NAME=$SHARE_PROFILE_NAME"
+            echo "TEAM_ID=$TEAM_ID"
+          } >> "$GITHUB_ENV"
+      - name: Archive and export signed IPA
+        working-directory: transfer-ios
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          xcodebuild archive \
+            -project AiYueTransfer.xcodeproj \
+            -scheme MuseTransfer \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/AiYueTransfer.xcarchive \
+            CODE_SIGN_IDENTITY='Apple Distribution' \
+            AIYUE_TEAM_ID="$TEAM_ID" \
+            AIYUE_APP_PROFILE_NAME="$APP_PROFILE_NAME" \
+            AIYUE_SHARE_PROFILE_NAME="$SHARE_PROFILE_NAME"
+
+          cat > "$TEMP_SIGNING_DIR/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>provisioningProfiles</key><dict>
+              <key>$APP_BUNDLE_ID</key><string>$APP_PROFILE_NAME</string>
+              <key>$SHARE_BUNDLE_ID</key><string>$SHARE_PROFILE_NAME</string>
+            </dict>
+            <key>uploadSymbols</key><true/>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath build/AiYueTransfer.xcarchive \
+            -exportPath build/export \
+            -exportOptionsPlist "$TEMP_SIGNING_DIR/ExportOptions.plist"
+          IPA_PATH=$(find build/export -maxdepth 1 -name '*.ipa' -print -quit)
+          test -n "$IPA_PATH"
+          mv "$IPA_PATH" build/export/AiYueTransfer-signed.ipa
+      - uses: actions/upload-artifact@v7
+        with:
+          name: AiYueTransfer-signed-IPA
+          path: transfer-ios/build/export/AiYueTransfer-signed.ipa
+          if-no-files-found: error
+      - name: Clean temporary signing material
+        if: always()
+        run: |
+          security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+          rm -rf "$TEMP_SIGNING_DIR"
+          rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/${APP_PROFILE_UUID:-}.mobileprovision"
+          rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/${SHARE_PROFILE_UUID:-}.mobileprovision"

@@ -1,4 +1,4 @@
-name: Muse Transfer Windows
+name: AiYue Transfer Windows
 
 on:
   push:
@@ -38,6 +38,6 @@ jobs:
         run: ./transfer-windows/scripts/package.ps1
       - uses: actions/upload-artifact@v7
         with:
-          name: MuseTransfer-Windows-x64
-          path: transfer-windows/artifacts/installer/MuseTransfer-Setup.exe
+          name: AiYueTransfer-Windows-x64
+          path: transfer-windows/artifacts/installer/AiYueTransfer-Setup.exe
           if-no-files-found: error

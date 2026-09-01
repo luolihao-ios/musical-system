@@ -19,7 +19,7 @@ final class TransferHandoffImporter {
               let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "handoff" })?.value,
               id.unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.contains($0) || $0.value == 45 }) else { return }
         let processedKey = "ProcessedMusicHandoff.\(id)"; guard !defaults.bool(forKey: processedKey) else { return }
-        guard let group = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.com.luolihao.musetransfer") else { return }
+        guard let group = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.com.luolihao.aiyuetransfer") else { return }
         let root = group.appending(path: "MusicHandoff/\(id)", directoryHint: .isDirectory)
         defer { try? fileManager.removeItem(at: root) }
         let document = try JSONDecoder().decode(Document.self, from: Data(contentsOf: root.appending(path: "music-handoff-v1.json")))
