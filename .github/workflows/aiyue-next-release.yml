@@ -22,7 +22,10 @@ jobs:
         with: { dotnet-version: "10.0.x" }
       - name: Install Inno Setup
         shell: pwsh
-        run: winget install --id JRSoftware.InnoSetup.7 --exact --source winget --silent --accept-package-agreements --accept-source-agreements
+        run: |
+          winget source reset --force
+          winget source update
+          winget install --id JRSoftware.InnoSetup.7 --exact --source winget --silent --accept-package-agreements --accept-source-agreements
       - name: Test and package
         shell: pwsh
         run: ./transfer-windows-next/scripts/package.ps1
