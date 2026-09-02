@@ -1,5 +1,6 @@
 using Makaretu.Dns;
 using AiyueTransfer.Protocol;
+using System.Text;
 
 namespace AiyueTransfer.App;
 
@@ -12,7 +13,8 @@ public sealed class BonjourAdvertiser : IDisposable
     {
         discovery = new ServiceDiscovery(multicast);
         profile = new ServiceProfile($"aiyue-{info.Fingerprint[..12]}", "_aiyue._tcp", (ushort)info.Port);
-        profile.AddProperty("alias", info.Alias); profile.AddProperty("version", info.Version); profile.AddProperty("deviceType", info.DeviceType);
+        // Makaretu's TXT helper accepts ASCII only. Preserve a Chinese device name as Base64 UTF-8.
+        profile.AddProperty("aliasB64", Convert.ToBase64String(Encoding.UTF8.GetBytes(info.Alias))); profile.AddProperty("version", info.Version); profile.AddProperty("deviceType", info.DeviceType);
         profile.AddProperty("fingerprint", info.Fingerprint); profile.AddProperty("protocol", info.Protocol);
         multicast.Start();
         discovery.Advertise(profile);

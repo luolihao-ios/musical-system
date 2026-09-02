@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using Makaretu.Dns;
 
 namespace AiyueTransfer.App;
@@ -46,11 +47,18 @@ public sealed class BonjourBrowser : IDisposable
             .Where(parts => parts.Length == 2)
             .ToDictionary(parts => parts[0], parts => parts[1], StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var alias = properties.GetValueOrDefault("alias") ?? instanceName.Split('.', 2)[0];
+        var alias = DecodeAlias(properties.GetValueOrDefault("aliasB64")) ?? properties.GetValueOrDefault("alias") ?? instanceName.Split('.', 2)[0];
         var deviceType = properties.GetValueOrDefault("deviceType") ?? "附近设备";
         var fingerprint = properties.GetValueOrDefault("fingerprint") ?? $"bonjour:{address}:{service.Port}";
         DiagnosticLog.Write($"Bonjour device parsed: alias={alias}; endpoint={address}:{service.Port}; fingerprint={fingerprint}.");
         DeviceDiscovered?.Invoke(new BonjourDevice(alias, deviceType, address, service.Port, fingerprint));
+    }
+
+    private static string? DecodeAlias(string? encoded)
+    {
+        if (string.IsNullOrWhiteSpace(encoded)) return null;
+        try { return Encoding.UTF8.GetString(Convert.FromBase64String(encoded)); }
+        catch (FormatException) { DiagnosticLog.Write("Bonjour aliasB64 was invalid."); return null; }
     }
 
     public void Dispose()
