@@ -18,6 +18,7 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\{#AppExeName}
+SetupIconFile=..\src\MuseTransfer.App\app.ico
 
 [Languages]
 Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
