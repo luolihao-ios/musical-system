@@ -19,6 +19,7 @@
 - `.aiyuepack` 必须包含 manifest、音频、歌词和封面，并校验后再导入。
 - 不依赖公网服务器；发现失败时提供网络诊断提示。
 - 以官方 LocalSend 在相同 Windows+iOS 和 Wi‑Fi 条件下的发现与传输结果作为对标验收基线。
+- Windows 安装器配置专用和公用网络的 TCP/UDP 53317 防火墙规则，并在卸载时清理。
 
 ---
 
@@ -110,10 +111,12 @@
 - Modify: `transfer-ios-next/scripts/verify.sh`
 
 - [ ] 加入 Windows 防火墙和专用网络提示，验证默认 Program Files 目录和自定义目录。
+- [ ] 安装时创建带固定规则名称的 TCP/UDP 53317 入站规则，覆盖 Private/Public profile；卸载时删除同名规则，并在无管理员权限或策略拒绝时显示可操作提示。
 - [ ] 确认 Windows 程序图标、桌面快捷方式和卸载入口使用统一图标。
 - [ ] GitHub Actions 在同一 workflow 生成 Windows 安装包和 iOS IPA。
 - [ ] 发布前运行协议、发现、传输、音乐包和安装测试。
 - [ ] 在真实 Windows+iPhone 同一 Wi‑Fi 环境完成端到端验收。
 - [ ] 在同一环境先运行官方 LocalSend 完成发现、单文件、文件夹和大文件传输，再重复全部场景验证爱乐互传结果不低于基线。
 - [ ] 记录发现耗时、传输耗时、确认/取消状态和校验结果；组播失败时验证 HTTP 注册回退。
+- [ ] 完成一次防火墙授权后，验证应用重启和电脑重启仍可发现设备并传输，无需重复设置。
 
