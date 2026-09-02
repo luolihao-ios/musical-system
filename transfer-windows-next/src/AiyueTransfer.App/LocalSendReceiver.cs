@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using AiyueTransfer.Protocol;
+using AiyueTransfer.Core;
 
 namespace AiyueTransfer.App;
 
@@ -50,6 +51,12 @@ public sealed class LocalSendReceiver : IAsyncDisposable
             var path = Path.Combine(folder, safeName);
             await using var output = File.Create(path); await context.Request.Body.CopyToAsync(output, context.RequestAborted);
             if (output.Length != file.Size) { File.Delete(path); return Results.StatusCode(StatusCodes.Status422UnprocessableEntity); }
+            if (string.Equals(Path.GetExtension(path), ".aiyuepack", StringComparison.OrdinalIgnoreCase))
+            {
+                var musicRoot = Path.Combine(destination, "MusicPackages", sessionId);
+                var manifest = AiyuePack.Extract(path, musicRoot);
+                await MusicHandoff.CreateAsync(musicRoot, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "luolihao", "AiYueTransfer", "MusicHandoff"), context.RequestAborted);
+            }
             return Results.NoContent();
         });
         application.MapPost(TransferRoutes.Cancel, (string sessionId) => { sessions.TryRemove(sessionId, out _); return Results.NoContent(); });
