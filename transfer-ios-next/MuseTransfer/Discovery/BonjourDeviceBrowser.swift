@@ -14,10 +14,12 @@ public final class BonjourDeviceBrowser: @unchecked Sendable {
             DiagnosticLog.write("Bonjour browser starting (_aiyue._tcp).")
             let browser = NWBrowser(for: .bonjour(type: "_aiyue._tcp", domain: nil), using: .tcp)
             browser.browseResultsChangedHandler = { [weak self] results, changes in
+                guard let self else { return }
+                let ownServiceName = "aiyue-" + self.localFingerprintPrefix
                 DiagnosticLog.write("Bonjour browse results: count=\(results.count); changes=\(changes.count).")
                 let devices = results.compactMap { result -> NearbyDevice? in
                     guard case let .service(name, type, domain, _) = result.endpoint else { return nil }
-                    if name == "aiyue-\(self?.localFingerprintPrefix ?? \"\")" {
+                    if name == ownServiceName {
                         DiagnosticLog.write("Bonjour own service ignored: \(name).")
                         return nil
                     }
