@@ -15,7 +15,7 @@ public sealed class BonjourBrowser : IDisposable
     public void Start()
     {
         if (discovery is not null) return;
-        DiagnosticLog.Write("Bonjour browser starting (_aiyue._tcp).");
+        DiagnosticLog.Write("Bonjour browser starting (_aiyue._tcp.local).");
         discovery = new ServiceDiscovery(multicast);
         discovery.ServiceInstanceDiscovered += OnServiceInstanceDiscovered;
         multicast.Start();
@@ -24,8 +24,10 @@ public sealed class BonjourBrowser : IDisposable
 
     public void Refresh()
     {
-        DiagnosticLog.Write("Bonjour browser query sent (_aiyue._tcp).");
-        discovery?.QueryServiceInstances(new DomainName("_aiyue._tcp"));
+        // DNS-SD service types are fully qualified on the local mDNS domain.
+        // Using the short form only let this client observe its own unsolicited announcement.
+        DiagnosticLog.Write("Bonjour browser query sent (_aiyue._tcp.local).");
+        discovery?.QueryServiceInstances(new DomainName("_aiyue._tcp.local"));
     }
 
     private void OnServiceInstanceDiscovered(object? sender, ServiceInstanceDiscoveryEventArgs args)
