@@ -36,6 +36,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     private string? selectedFolder;
     public string SavePath { get; private set; }
     public string EmptyText => Devices.Count == 0 ? "暂未发现设备，点击“刷新”重试" : string.Empty;
+    public Visibility EmptyDevicesVisibility => Devices.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     public ICommand RefreshCommand { get; }
     public ICommand ChooseFilesCommand { get; }
     public ICommand ChooseFolderCommand { get; }
@@ -60,6 +61,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         ClipboardCommand = new SimpleCommand(ChooseClipboard);
         ChooseSavePathCommand = new SimpleCommand(ChooseSavePath);
         discovery.AnnouncementReceived += OnAnnouncement;
+        Devices.CollectionChanged += (_, _) => { Changed(nameof(EmptyText)); Changed(nameof(EmptyDevicesVisibility)); };
         _ = InitializeAsync();
     }
 
