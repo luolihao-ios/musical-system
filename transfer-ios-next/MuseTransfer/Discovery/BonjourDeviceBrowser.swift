@@ -26,7 +26,7 @@ public final class BonjourDeviceBrowser: @unchecked Sendable {
                     DiagnosticLog.write("Bonjour service found: name=\(name); type=\(type); domain=\(domain).")
                     return NearbyDevice(id: "\(name).\(domain)", alias: name, deviceType: "附近设备", serviceName: name, serviceType: type, serviceDomain: domain)
                 }
-                self?.onDevicesChanged?(devices.sorted { $0.alias.localizedCaseInsensitiveCompare($1.alias) == .orderedAscending })
+                self.onDevicesChanged?(devices.sorted { $0.alias.localizedCaseInsensitiveCompare($1.alias) == .orderedAscending })
             }
             browser.stateUpdateHandler = { state in DiagnosticLog.write("Bonjour browser state: \(String(describing: state)).") }
             self.browser = browser; browser.start(queue: self.queue)
