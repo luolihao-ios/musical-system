@@ -33,6 +33,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable
     private readonly LocalSendDiscovery discovery = new();
     private readonly DeviceInfo local = new("爱乐互传", "2.0", Environment.MachineName, "desktop", Guid.NewGuid().ToString("N"), 53317, "http");
     private readonly LocalSendReceiver receiver;
+    private readonly BonjourAdvertiser bonjour = new();
     private readonly Dictionary<string, DateTimeOffset> lastSeen = new(StringComparer.Ordinal);
 
     public NearbyDevicesViewModel()
@@ -48,7 +49,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable
 
     private async Task InitializeAsync()
     {
-        try { await receiver.StartAsync(); await discovery.StartAsync(local); }
+        try { await receiver.StartAsync(); bonjour.Start(local); await discovery.StartAsync(local); }
         catch (System.Net.Sockets.SocketException) { }
     }
     private void OnIncomingRequest(IncomingRequest request) => Application.Current.Dispatcher.Invoke(() =>
@@ -84,7 +85,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable
         var expired = lastSeen.Where(pair => DateTimeOffset.UtcNow - pair.Value > TimeSpan.FromMinutes(2)).Select(pair => pair.Key).ToHashSet(StringComparer.Ordinal);
         foreach (var device in Devices.Where(device => expired.Contains(device.Fingerprint)).ToArray()) Devices.Remove(device);
     }
-    public async ValueTask DisposeAsync() { await discovery.DisposeAsync(); await receiver.DisposeAsync(); }
+    public async ValueTask DisposeAsync() { bonjour.Dispose(); await discovery.DisposeAsync(); await receiver.DisposeAsync(); }
 }
 
 public sealed class SimpleCommand(Action execute) : ICommand
