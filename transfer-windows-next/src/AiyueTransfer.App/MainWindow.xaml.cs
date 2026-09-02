@@ -48,6 +48,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     private readonly DeviceInfo local = new("爱乐互传", "2.0", Environment.MachineName, "desktop", Guid.NewGuid().ToString("N"), 53317, "http");
     private readonly LocalSendReceiver receiver;
     private readonly BonjourAdvertiser bonjour = new();
+    private readonly BonjourBrowser bonjourBrowser = new();
     private readonly Dictionary<string, DateTimeOffset> lastSeen = new(StringComparer.Ordinal);
 
     public NearbyDevicesViewModel()
@@ -61,13 +62,14 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         ClipboardCommand = new SimpleCommand(ChooseClipboard);
         ChooseSavePathCommand = new SimpleCommand(ChooseSavePath);
         discovery.AnnouncementReceived += OnAnnouncement;
+        bonjourBrowser.DeviceDiscovered += OnBonjourDevice;
         Devices.CollectionChanged += (_, _) => { Changed(nameof(EmptyText)); Changed(nameof(EmptyDevicesVisibility)); };
         _ = InitializeAsync();
     }
 
     private async Task InitializeAsync()
     {
-        try { await receiver.StartAsync(); bonjour.Start(local); await discovery.StartAsync(local); }
+        try { await receiver.StartAsync(); bonjour.Start(local); bonjourBrowser.Start(); await discovery.StartAsync(local); }
         catch (System.Net.Sockets.SocketException) { }
     }
     private void OnIncomingRequest(IncomingRequest request) => System.Windows.Application.Current.Dispatcher.Invoke(() =>
@@ -84,6 +86,17 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
             lastSeen[announcement.Info.Fingerprint] = DateTimeOffset.UtcNow;
             var existing = Devices.FirstOrDefault(device => device.Endpoint.Host == endpoint.Address.ToString());
             if (existing is null) Devices.Add(new NearbyDeviceCard(announcement.Info.Alias, announcement.Info.DeviceType, new Uri($"http://{endpoint.Address}:{announcement.Info.Port}"), announcement.Info.Fingerprint, () => _ = SendAsync(new Uri($"http://{endpoint.Address}:{announcement.Info.Port}"))));
+        });
+    }
+    private void OnBonjourDevice(BonjourDevice device)
+    {
+        if (device.Fingerprint == local.Fingerprint) return;
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            lastSeen[device.Fingerprint] = DateTimeOffset.UtcNow;
+            var endpoint = new Uri($"http://{device.Address}:{device.Port}");
+            if (Devices.All(existing => existing.Endpoint != endpoint))
+                Devices.Add(new NearbyDeviceCard(device.Alias, device.DeviceType, endpoint, device.Fingerprint, () => _ = SendAsync(endpoint)));
         });
     }
     private void ChooseFiles()
@@ -116,12 +129,13 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     }
     private async Task RefreshAsync()
     {
+        bonjourBrowser.Refresh();
         await discovery.AnnounceAsync(local);
         var expired = lastSeen.Where(pair => DateTimeOffset.UtcNow - pair.Value > TimeSpan.FromMinutes(2)).Select(pair => pair.Key).ToHashSet(StringComparer.Ordinal);
         foreach (var device in Devices.Where(device => expired.Contains(device.Fingerprint)).ToArray()) Devices.Remove(device);
     }
     public void Refresh() => _ = RefreshAsync();
-    public async ValueTask DisposeAsync() { bonjour.Dispose(); await discovery.DisposeAsync(); await receiver.DisposeAsync(); }
+    public async ValueTask DisposeAsync() { bonjourBrowser.Dispose(); bonjour.Dispose(); await discovery.DisposeAsync(); await receiver.DisposeAsync(); }
     private void Changed([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
 
