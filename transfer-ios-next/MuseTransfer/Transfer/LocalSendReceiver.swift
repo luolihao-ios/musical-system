@@ -38,6 +38,15 @@ public final class LocalSendReceiver: @unchecked Sendable {
     }
 
     public func stop() { queue.async { DiagnosticLog.write("iOS receiver stopped."); self.listener?.cancel(); self.listener = nil } }
+    public func refreshAdvertisement() {
+        queue.async {
+            DiagnosticLog.write("iOS receiver re-advertising Bonjour service.")
+            self.listener?.cancel()
+            self.listener = nil
+            do { try self.start() }
+            catch { DiagnosticLog.write("iOS receiver re-advertise failed: \(error.localizedDescription)") }
+        }
+    }
     public func decide(sessionID: String, accepted: Bool) { queue.async { self.pending.removeValue(forKey: sessionID)?.resume(returning: accepted) } }
 
     private func receive(_ connection: NWConnection) {
