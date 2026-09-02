@@ -20,6 +20,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: 爱乐互传
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: 爱乐互传需要访问局域网，以发现并连接您确认的附近设备。
+        INFOPLIST_KEY_NSBonjourServices: "_aiyue._tcp"
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
