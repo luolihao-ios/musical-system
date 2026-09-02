@@ -82,7 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           xcodegen generate
-          xcodebuild build -project AiYueTransferNext.xcodeproj -scheme AiyueTransfer -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5'
+          xcodebuild build -project AiYueTransferNext.xcodeproj -scheme AiyueTransfer -destination 'generic/platform=iOS Simulator'
           xcodebuild archive -project AiYueTransferNext.xcodeproj -scheme AiyueTransfer -configuration Release -destination 'generic/platform=iOS' -archivePath build/AiyueTransfer.xcarchive CODE_SIGN_IDENTITY='Apple Distribution' CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$TEAM_ID" PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"
           cat > "$SIGNING_DIR/ExportOptions.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>method</key><string>app-store-connect</string><key>signingStyle</key><string>manual</string><key>teamID</key><string>$TEAM_ID</string><key>provisioningProfiles</key><dict><key>$BUNDLE_ID</key><string>$PROFILE_NAME</string></dict></dict></plist>
