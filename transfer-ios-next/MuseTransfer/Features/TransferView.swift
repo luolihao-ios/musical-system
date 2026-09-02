@@ -16,6 +16,7 @@ struct TransferView: View {
                 }
                 Spacer()
             }.padding().navigationTitle("爱乐互传")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { ShareLink(item: DiagnosticLog.fileURL) { Image(systemName: "stethoscope") }.accessibilityLabel("导出诊断日志") } }
         }.fileImporter(isPresented: $model.showImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { model.select($0) }
         .alert("接收文件？", isPresented: Binding(get: { model.incomingTransfer != nil }, set: { if !$0 { model.decideIncoming(false) } })) {
             Button("拒绝", role: .destructive) { model.decideIncoming(false) }

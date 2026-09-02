@@ -21,6 +21,7 @@ public final class LocalSendReceiver: @unchecked Sendable {
 
     public func start() throws {
         guard listener == nil else { return }
+        DiagnosticLog.write("iOS receiver starting on TCP \(local.port).")
         let listener = try NWListener(using: .tcp, on: NWEndpoint.Port(rawValue: UInt16(local.port))!)
         // A listener alone is not discoverable. Publishing this Bonjour service is
         // the iOS half of the Windows mDNS advertisement.
@@ -31,11 +32,12 @@ public final class LocalSendReceiver: @unchecked Sendable {
             "protocol": Data("http".utf8)
         ])
         listener.service = NWListener.Service(name: "\(local.alias)-\(local.fingerprint.prefix(6))", type: "_aiyue._tcp", domain: nil, txtRecord: txtRecord)
+        listener.stateUpdateHandler = { state in DiagnosticLog.write("iOS receiver state: \(String(describing: state)).") }
         listener.newConnectionHandler = { [weak self] connection in self?.receive(connection) }
         self.listener = listener; listener.start(queue: queue)
     }
 
-    public func stop() { queue.async { self.listener?.cancel(); self.listener = nil } }
+    public func stop() { queue.async { DiagnosticLog.write("iOS receiver stopped."); self.listener?.cancel(); self.listener = nil } }
     public func decide(sessionID: String, accepted: Bool) { queue.async { self.pending.removeValue(forKey: sessionID)?.resume(returning: accepted) } }
 
     private func receive(_ connection: NWConnection) {

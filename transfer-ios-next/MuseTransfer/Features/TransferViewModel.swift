@@ -16,11 +16,11 @@ import UIKit
         let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("爱乐互传", isDirectory: true)
         receiver = LocalSendReceiver(local: local, destination: folder)
         receiver.onIncomingTransfer = { [weak self] request in Task { @MainActor in self?.incomingTransfer = request } }
-        try? receiver.start()
+        do { try receiver.start() } catch { DiagnosticLog.write("iOS receiver start failed: \(error.localizedDescription)") }
         browser.onDevicesChanged = { [weak self] devices in Task { @MainActor in self?.devices = devices } }
         browser.start()
     }
-    func refresh() { browser.stop(); browser.start() }
+    func refresh() { DiagnosticLog.write("User requested discovery refresh."); browser.stop(); browser.start() }
     func select(_ result: Result<[URL], Error>) { if case let .success(urls) = result { selectedFiles = urls } }
     func send(to device: NearbyDevice) {
         guard !selectedFiles.isEmpty else { return }

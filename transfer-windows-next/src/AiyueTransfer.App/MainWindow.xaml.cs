@@ -11,7 +11,7 @@ namespace AiyueTransfer.App;
 
 public partial class MainWindow : Window
 {
-    public MainWindow() { InitializeComponent(); DataContext = new NearbyDevicesViewModel(); }
+    public MainWindow() { InitializeComponent(); DiagnosticLog.Write("Windows client launched."); DataContext = new NearbyDevicesViewModel(); }
     private void Show(FrameworkElement panel) { ReceivePanel.Visibility = Visibility.Collapsed; SendPanel.Visibility = Visibility.Collapsed; SettingsPanel.Visibility = Visibility.Collapsed; panel.Visibility = Visibility.Visible; }
     private void Receive_Click(object sender, RoutedEventArgs e) => Show(ReceivePanel);
     private void Send_Click(object sender, RoutedEventArgs e) => Show(SendPanel);
@@ -69,8 +69,8 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
 
     private async Task InitializeAsync()
     {
-        try { await receiver.StartAsync(); bonjour.Start(local); bonjourBrowser.Start(); await discovery.StartAsync(local); }
-        catch (System.Net.Sockets.SocketException) { }
+        try { await receiver.StartAsync(); DiagnosticLog.Write("HTTP receiver started on TCP 53317."); bonjour.Start(local); DiagnosticLog.Write("Bonjour advertiser started."); bonjourBrowser.Start(); await discovery.StartAsync(local); DiagnosticLog.Write("UDP discovery started and announcement sent."); }
+        catch (Exception exception) { DiagnosticLog.Write($"Discovery initialization failed: {exception.GetType().Name}: {exception.Message}"); }
     }
     private void OnIncomingRequest(IncomingRequest request) => System.Windows.Application.Current.Dispatcher.Invoke(() =>
     {
@@ -80,6 +80,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     });
     private void OnAnnouncement(System.Net.IPEndPoint endpoint, DiscoveryAnnouncement announcement)
     {
+        DiagnosticLog.Write($"UDP announcement received from {endpoint}; alias={announcement.Info.Alias}; port={announcement.Info.Port}.");
         if (announcement.Info.Fingerprint == local.Fingerprint) return;
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
@@ -90,6 +91,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     }
     private void OnBonjourDevice(BonjourDevice device)
     {
+        DiagnosticLog.Write($"Bonjour device delivered to UI: {device.Alias}; {device.Address}:{device.Port}.");
         if (device.Fingerprint == local.Fingerprint) return;
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
@@ -129,6 +131,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     }
     private async Task RefreshAsync()
     {
+        DiagnosticLog.Write("User requested discovery refresh.");
         bonjourBrowser.Refresh();
         await discovery.AnnounceAsync(local);
         var expired = lastSeen.Where(pair => DateTimeOffset.UtcNow - pair.Value > TimeSpan.FromMinutes(2)).Select(pair => pair.Key).ToHashSet(StringComparer.Ordinal);

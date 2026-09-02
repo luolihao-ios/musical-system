@@ -14,6 +14,7 @@ public sealed class BonjourBrowser : IDisposable
     public void Start()
     {
         if (discovery is not null) return;
+        DiagnosticLog.Write("Bonjour browser starting (_aiyue._tcp).");
         discovery = new ServiceDiscovery(multicast);
         discovery.ServiceInstanceDiscovered += OnServiceInstanceDiscovered;
         multicast.Start();
@@ -22,6 +23,7 @@ public sealed class BonjourBrowser : IDisposable
 
     public void Refresh()
     {
+        DiagnosticLog.Write("Bonjour browser query sent (_aiyue._tcp).");
         discovery?.QueryServiceInstances(new DomainName("_aiyue._tcp"));
     }
 
@@ -29,13 +31,14 @@ public sealed class BonjourBrowser : IDisposable
     {
         var records = args.Message.Answers.Concat(args.Message.AdditionalRecords).ToArray();
         var instanceName = args.ServiceInstanceName.ToString();
+        DiagnosticLog.Write($"Bonjour instance received: {instanceName}; records={records.Length}; sender={args.RemoteEndPoint}.");
         var service = records.OfType<SRVRecord>().FirstOrDefault(record => string.Equals(record.Name.ToString(), instanceName, StringComparison.OrdinalIgnoreCase));
-        if (service is null || service.Port == 0) return;
+        if (service is null || service.Port == 0) { DiagnosticLog.Write($"Bonjour instance ignored: no SRV record for {instanceName}."); return; }
 
         var address = records.OfType<AddressRecord>()
             .FirstOrDefault(record => string.Equals(record.Name.ToString(), service.Target.ToString(), StringComparison.OrdinalIgnoreCase))?.Address
             ?? args.RemoteEndPoint.Address;
-        if (IPAddress.Any.Equals(address) || IPAddress.IPv6Any.Equals(address)) return;
+        if (IPAddress.Any.Equals(address) || IPAddress.IPv6Any.Equals(address)) { DiagnosticLog.Write($"Bonjour instance ignored: unusable address for {instanceName}."); return; }
 
         var properties = records.OfType<TXTRecord>()
             .FirstOrDefault(record => string.Equals(record.Name.ToString(), instanceName, StringComparison.OrdinalIgnoreCase))?.Strings
@@ -46,6 +49,7 @@ public sealed class BonjourBrowser : IDisposable
         var alias = properties.GetValueOrDefault("alias") ?? instanceName.Split('.', 2)[0];
         var deviceType = properties.GetValueOrDefault("deviceType") ?? "附近设备";
         var fingerprint = properties.GetValueOrDefault("fingerprint") ?? $"bonjour:{address}:{service.Port}";
+        DiagnosticLog.Write($"Bonjour device parsed: alias={alias}; endpoint={address}:{service.Port}; fingerprint={fingerprint}.");
         DeviceDiscovered?.Invoke(new BonjourDevice(alias, deviceType, address, service.Port, fingerprint));
     }
 
