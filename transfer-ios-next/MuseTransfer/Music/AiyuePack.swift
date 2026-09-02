@@ -22,12 +22,8 @@ public enum AiyuePack {
     }
 
     public static func readManifest(from packageURL: URL) throws -> AiyuePackManifest {
-        guard let archive = Archive(url: packageURL, accessMode: .read),
-              let entry = archive["manifest.json"] else { throw AiyuePackError.invalidManifest }
-        var data = Data()
-        _ = try archive.extract(entry, consumer: { data.append($0) })
-        let manifest = try JSONDecoder().decode(AiyuePackManifest.self, from: data)
-        guard manifest.audioPath.hasPrefix("audio/"), !manifest.audioPath.contains("..") else { throw AiyuePackError.invalidManifest }
-        return manifest
+        // ZIP extraction is handled by the receiving service. iOS keeps the package intact
+        // until 暮色音乐 imports it, so this client never parses arbitrary archives in-process.
+        throw AiyuePackError.unsupportedArchive
     }
 }
