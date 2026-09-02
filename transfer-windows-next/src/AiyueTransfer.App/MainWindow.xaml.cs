@@ -3,6 +3,8 @@ using System.IO;
 using System.Net.Http;
 using System.Windows;
 using System.Windows.Input;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using AiyueTransfer.Protocol;
 
 namespace AiyueTransfer.App;
@@ -22,16 +24,18 @@ public sealed class NearbyDeviceCard(string alias, string deviceType, Uri endpoi
     public ICommand SendCommand { get; } = new SimpleCommand(send);
 }
 
-public sealed class NearbyDevicesViewModel : IAsyncDisposable
+public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyChanged
 {
     public ObservableCollection<NearbyDeviceCard> Devices { get; } = [];
     private readonly List<string> selectedFiles = [];
+    private string? selectedFolder;
     public string EmptyText => Devices.Count == 0 ? "暂未发现设备，点击“刷新”重试" : string.Empty;
     public ICommand RefreshCommand { get; }
     public ICommand ChooseFilesCommand { get; }
     public ICommand ChooseFolderCommand { get; }
     public ICommand ClipboardCommand { get; }
     public string SelectedSummary => selectedFiles.Count == 0 ? "尚未选择文件" : $"已选择 {selectedFiles.Count} 个文件";
+    public event PropertyChangedEventHandler? PropertyChanged;
     private readonly LocalSendDiscovery discovery = new();
     private readonly DeviceInfo local = new("爱乐互传", "2.0", Environment.MachineName, "desktop", Guid.NewGuid().ToString("N"), 53317, "http");
     private readonly LocalSendReceiver receiver;
@@ -75,23 +79,23 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable
     private void ChooseFiles()
     {
         var picker = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = "选择要发送的文件" };
-        if (picker.ShowDialog() == true) { selectedFiles.Clear(); selectedFiles.AddRange(picker.FileNames); }
+        if (picker.ShowDialog() == true) { selectedFolder = null; selectedFiles.Clear(); selectedFiles.AddRange(picker.FileNames); Changed(nameof(SelectedSummary)); }
     }
     private void ChooseFolder()
     {
         using var picker = new System.Windows.Forms.FolderBrowserDialog { Description = "选择要发送的文件夹" };
-        if (picker.ShowDialog() == System.Windows.Forms.DialogResult.OK) { selectedFiles.Clear(); selectedFiles.AddRange(Directory.EnumerateFiles(picker.SelectedPath, "*", SearchOption.AllDirectories)); }
+        if (picker.ShowDialog() == System.Windows.Forms.DialogResult.OK) { selectedFolder = picker.SelectedPath; selectedFiles.Clear(); selectedFiles.AddRange(Directory.EnumerateFiles(picker.SelectedPath, "*", SearchOption.AllDirectories)); Changed(nameof(SelectedSummary)); }
     }
     private void ChooseClipboard()
     {
         if (!System.Windows.Clipboard.ContainsText()) { System.Windows.MessageBox.Show("剪贴板中没有文本。", "爱乐互传"); return; }
         var folder = Path.Combine(Path.GetTempPath(), "AiYueTransfer"); Directory.CreateDirectory(folder);
-        var path = Path.Combine(folder, $"clipboard-{DateTime.Now:yyyyMMdd-HHmmss}.txt"); File.WriteAllText(path, System.Windows.Clipboard.GetText()); selectedFiles.Clear(); selectedFiles.Add(path);
+        var path = Path.Combine(folder, $"clipboard-{DateTime.Now:yyyyMMdd-HHmmss}.txt"); File.WriteAllText(path, System.Windows.Clipboard.GetText()); selectedFolder = null; selectedFiles.Clear(); selectedFiles.Add(path); Changed(nameof(SelectedSummary));
     }
     private async Task SendAsync(Uri endpoint)
     {
         if (selectedFiles.Count == 0) { System.Windows.MessageBox.Show("请先选择文件。", "爱乐互传"); return; }
-        try { await new LocalSendSender(new HttpClient()).SendAsync(endpoint, local, selectedFiles); System.Windows.MessageBox.Show("传输完成。", "爱乐互传"); }
+        try { var sender = new LocalSendSender(new HttpClient()); if (selectedFolder is not null) await sender.SendFolderAsync(endpoint, local, selectedFolder); else await sender.SendAsync(endpoint, local, selectedFiles); System.Windows.MessageBox.Show("传输完成。", "爱乐互传"); }
         catch (Exception exception) { System.Windows.MessageBox.Show($"传输失败：{exception.Message}", "爱乐互传", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning); }
     }
     private async Task RefreshAsync()
@@ -101,6 +105,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable
         foreach (var device in Devices.Where(device => expired.Contains(device.Fingerprint)).ToArray()) Devices.Remove(device);
     }
     public async ValueTask DisposeAsync() { bonjour.Dispose(); await discovery.DisposeAsync(); await receiver.DisposeAsync(); }
+    private void Changed([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
 
 public sealed class SimpleCommand(Action execute) : ICommand

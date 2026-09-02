@@ -1,0 +1,104 @@
+name: AiYue Transfer Next Release
+
+on:
+  push:
+    branches: [codex/aiyue-greenfield]
+    paths:
+      - "transfer-windows-next/**"
+      - "transfer-ios-next/**"
+      - ".github/workflows/aiyue-next-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with: { dotnet-version: "10.0.x" }
+      - name: Install Inno Setup
+        shell: pwsh
+        run: winget install --id JRSoftware.InnoSetup.7 --exact --source winget --silent --accept-package-agreements --accept-source-agreements
+      - name: Test and package
+        shell: pwsh
+        run: ./transfer-windows-next/scripts/package.ps1
+      - uses: actions/upload-artifact@v7
+        with:
+          name: AiYueTransfer-Windows-x64
+          path: transfer-windows-next/artifacts/installer/AiYueTransfer-Setup.exe
+          if-no-files-found: error
+
+  ios:
+    name: iOS IPA and TestFlight
+    runs-on: macos-latest
+    env:
+      BUNDLE_ID: com.luolihao.aiyuetransfer
+      KEYCHAIN_PATH: /tmp/aiyue-next.keychain-db
+      SIGNING_DIR: /tmp/aiyue-next-signing
+    steps:
+      - uses: actions/checkout@v7
+      - run: brew install xcodegen
+      - name: Import signing material
+        env:
+          P12: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          PROFILE: ${{ secrets.AIYUE_TRANSFER_APP_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$P12" && test -n "$P12_PASSWORD" && test -n "$PROFILE"
+          mkdir -p "$SIGNING_DIR" "$HOME/Library/MobileDevice/Provisioning Profiles"
+          echo "$P12" | base64 -D > "$SIGNING_DIR/distribution.p12"
+          echo "$PROFILE" | base64 -D > "$SIGNING_DIR/app.mobileprovision"
+          security cms -D -i "$SIGNING_DIR/app.mobileprovision" > "$SIGNING_DIR/profile.plist"
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' "$SIGNING_DIR/profile.plist")
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print Name' "$SIGNING_DIR/profile.plist")
+          TEAM_ID=$(/usr/libexec/PlistBuddy -c 'Print TeamIdentifier:0' "$SIGNING_DIR/profile.plist")
+          APP_IDENTIFIER=$(/usr/libexec/PlistBuddy -c 'Print Entitlements:application-identifier' "$SIGNING_DIR/profile.plist")
+          test "$APP_IDENTIFIER" = "$TEAM_ID.$BUNDLE_ID"
+          cp "$SIGNING_DIR/app.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 24)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$SIGNING_DIR/distribution.p12" -k "$KEYCHAIN_PATH" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          echo "PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
+          echo "PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
+          echo "TEAM_ID=$TEAM_ID" >> "$GITHUB_ENV"
+      - name: Test, archive, export and upload
+        working-directory: transfer-ios-next
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          xcodebuild test -project AiYueTransferNext.xcodeproj -scheme AiyueTransfer -destination 'platform=iOS Simulator,name=iPhone 16'
+          xcodebuild archive -project AiYueTransferNext.xcodeproj -scheme AiyueTransfer -configuration Release -destination 'generic/platform=iOS' -archivePath build/AiyueTransfer.xcarchive CODE_SIGN_IDENTITY='Apple Distribution' CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$TEAM_ID" PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"
+          cat > "$SIGNING_DIR/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>method</key><string>app-store-connect</string><key>signingStyle</key><string>manual</string><key>teamID</key><string>$TEAM_ID</string><key>provisioningProfiles</key><dict><key>$BUNDLE_ID</key><string>$PROFILE_NAME</string></dict></dict></plist>
+          EOF
+          xcodebuild -exportArchive -archivePath build/AiyueTransfer.xcarchive -exportPath build/export -exportOptionsPlist "$SIGNING_DIR/ExportOptions.plist"
+          mv "$(find build/export -maxdepth 1 -name '*.ipa' -print -quit)" build/export/AiYueTransfer.ipa
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          echo "$API_PRIVATE_KEY" | base64 -D > "$HOME/.appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8"
+          xcrun altool --validate-app --type ios -f build/export/AiYueTransfer.ipa --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER_ID"
+          xcrun altool --upload-app --type ios -f build/export/AiYueTransfer.ipa --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER_ID"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: AiYueTransfer-iOS-IPA
+          path: transfer-ios-next/build/export/AiYueTransfer.ipa
+          if-no-files-found: ignore
+      - name: Clean signing material
+        if: always()
+        run: |
+          security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+          rm -rf "$SIGNING_DIR" "$HOME/.appstoreconnect/private_keys"
+          rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/${PROFILE_UUID:-}.mobileprovision"

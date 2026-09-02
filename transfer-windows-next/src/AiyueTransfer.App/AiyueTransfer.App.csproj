@@ -1,4 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net10.0-windows10.0.19041.0</TargetFramework><UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><ApplicationManifest>app.manifest</ApplicationManifest></PropertyGroup>
+  <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net10.0-windows10.0.19041.0</TargetFramework><UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><ApplicationManifest>app.manifest</ApplicationManifest><ApplicationIcon>..\..\..\transfer-windows\src\MuseTransfer.App\app.ico</ApplicationIcon></PropertyGroup>
   <ItemGroup><ProjectReference Include="../AiyueTransfer.Protocol/AiyueTransfer.Protocol.csproj"/><ProjectReference Include="../AiyueTransfer.Core/AiyueTransfer.Core.csproj"/><FrameworkReference Include="Microsoft.AspNetCore.App"/><PackageReference Include="Makaretu.Dns.Multicast" Version="0.27.0"/></ItemGroup>
 </Project>
