@@ -20,6 +20,10 @@ public sealed class AiyuePackTests
             using var reader = new StreamReader(zip.GetEntry("manifest.json")!.Open());
             var manifest = JsonSerializer.Deserialize<AiyuePackManifest>(reader.ReadToEnd(), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
             Assert.Equal("song", manifest!.Title);
+            var extract = Path.Combine(root, "extract");
+            var unpacked = AiyuePack.Extract(output, extract);
+            Assert.Equal("audio/song.mp3", unpacked.AudioPath);
+            Assert.True(File.Exists(Path.Combine(extract, "audio", "song.mp3")));
         }
         finally { Directory.Delete(root, true); }
     }

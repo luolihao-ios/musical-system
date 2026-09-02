@@ -20,4 +20,14 @@ public enum AiyuePack {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return try encoder.encode(manifest)
     }
+
+    public static func readManifest(from packageURL: URL) throws -> AiyuePackManifest {
+        guard let archive = Archive(url: packageURL, accessMode: .read),
+              let entry = archive["manifest.json"] else { throw AiyuePackError.invalidManifest }
+        var data = Data()
+        _ = try archive.extract(entry, consumer: { data.append($0) })
+        let manifest = try JSONDecoder().decode(AiyuePackManifest.self, from: data)
+        guard manifest.audioPath.hasPrefix("audio/"), !manifest.audioPath.contains("..") else { throw AiyuePackError.invalidManifest }
+        return manifest
+    }
 }
