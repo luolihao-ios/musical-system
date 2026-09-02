@@ -12,6 +12,11 @@ namespace AiyueTransfer.App;
 public partial class MainWindow : Window
 {
     public MainWindow() { InitializeComponent(); DataContext = new NearbyDevicesViewModel(); }
+    private void Show(FrameworkElement panel) { ReceivePanel.Visibility = Visibility.Collapsed; SendPanel.Visibility = Visibility.Collapsed; SettingsPanel.Visibility = Visibility.Collapsed; panel.Visibility = Visibility.Visible; }
+    private void Receive_Click(object sender, RoutedEventArgs e) => Show(ReceivePanel);
+    private void Send_Click(object sender, RoutedEventArgs e) => Show(SendPanel);
+    private void Settings_Click(object sender, RoutedEventArgs e) => Show(SettingsPanel);
+    private void Refresh_Click(object sender, RoutedEventArgs e) { ((System.Windows.Media.Animation.Storyboard)FindResource("RefreshSpin")).Begin(); if (DataContext is NearbyDevicesViewModel model) model.Refresh(); }
     protected override async void OnClosed(EventArgs e) { if (DataContext is NearbyDevicesViewModel model) await model.DisposeAsync(); base.OnClosed(e); }
 }
 
@@ -29,11 +34,13 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     public ObservableCollection<NearbyDeviceCard> Devices { get; } = [];
     private readonly List<string> selectedFiles = [];
     private string? selectedFolder;
+    public string SavePath { get; private set; }
     public string EmptyText => Devices.Count == 0 ? "暂未发现设备，点击“刷新”重试" : string.Empty;
     public ICommand RefreshCommand { get; }
     public ICommand ChooseFilesCommand { get; }
     public ICommand ChooseFolderCommand { get; }
     public ICommand ClipboardCommand { get; }
+    public ICommand ChooseSavePathCommand { get; }
     public string SelectedSummary => selectedFiles.Count == 0 ? "尚未选择文件" : $"已选择 {selectedFiles.Count} 个文件";
     public event PropertyChangedEventHandler? PropertyChanged;
     private readonly LocalSendDiscovery discovery = new();
@@ -44,13 +51,14 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
 
     public NearbyDevicesViewModel()
     {
-        var destination = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "爱乐互传");
-        receiver = new LocalSendReceiver(local, destination);
+        SavePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "爱乐互传");
+        receiver = new LocalSendReceiver(local, SavePath);
         receiver.RequestReceived += OnIncomingRequest;
         RefreshCommand = new SimpleCommand(() => _ = RefreshAsync());
         ChooseFilesCommand = new SimpleCommand(ChooseFiles);
         ChooseFolderCommand = new SimpleCommand(ChooseFolder);
         ClipboardCommand = new SimpleCommand(ChooseClipboard);
+        ChooseSavePathCommand = new SimpleCommand(ChooseSavePath);
         discovery.AnnouncementReceived += OnAnnouncement;
         _ = InitializeAsync();
     }
@@ -92,6 +100,12 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         var folder = Path.Combine(Path.GetTempPath(), "AiYueTransfer"); Directory.CreateDirectory(folder);
         var path = Path.Combine(folder, $"clipboard-{DateTime.Now:yyyyMMdd-HHmmss}.txt"); File.WriteAllText(path, System.Windows.Clipboard.GetText()); selectedFolder = null; selectedFiles.Clear(); selectedFiles.Add(path); Changed(nameof(SelectedSummary));
     }
+    private void ChooseSavePath()
+    {
+        using var picker = new System.Windows.Forms.FolderBrowserDialog { Description = "选择接收文件的保存位置" };
+        if (picker.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+        SavePath = picker.SelectedPath; receiver.SetDestination(SavePath); Changed(nameof(SavePath));
+    }
     private async Task SendAsync(Uri endpoint)
     {
         if (selectedFiles.Count == 0) { System.Windows.MessageBox.Show("请先选择文件。", "爱乐互传"); return; }
@@ -104,6 +118,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         var expired = lastSeen.Where(pair => DateTimeOffset.UtcNow - pair.Value > TimeSpan.FromMinutes(2)).Select(pair => pair.Key).ToHashSet(StringComparer.Ordinal);
         foreach (var device in Devices.Where(device => expired.Contains(device.Fingerprint)).ToArray()) Devices.Remove(device);
     }
+    public void Refresh() => _ = RefreshAsync();
     public async ValueTask DisposeAsync() { bonjour.Dispose(); await discovery.DisposeAsync(); await receiver.DisposeAsync(); }
     private void Changed([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }

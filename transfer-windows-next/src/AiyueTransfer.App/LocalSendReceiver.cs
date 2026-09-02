@@ -15,7 +15,7 @@ public sealed record IncomingRequest(string SessionId, DeviceInfo Sender, IReadO
 public sealed class LocalSendReceiver : IAsyncDisposable
 {
     private readonly DeviceInfo local;
-    private readonly string destination;
+    private string destination;
     private readonly ConcurrentDictionary<string, PendingUpload> sessions = new(StringComparer.Ordinal);
     private WebApplication? application;
     public event Action<IncomingRequest>? RequestReceived;
@@ -73,6 +73,7 @@ public sealed class LocalSendReceiver : IAsyncDisposable
     }
 
     public bool Decide(string sessionId, bool accepted) => sessions.TryGetValue(sessionId, out var session) && session.Decision.TrySetResult(accepted);
+    public void SetDestination(string value) { destination = value; Directory.CreateDirectory(destination); }
     public async ValueTask DisposeAsync() { if (application is not null) { await application.StopAsync(); await application.DisposeAsync(); } }
 
     private static bool IsSafeRelativeName(string fileName)
