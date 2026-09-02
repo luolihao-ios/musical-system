@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Input;
 using AiyueTransfer.Protocol;
@@ -12,20 +13,23 @@ public partial class MainWindow : Window
     protected override async void OnClosed(EventArgs e) { if (DataContext is NearbyDevicesViewModel model) await model.DisposeAsync(); base.OnClosed(e); }
 }
 
-public sealed class NearbyDeviceCard(string alias, string deviceType, Uri endpoint, string fingerprint)
+public sealed class NearbyDeviceCard(string alias, string deviceType, Uri endpoint, string fingerprint, Action send)
 {
     public string Alias { get; } = alias;
     public string DeviceType { get; } = deviceType;
     public Uri Endpoint { get; } = endpoint;
     public string Fingerprint { get; } = fingerprint;
-    public ICommand SendCommand { get; } = new SimpleCommand(() => { });
+    public ICommand SendCommand { get; } = new SimpleCommand(send);
 }
 
 public sealed class NearbyDevicesViewModel : IAsyncDisposable
 {
     public ObservableCollection<NearbyDeviceCard> Devices { get; } = [];
+    private readonly List<string> selectedFiles = [];
     public string EmptyText => Devices.Count == 0 ? "暂未发现设备，点击“刷新”重试" : string.Empty;
     public ICommand RefreshCommand { get; }
+    public ICommand ChooseFilesCommand { get; }
+    public string SelectedSummary => selectedFiles.Count == 0 ? "尚未选择文件" : $"已选择 {selectedFiles.Count} 个文件";
     private readonly LocalSendDiscovery discovery = new();
     private readonly DeviceInfo local = new("爱乐互传", "2.0", Environment.MachineName, "desktop", Guid.NewGuid().ToString("N"), 53317, "http");
     private readonly LocalSendReceiver receiver;
@@ -37,6 +41,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable
         receiver = new LocalSendReceiver(local, destination);
         receiver.RequestReceived += OnIncomingRequest;
         RefreshCommand = new SimpleCommand(() => _ = RefreshAsync());
+        ChooseFilesCommand = new SimpleCommand(ChooseFiles);
         discovery.AnnouncementReceived += OnAnnouncement;
         _ = InitializeAsync();
     }
@@ -59,8 +64,19 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable
         {
             lastSeen[announcement.Info.Fingerprint] = DateTimeOffset.UtcNow;
             var existing = Devices.FirstOrDefault(device => device.Endpoint.Host == endpoint.Address.ToString());
-            if (existing is null) Devices.Add(new NearbyDeviceCard(announcement.Info.Alias, announcement.Info.DeviceType, new Uri($"http://{endpoint.Address}:{announcement.Info.Port}"), announcement.Info.Fingerprint));
+            if (existing is null) Devices.Add(new NearbyDeviceCard(announcement.Info.Alias, announcement.Info.DeviceType, new Uri($"http://{endpoint.Address}:{announcement.Info.Port}"), announcement.Info.Fingerprint, () => _ = SendAsync(new Uri($"http://{endpoint.Address}:{announcement.Info.Port}"))));
         });
+    }
+    private void ChooseFiles()
+    {
+        var picker = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = "选择要发送的文件" };
+        if (picker.ShowDialog() == true) { selectedFiles.Clear(); selectedFiles.AddRange(picker.FileNames); }
+    }
+    private async Task SendAsync(Uri endpoint)
+    {
+        if (selectedFiles.Count == 0) { MessageBox.Show("请先选择文件。", "爱乐互传"); return; }
+        try { await new LocalSendSender(new HttpClient()).SendAsync(endpoint, local, selectedFiles); MessageBox.Show("传输完成。", "爱乐互传"); }
+        catch (Exception exception) { MessageBox.Show($"传输失败：{exception.Message}", "爱乐互传", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
     private async Task RefreshAsync()
     {
