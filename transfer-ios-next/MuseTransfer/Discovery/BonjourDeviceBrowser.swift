@@ -13,8 +13,8 @@ public final class BonjourDeviceBrowser: @unchecked Sendable {
             let browser = NWBrowser(for: .bonjour(type: "_aiyue._tcp", domain: nil), using: .tcp)
             browser.browseResultsChangedHandler = { [weak self] results, _ in
                 let devices = results.compactMap { result -> NearbyDevice? in
-                    guard case let .service(name, _, _, _) = result.endpoint else { return nil }
-                    return NearbyDevice(id: name, alias: name, deviceType: "desktop", serviceName: name, serviceType: "_aiyue._tcp", serviceDomain: "local.")
+                    guard case let .service(name, type, domain, _) = result.endpoint else { return nil }
+                    return NearbyDevice(id: "\(name).\(domain)", alias: name, deviceType: "附近设备", serviceName: name, serviceType: type, serviceDomain: domain)
                 }
                 self?.onDevicesChanged?(devices.sorted { $0.alias.localizedCaseInsensitiveCompare($1.alias) == .orderedAscending })
             }

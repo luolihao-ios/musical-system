@@ -13,7 +13,8 @@ public sealed class BonjourAdvertiser : IDisposable
         var profile = new ServiceProfile(info.Alias, "_aiyue._tcp", (ushort)info.Port);
         profile.AddProperty("alias", info.Alias); profile.AddProperty("version", info.Version); profile.AddProperty("deviceType", info.DeviceType);
         profile.AddProperty("fingerprint", info.Fingerprint); profile.AddProperty("protocol", info.Protocol);
-        discovery.Advertise(profile); multicast.Start();
+        multicast.Start();
+        discovery.Advertise(profile);
     }
     public void Dispose() { discovery?.Unadvertise(); multicast.Stop(); discovery?.Dispose(); multicast.Dispose(); }
 }

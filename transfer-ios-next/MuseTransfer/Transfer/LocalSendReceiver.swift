@@ -22,6 +22,9 @@ public final class LocalSendReceiver: @unchecked Sendable {
     public func start() throws {
         guard listener == nil else { return }
         let listener = try NWListener(using: .tcp, on: NWEndpoint.Port(rawValue: UInt16(local.port))!)
+        // A listener alone is not discoverable. Publishing this Bonjour service is
+        // the iOS half of the Windows mDNS advertisement.
+        listener.service = NWListener.Service(name: "\(local.alias)-\(local.fingerprint.prefix(6))", type: "_aiyue._tcp", domain: nil, txtRecord: nil)
         listener.newConnectionHandler = { [weak self] connection in self?.receive(connection) }
         self.listener = listener; listener.start(queue: queue)
     }
