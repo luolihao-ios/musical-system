@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using AiyueTransfer.Protocol;
@@ -27,16 +28,30 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable
     public ICommand RefreshCommand { get; }
     private readonly LocalSendDiscovery discovery = new();
     private readonly DeviceInfo local = new("爱乐互传", "2.0", Environment.MachineName, "desktop", Guid.NewGuid().ToString("N"), 53317, "http");
+    private readonly LocalSendReceiver receiver;
     private readonly Dictionary<string, DateTimeOffset> lastSeen = new(StringComparer.Ordinal);
 
     public NearbyDevicesViewModel()
     {
+        var destination = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "爱乐互传");
+        receiver = new LocalSendReceiver(local, destination);
+        receiver.RequestReceived += OnIncomingRequest;
         RefreshCommand = new SimpleCommand(() => _ = RefreshAsync());
         discovery.AnnouncementReceived += OnAnnouncement;
         _ = InitializeAsync();
     }
 
-    private async Task InitializeAsync() { try { await discovery.StartAsync(local); } catch (System.Net.Sockets.SocketException) { } }
+    private async Task InitializeAsync()
+    {
+        try { await receiver.StartAsync(); await discovery.StartAsync(local); }
+        catch (System.Net.Sockets.SocketException) { }
+    }
+    private void OnIncomingRequest(IncomingRequest request) => Application.Current.Dispatcher.Invoke(() =>
+    {
+        var total = request.Files.Values.Sum(file => file.Size);
+        var answer = MessageBox.Show($"{request.Sender.Alias} 要发送 {request.Files.Count} 个文件（{total:N0} 字节）。\n是否接收？", "爱乐互传", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        receiver.Decide(request.SessionId, answer == MessageBoxResult.Yes);
+    });
     private void OnAnnouncement(System.Net.IPEndPoint endpoint, DiscoveryAnnouncement announcement)
     {
         if (announcement.Info.Fingerprint == local.Fingerprint) return;
@@ -53,7 +68,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable
         var expired = lastSeen.Where(pair => DateTimeOffset.UtcNow - pair.Value > TimeSpan.FromMinutes(2)).Select(pair => pair.Key).ToHashSet(StringComparer.Ordinal);
         foreach (var device in Devices.Where(device => expired.Contains(device.Fingerprint)).ToArray()) Devices.Remove(device);
     }
-    public async ValueTask DisposeAsync() => await discovery.DisposeAsync();
+    public async ValueTask DisposeAsync() { await discovery.DisposeAsync(); await receiver.DisposeAsync(); }
 }
 
 public sealed class SimpleCommand(Action execute) : ICommand
