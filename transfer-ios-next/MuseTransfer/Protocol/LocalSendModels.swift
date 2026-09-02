@@ -26,3 +26,8 @@ public struct PrepareUploadRequest: Codable, Equatable, Sendable {
     public let info: DeviceInfo; public let files: [String: FileMetadata]
     public init(info: DeviceInfo, files: [String: FileMetadata]) { self.info = info; self.files = files }
 }
+
+public struct PrepareUploadResponse: Codable, Equatable, Sendable {
+    public let sessionId: String
+    public let files: [String: String]
+}
