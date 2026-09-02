@@ -132,6 +132,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     private async Task RefreshAsync()
     {
         DiagnosticLog.Write("User requested discovery refresh.");
+        bonjour.Announce();
         bonjourBrowser.Refresh();
         await discovery.AnnounceAsync(local);
         var expired = lastSeen.Where(pair => DateTimeOffset.UtcNow - pair.Value > TimeSpan.FromMinutes(2)).Select(pair => pair.Key).ToHashSet(StringComparer.Ordinal);

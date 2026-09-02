@@ -31,7 +31,7 @@ public final class LocalSendReceiver: @unchecked Sendable {
             "fingerprint": Data(local.fingerprint.utf8),
             "protocol": Data("http".utf8)
         ])
-        listener.service = NWListener.Service(name: "\(local.alias)-\(local.fingerprint.prefix(6))", type: "_aiyue._tcp", domain: nil, txtRecord: txtRecord)
+        listener.service = NWListener.Service(name: "aiyue-\(local.fingerprint.prefix(12))", type: "_aiyue._tcp", domain: nil, txtRecord: txtRecord)
         listener.stateUpdateHandler = { state in DiagnosticLog.write("iOS receiver state: \(String(describing: state)).") }
         listener.newConnectionHandler = { [weak self] connection in self?.receive(connection) }
         self.listener = listener; listener.start(queue: queue)

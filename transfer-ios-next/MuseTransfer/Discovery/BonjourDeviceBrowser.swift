@@ -3,10 +3,11 @@ import Network
 
 public final class BonjourDeviceBrowser: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.luolihao.aiyuetransfer.discovery")
+    private let localFingerprintPrefix: String
     private var browser: NWBrowser?
     public var onDevicesChanged: (@Sendable ([NearbyDevice]) -> Void)?
 
-    public init() { }
+    public init(localFingerprint: String) { localFingerprintPrefix = String(localFingerprint.prefix(12)) }
     public func start() {
         queue.async {
             guard self.browser == nil else { return }
@@ -16,6 +17,10 @@ public final class BonjourDeviceBrowser: @unchecked Sendable {
                 DiagnosticLog.write("Bonjour browse results: count=\(results.count); changes=\(changes.count).")
                 let devices = results.compactMap { result -> NearbyDevice? in
                     guard case let .service(name, type, domain, _) = result.endpoint else { return nil }
+                    if name == "aiyue-\(self?.localFingerprintPrefix ?? \"\")" {
+                        DiagnosticLog.write("Bonjour own service ignored: \(name).")
+                        return nil
+                    }
                     DiagnosticLog.write("Bonjour service found: name=\(name); type=\(type); domain=\(domain).")
                     return NearbyDevice(id: "\(name).\(domain)", alias: name, deviceType: "附近设备", serviceName: name, serviceType: type, serviceDomain: domain)
                 }
