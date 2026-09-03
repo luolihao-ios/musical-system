@@ -42,7 +42,7 @@ var
   Parameters: String;
 begin
   Parameters := 'advfirewall firewall add rule name="' + RuleName + '" dir=in action=allow protocol=' + Protocol +
-    ' localport=53317 profile=private,public program="' + ExpandConstant('{app}\{#AppExeName}') + '"';
+    ' localport=53317-53417 profile=private,public program="' + ExpandConstant('{app}\{#AppExeName}') + '"';
   if (not Exec(ExpandConstant('{sys}\netsh.exe'), Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
     MsgBox('爱乐互传未能自动添加 ' + Protocol + ' 53317 防火墙规则。请在 Windows Defender 防火墙中允许此程序在专用和公用网络上接收入站连接。', mbError, MB_OK);
 end;

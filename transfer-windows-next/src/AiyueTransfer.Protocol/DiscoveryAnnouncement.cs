@@ -44,7 +44,10 @@ public sealed class LocalSendDiscovery : IAsyncDisposable
     }
 
     public Task AnnounceAsync(DeviceInfo local, CancellationToken cancellationToken = default) =>
-        client.SendAsync(new DiscoveryAnnouncement(local).ToBytes(), new IPEndPoint(MulticastAddress, local.Port), cancellationToken).AsTask();
+        // The multicast discovery socket stays on its fixed protocol port. The
+        // advertised HTTP endpoint may use a fallback port when Windows reserves
+        // the preferred TCP port.
+        client.SendAsync(new DiscoveryAnnouncement(local).ToBytes(), new IPEndPoint(MulticastAddress, DefaultPort), cancellationToken).AsTask();
 
     private async Task ReceiveAsync(CancellationToken cancellationToken)
     {

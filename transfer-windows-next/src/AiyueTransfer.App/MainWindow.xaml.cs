@@ -45,7 +45,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     public string SelectedSummary => selectedFiles.Count == 0 ? "尚未选择文件" : $"已选择 {selectedFiles.Count} 个文件";
     public event PropertyChangedEventHandler? PropertyChanged;
     private readonly LocalSendDiscovery discovery = new();
-    private readonly DeviceInfo local = new("爱乐互传", "2.0", Environment.MachineName, "desktop", Guid.NewGuid().ToString("N"), 53317, "http");
+    private readonly DeviceInfo local;
     private readonly LocalSendReceiver receiver;
     private readonly BonjourAdvertiser bonjour = new();
     private readonly BonjourBrowser bonjourBrowser = new();
@@ -54,6 +54,9 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     public NearbyDevicesViewModel()
     {
         SavePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "爱乐互传");
+        var port = WindowsTransferPort.Select();
+        local = new DeviceInfo("爱乐互传", "2.0", Environment.MachineName, "desktop", Guid.NewGuid().ToString("N"), port, "http");
+        DiagnosticLog.Write($"Selected TCP transfer port: {local.Port}.");
         receiver = new LocalSendReceiver(local, SavePath);
         receiver.RequestReceived += OnIncomingRequest;
         RefreshCommand = new SimpleCommand(() => _ = RefreshAsync());
@@ -88,11 +91,11 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         {
             await receiver.StartAsync();
             receiverStarted = true;
-            DiagnosticLog.Write("HTTP receiver started on TCP 53317.");
+            DiagnosticLog.Write($"HTTP receiver started on TCP {local.Port}.");
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"HTTP receiver start failed on TCP 53317: {exception}");
+            DiagnosticLog.Write($"HTTP receiver start failed on TCP {local.Port}: {exception}");
         }
 
         if (receiverStarted)
