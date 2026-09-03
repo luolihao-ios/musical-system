@@ -38,8 +38,15 @@ public sealed class BonjourBrowser : IDisposable
         var service = records.OfType<SRVRecord>().FirstOrDefault(record => string.Equals(record.Name.ToString(), instanceName, StringComparison.OrdinalIgnoreCase));
         if (service is null || service.Port == 0) { DiagnosticLog.Write($"Bonjour instance ignored: no SRV record for {instanceName}."); return; }
 
-        var address = records.OfType<AddressRecord>()
-            .FirstOrDefault(record => string.Equals(record.Name.ToString(), service.Target.ToString(), StringComparison.OrdinalIgnoreCase))?.Address
+        var addresses = records.OfType<AddressRecord>()
+            .Where(record => string.Equals(record.Name.ToString(), service.Target.ToString(), StringComparison.OrdinalIgnoreCase))
+            .Select(record => record.Address)
+            .ToArray();
+        // iOS usually advertises both address families. A link-local IPv6 address
+        // needs an interface scope and cannot be used as a plain HTTP URI, while
+        // the paired Wi-Fi IPv4 address is directly reachable on this LAN.
+        var address = addresses.FirstOrDefault(candidate => candidate.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+            ?? addresses.FirstOrDefault()
             ?? args.RemoteEndPoint.Address;
         if (IPAddress.Any.Equals(address) || IPAddress.IPv6Any.Equals(address)) { DiagnosticLog.Write($"Bonjour instance ignored: unusable address for {instanceName}."); return; }
 
@@ -52,7 +59,7 @@ public sealed class BonjourBrowser : IDisposable
         var alias = DecodeAlias(properties.GetValueOrDefault("aliasB64")) ?? properties.GetValueOrDefault("alias") ?? instanceName.Split('.', 2)[0];
         var deviceType = properties.GetValueOrDefault("deviceType") ?? "附近设备";
         var fingerprint = properties.GetValueOrDefault("fingerprint") ?? $"bonjour:{address}:{service.Port}";
-        DiagnosticLog.Write($"Bonjour device parsed: alias={alias}; endpoint={address}:{service.Port}; fingerprint={fingerprint}.");
+        DiagnosticLog.Write($"Bonjour device parsed: alias={alias}; endpoint={address}:{service.Port}; allAddresses=[{string.Join(",", addresses)}]; fingerprint={fingerprint}.");
         DeviceDiscovered?.Invoke(new BonjourDevice(alias, deviceType, address, service.Port, fingerprint));
     }
 

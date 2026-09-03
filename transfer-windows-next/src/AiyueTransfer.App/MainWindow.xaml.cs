@@ -145,7 +145,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
             lastSeen[device.Fingerprint] = DateTimeOffset.UtcNow;
-            var endpoint = new Uri($"http://{device.Address}:{device.Port}");
+            var endpoint = new UriBuilder(Uri.UriSchemeHttp, device.Address.ToString(), device.Port).Uri;
             if (Devices.All(existing => existing.Endpoint != endpoint))
                 Devices.Add(new NearbyDeviceCard(device.Alias, device.DeviceType, endpoint, device.Fingerprint, () => _ = SendAsync(endpoint)));
         });
