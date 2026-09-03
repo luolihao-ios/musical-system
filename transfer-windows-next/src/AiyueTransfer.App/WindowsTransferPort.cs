@@ -6,8 +6,9 @@ namespace AiyueTransfer.App;
 /// <summary>Selects a TCP port that this Windows installation is allowed to bind.</summary>
 internal static class WindowsTransferPort
 {
-    public const int Preferred = 53317;
-    public const int LastCandidate = 53417;
+    // Deliberately separate from LocalSend's default 53317 TCP/UDP port.
+    public const int Preferred = 54218;
+    public const int LastCandidate = 54318;
 
     public static int Select()
     {

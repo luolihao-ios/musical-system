@@ -20,8 +20,9 @@ public sealed record DiscoveryAnnouncement(DeviceInfo Info)
 
 public sealed class LocalSendDiscovery : IAsyncDisposable
 {
-    public const int DefaultPort = 53317;
-    public static readonly IPAddress MulticastAddress = IPAddress.Parse("224.0.0.167");
+    // Private fallback discovery channel. Do not share LocalSend's 224.0.0.167:53317.
+    public const int DefaultPort = 54217;
+    public static readonly IPAddress MulticastAddress = IPAddress.Parse("239.255.77.77");
     private readonly UdpClient client;
     private readonly CancellationTokenSource stop = new();
     private Task? receiveLoop;

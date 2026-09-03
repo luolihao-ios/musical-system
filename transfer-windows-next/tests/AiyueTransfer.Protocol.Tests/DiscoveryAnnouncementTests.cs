@@ -7,6 +7,14 @@ namespace AiyueTransfer.Protocol.Tests;
 public sealed class DiscoveryAnnouncementTests
 {
     [Fact]
+    public void FallbackDiscovery_UsesPrivateChannel_NotLocalSendDefaults()
+    {
+        Assert.Equal(54217, LocalSendDiscovery.DefaultPort);
+        Assert.Equal("239.255.77.77", LocalSendDiscovery.MulticastAddress.ToString());
+        Assert.NotEqual(53317, LocalSendDiscovery.DefaultPort);
+    }
+
+    [Fact]
     public void Announcement_RoundTrips()
     {
         var source = new DiscoveryAnnouncement(new DeviceInfo("爱乐互传", "2.0", "Windows", "desktop", "fp", 53317, "http"));

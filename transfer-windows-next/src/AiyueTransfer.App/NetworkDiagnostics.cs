@@ -25,9 +25,9 @@ internal static class NetworkDiagnostics
                 .Where(endpoint => endpoint.Port == transferPort)
                 .Select(endpoint => endpoint.ToString());
             var udpListeners = properties.GetActiveUdpListeners()
-                .Where(endpoint => endpoint.Port is 5353 or 53317)
+                .Where(endpoint => endpoint.Port is 5353 or 54217)
                 .Select(endpoint => endpoint.ToString());
-            DiagnosticLog.Write($"Network listeners before startup: tcp{transferPort}=[{string.Join(",", tcpListeners)}]; udp5353-or-53317=[{string.Join(",", udpListeners)}].");
+            DiagnosticLog.Write($"Network listeners before startup: tcp{transferPort}=[{string.Join(",", tcpListeners)}]; udp5353-or-54217=[{string.Join(",", udpListeners)}].");
         }
         catch (Exception exception)
         {

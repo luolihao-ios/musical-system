@@ -12,7 +12,7 @@ public struct DeviceInfo: Codable, Equatable, Sendable {
     public let announce: Bool
 
     enum CodingKeys: String, CodingKey { case alias, version, deviceModel, deviceType, fingerprint, port; case protocolName = "protocol"; case download, announce }
-    public init(alias: String, version: String = "2.0", deviceModel: String, deviceType: String, fingerprint: String, port: Int = 53317, protocolName: String = "http", download: Bool = true, announce: Bool = true) {
+    public init(alias: String, version: String = "2.0", deviceModel: String, deviceType: String, fingerprint: String, port: Int = 54218, protocolName: String = "http", download: Bool = true, announce: Bool = true) {
         self.alias = alias; self.version = version; self.deviceModel = deviceModel; self.deviceType = deviceType; self.fingerprint = fingerprint; self.port = port; self.protocolName = protocolName; self.download = download; self.announce = announce
     }
 }
