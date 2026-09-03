@@ -27,7 +27,13 @@ public sealed class LocalSendSender(HttpClient http)
         if (sources.Length == 0) throw new InvalidDataException("没有可发送的文件。");
         var files = sources.Select(source => new FileMetadata(Guid.NewGuid().ToString("N"), source.TransferName.Replace('\\', '/'), new FileInfo(source.Path).Length, Mime(source.Path), Hash(source.Path))).ToDictionary(file => file.Id, StringComparer.Ordinal);
         using var prepare = await http.PostAsJsonAsync(new Uri(endpoint, TransferRoutes.PrepareUpload), new PrepareUploadRequest(local, files), ProtocolJson.Options, cancellationToken);
-        prepare.EnsureSuccessStatusCode();
+        if (!prepare.IsSuccessStatusCode)
+        {
+            var details = await prepare.Content.ReadAsStringAsync(cancellationToken);
+            throw new InvalidOperationException(prepare.StatusCode == System.Net.HttpStatusCode.Forbidden
+                ? "对方拒绝了本次传输。"
+                : $"对方未能接受传输请求（{(int)prepare.StatusCode}）：{details}");
+        }
         var response = await prepare.Content.ReadFromJsonAsync<PrepareUploadResponse>(ProtocolJson.Options, cancellationToken) ?? throw new InvalidDataException("接收端没有返回传输会话。");
         foreach (var file in files.Values)
         {

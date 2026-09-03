@@ -53,7 +53,15 @@ public final class LocalSendReceiver: @unchecked Sendable {
     private func route(_ request: HTTPRequest) async -> Data {
         if request.method == "POST", request.path == "/api/aiyue/v1/register" { return Self.response(200, try? JSONEncoder().encode(local)) }
         if request.method == "POST", request.path == "/api/aiyue/v1/prepare-upload" {
-            guard let value = try? JSONDecoder().decode(PrepareUploadRequest.self, from: request.body), !value.files.isEmpty else { return Self.response(400) }
+            let value: PrepareUploadRequest
+            do {
+                value = try JSONDecoder().decode(PrepareUploadRequest.self, from: request.body)
+            } catch {
+                DiagnosticLog.write("Prepare upload rejected: JSON decode failed; error=\(error.localizedDescription); bytes=\(request.body.count).")
+                return Self.response(400)
+            }
+            guard !value.files.isEmpty else { DiagnosticLog.write("Prepare upload rejected: no files."); return Self.response(400) }
+            DiagnosticLog.write("Prepare upload received: sender=\(value.info.alias); files=\(value.files.count).")
             let id = UUID().uuidString.lowercased(); let accepted = await withCheckedContinuation { continuation in
                 queue.async { self.pending[id] = continuation; self.onIncomingTransfer?(IncomingTransfer(id: id, sender: value.info, files: value.files)) }
             }
