@@ -52,6 +52,8 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     public ICommand ChooseFolderCommand { get; }
     public ICommand ClipboardCommand { get; }
     public ICommand ChooseSavePathCommand { get; }
+    public ICommand CopyDiagnosticPathCommand { get; }
+    public string DiagnosticLogPath => DiagnosticLog.Path;
     public string SelectedSummary => selectedFiles.Count == 0 ? "尚未选择文件" : $"文件：{selectedFiles.Count}  ·  大小：{FormatSize(selectedFiles.Sum(path => new FileInfo(path).Length))}";
     public event PropertyChangedEventHandler? PropertyChanged;
     private readonly DeviceInfo local;
@@ -73,6 +75,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         ChooseFolderCommand = new SimpleCommand(ChooseFolder);
         ClipboardCommand = new SimpleCommand(ChooseClipboard);
         ChooseSavePathCommand = new SimpleCommand(ChooseSavePath);
+        CopyDiagnosticPathCommand = new SimpleCommand(CopyDiagnosticPath);
         bonjourBrowser.DeviceDiscovered += OnBonjourDevice;
         Devices.CollectionChanged += (_, _) => { Changed(nameof(EmptyText)); Changed(nameof(EmptyDevicesVisibility)); };
         _ = InitializeAsync();
@@ -159,6 +162,11 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         using var picker = new System.Windows.Forms.FolderBrowserDialog { Description = "选择接收文件的保存位置" };
         if (picker.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
         SavePath = picker.SelectedPath; receiver.SetDestination(SavePath); Changed(nameof(SavePath));
+    }
+    private void CopyDiagnosticPath()
+    {
+        System.Windows.Clipboard.SetText(DiagnosticLog.Path);
+        System.Windows.MessageBox.Show("诊断日志路径已复制，可直接粘贴到文件资源管理器地址栏。", "爱乐互传", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
     }
     private void BeginTransfer(Uri endpoint)
     {
