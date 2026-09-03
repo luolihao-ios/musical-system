@@ -20,13 +20,13 @@ public partial class MainWindow : Window
     protected override async void OnClosed(EventArgs e) { if (DataContext is NearbyDevicesViewModel model) await model.DisposeAsync(); base.OnClosed(e); }
 }
 
-public sealed class NearbyDeviceCard(string alias, string deviceType, Uri endpoint, string fingerprint, Action send)
+public sealed class NearbyDeviceCard(string alias, string deviceType, Uri endpoint, string fingerprint, Action activate)
 {
     public string Alias { get; } = alias;
     public string DeviceType { get; } = deviceType;
     public Uri Endpoint { get; } = endpoint;
     public string Fingerprint { get; } = fingerprint;
-    public ICommand SendCommand { get; } = new SimpleCommand(send);
+    public ICommand ActivateCommand { get; } = new SimpleCommand(activate);
 }
 
 public sealed class SelectedFileCard(string path)
@@ -135,7 +135,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
             lastSeen[device.Fingerprint] = DateTimeOffset.UtcNow;
             var endpoint = new UriBuilder(Uri.UriSchemeHttp, device.Address.ToString(), device.Port).Uri;
             if (Devices.All(existing => existing.Endpoint != endpoint))
-                Devices.Add(new NearbyDeviceCard(device.Alias, device.DeviceType, endpoint, device.Fingerprint, () => _ = SendAsync(endpoint)));
+                Devices.Add(new NearbyDeviceCard(device.Alias, device.DeviceType, endpoint, device.Fingerprint, () => BeginTransfer(endpoint)));
         });
     }
     private void ChooseFiles()
@@ -160,9 +160,13 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         if (picker.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
         SavePath = picker.SelectedPath; receiver.SetDestination(SavePath); Changed(nameof(SavePath));
     }
-    private async Task SendAsync(Uri endpoint)
+    private void BeginTransfer(Uri endpoint)
     {
         if (selectedFiles.Count == 0) { System.Windows.MessageBox.Show("请先选择文件。", "爱乐互传"); return; }
+        _ = SendAsync(endpoint);
+    }
+    private async Task SendAsync(Uri endpoint)
+    {
         try { DiagnosticLog.Write($"Send started: endpoint={endpoint}; files={selectedFiles.Count}."); var sender = new LocalSendSender(new HttpClient()); if (selectedFolder is not null) await sender.SendFolderAsync(endpoint, local, selectedFolder); else await sender.SendAsync(endpoint, local, selectedFiles); DiagnosticLog.Write($"Send completed: endpoint={endpoint}."); System.Windows.MessageBox.Show("传输完成。", "爱乐互传"); }
         catch (Exception exception) { DiagnosticLog.Write($"Send failed: endpoint={endpoint}; error={exception}"); System.Windows.MessageBox.Show($"传输失败：{exception.Message}", "爱乐互传", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning); }
     }

@@ -7,7 +7,9 @@ import UIKit
     var devices: [NearbyDevice] = []
     var selectedFiles: [URL] = []
     var showImporter = false
+    var showEditor = false
     var incomingTransfer: IncomingTransfer?
+    var showSelectionWarning = false
     var isSending = false
     var sendStatus: String?
     var selectedSummary: String {
@@ -34,8 +36,9 @@ import UIKit
     func refresh() { DiagnosticLog.write("User requested discovery refresh."); browser.stop(); browser.start() }
     func select(_ result: Result<[URL], Error>) { if case let .success(urls) = result { selectedFiles = urls; sendStatus = nil } }
     func remove(_ url: URL) { selectedFiles.removeAll { $0 == url } }
+    func removeAll() { selectedFiles.removeAll(); showEditor = false }
     func send(to device: NearbyDevice) {
-        guard !selectedFiles.isEmpty else { return }
+        guard !selectedFiles.isEmpty else { showSelectionWarning = true; return }
         isSending = true; sendStatus = "正在请求 \(device.alias) 接收…"
         Task {
             do {
