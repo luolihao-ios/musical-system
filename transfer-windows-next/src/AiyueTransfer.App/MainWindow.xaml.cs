@@ -69,8 +69,54 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
 
     private async Task InitializeAsync()
     {
-        try { await receiver.StartAsync(); DiagnosticLog.Write("HTTP receiver started on TCP 53317."); bonjour.Start(local); DiagnosticLog.Write("Bonjour advertiser started."); bonjourBrowser.Start(); await discovery.StartAsync(local); DiagnosticLog.Write("UDP discovery started and announcement sent."); }
-        catch (Exception exception) { DiagnosticLog.Write($"Discovery initialization failed: {exception.GetType().Name}: {exception.Message}"); }
+        NetworkDiagnostics.WriteStartupSnapshot(local.Port);
+        // Discovery must remain usable when the receiving endpoint cannot bind.
+        // Previously one failure stopped the Bonjour browser, which hid iPhones
+        // even though browsing itself does not require the HTTP listener.
+        try
+        {
+            bonjourBrowser.Start();
+            DiagnosticLog.Write("Bonjour browser started.");
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write($"Bonjour browser start failed: {exception}");
+        }
+
+        var receiverStarted = false;
+        try
+        {
+            await receiver.StartAsync();
+            receiverStarted = true;
+            DiagnosticLog.Write("HTTP receiver started on TCP 53317.");
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write($"HTTP receiver start failed on TCP 53317: {exception}");
+        }
+
+        if (receiverStarted)
+        {
+            try
+            {
+                bonjour.Start(local);
+                DiagnosticLog.Write("Bonjour advertiser started.");
+            }
+            catch (Exception exception)
+            {
+                DiagnosticLog.Write($"Bonjour advertiser start failed: {exception}");
+            }
+        }
+
+        try
+        {
+            await discovery.StartAsync(local);
+            DiagnosticLog.Write("UDP discovery started and announcement sent.");
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write($"UDP discovery start failed: {exception}");
+        }
     }
     private void OnIncomingRequest(IncomingRequest request) => System.Windows.Application.Current.Dispatcher.Invoke(() =>
     {

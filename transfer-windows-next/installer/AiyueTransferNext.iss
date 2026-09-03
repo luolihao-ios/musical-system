@@ -33,6 +33,7 @@ Filename: "{app}\{#AppExeName}"; Description: "启动 {#AppName}"; Flags: nowait
 [UninstallRun]
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""AiYueTransfer TCP 53317"""; Flags: runhidden waituntilterminated
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""AiYueTransfer UDP 53317"""; Flags: runhidden waituntilterminated
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""AiYueTransfer mDNS UDP 5353"""; Flags: runhidden waituntilterminated
 
 [Code]
 procedure AddFirewallRule(const RuleName, Protocol: String);
@@ -47,9 +48,16 @@ begin
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+  Parameters: String;
 begin
   if CurStep = ssPostInstall then begin
     AddFirewallRule('AiYueTransfer TCP 53317', 'TCP');
     AddFirewallRule('AiYueTransfer UDP 53317', 'UDP');
+    { Bonjour/mDNS replies arrive on UDP 5353, not on the transfer port. }
+    Parameters := 'advfirewall firewall add rule name="AiYueTransfer mDNS UDP 5353" dir=in action=allow protocol=UDP' +
+      ' localport=5353 profile=private,public program="' + ExpandConstant('{app}\{#AppExeName}') + '"';
+    Exec(ExpandConstant('{sys}\netsh.exe'), Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;
 end;

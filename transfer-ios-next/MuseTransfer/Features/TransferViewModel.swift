@@ -22,7 +22,10 @@ import UIKit
         browser.onDevicesChanged = { [weak self] devices in Task { @MainActor in self?.devices = devices } }
         browser.start()
     }
-    func refresh() { DiagnosticLog.write("User requested discovery refresh."); receiver.refreshAdvertisement(); browser.stop(); browser.start() }
+    // Restarting NWListener to refresh Bonjour races with the old TCP socket being
+    // released. It caused address-in-use failures and made a previously working
+    // iOS advertisement disappear. Refreshing the browser is sufficient here.
+    func refresh() { DiagnosticLog.write("User requested discovery refresh."); browser.stop(); browser.start() }
     func select(_ result: Result<[URL], Error>) { if case let .success(urls) = result { selectedFiles = urls } }
     func send(to device: NearbyDevice) {
         guard !selectedFiles.isEmpty else { return }
