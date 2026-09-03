@@ -12,7 +12,7 @@ public final class LocalSendSender: Sendable {
             let id = UUID().uuidString.lowercased()
             result[id] = FileMetadata(id: id, fileName: url.lastPathComponent, size: Int64(values.fileSize ?? 0), fileType: values.contentType?.preferredMIMEType ?? "application/octet-stream")
         }
-        var prepare = URLRequest(url: endpoint.appending(path: "/api/localsend/v2/prepare-upload"))
+        var prepare = URLRequest(url: endpoint.appending(path: "/api/aiyue/v1/prepare-upload"))
         prepare.httpMethod = "POST"; prepare.setValue("application/json", forHTTPHeaderField: "Content-Type")
         prepare.httpBody = try JSONEncoder().encode(PrepareUploadRequest(info: local, files: metadata))
         let (data, response) = try await session.data(for: prepare)
@@ -22,7 +22,7 @@ public final class LocalSendSender: Sendable {
         let accepted = try JSONDecoder().decode(PrepareUploadResponse.self, from: data)
         for (id, file) in metadata {
             guard let token = accepted.files[id] else { throw LocalSendSenderError.invalidResponse }
-            var components = URLComponents(url: endpoint.appending(path: "/api/localsend/v2/upload"), resolvingAgainstBaseURL: false)!
+            var components = URLComponents(url: endpoint.appending(path: "/api/aiyue/v1/upload"), resolvingAgainstBaseURL: false)!
             components.queryItems = [URLQueryItem(name: "sessionId", value: accepted.sessionId), URLQueryItem(name: "fileId", value: id), URLQueryItem(name: "token", value: token)]
             var upload = URLRequest(url: components.url!); upload.httpMethod = "POST"; upload.httpBody = try Data(contentsOf: urls.first { $0.lastPathComponent == file.fileName }!)
             let (_, uploadResponse) = try await session.data(for: upload)

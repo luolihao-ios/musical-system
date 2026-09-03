@@ -51,8 +51,8 @@ public final class LocalSendReceiver: @unchecked Sendable {
     }
 
     private func route(_ request: HTTPRequest) async -> Data {
-        if request.method == "POST", request.path == "/api/localsend/v2/register" { return Self.response(200, try? JSONEncoder().encode(local)) }
-        if request.method == "POST", request.path == "/api/localsend/v2/prepare-upload" {
+        if request.method == "POST", request.path == "/api/aiyue/v1/register" { return Self.response(200, try? JSONEncoder().encode(local)) }
+        if request.method == "POST", request.path == "/api/aiyue/v1/prepare-upload" {
             guard let value = try? JSONDecoder().decode(PrepareUploadRequest.self, from: request.body), !value.files.isEmpty else { return Self.response(400) }
             let id = UUID().uuidString.lowercased(); let accepted = await withCheckedContinuation { continuation in
                 queue.async { self.pending[id] = continuation; self.onIncomingTransfer?(IncomingTransfer(id: id, sender: value.info, files: value.files)) }
@@ -61,7 +61,7 @@ public final class LocalSendReceiver: @unchecked Sendable {
             let tokens = Dictionary(uniqueKeysWithValues: value.files.keys.map { ($0, UUID().uuidString.lowercased()) }); self.tokens[id] = tokens; self.fileNames[id] = value.files.mapValues(\.fileName)
             return Self.response(200, try? JSONEncoder().encode(PrepareUploadResponse(sessionId: id, files: tokens)))
         }
-        if request.method == "POST", request.path.hasPrefix("/api/localsend/v2/upload") {
+        if request.method == "POST", request.path.hasPrefix("/api/aiyue/v1/upload") {
             guard let query = URLComponents(string: "http://local" + request.path)?.queryItems, let sessionID = query.first(where: { $0.name == "sessionId" })?.value, let fileID = query.first(where: { $0.name == "fileId" })?.value, let token = query.first(where: { $0.name == "token" })?.value, tokens[sessionID]?[fileID] == token else { return Self.response(401) }
             let fileName = fileNames[sessionID]?[fileID] ?? fileID
             let target = destination.appendingPathComponent(sessionID).appendingPathComponent(URL(fileURLWithPath: fileName).lastPathComponent)

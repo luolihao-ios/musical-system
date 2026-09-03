@@ -13,7 +13,7 @@ public sealed class HttpDiscoveryClient(HttpClient http)
         {
             try
             {
-                using var response = await http.PostAsJsonAsync(new Uri(endpoint, "/api/localsend/v2/register"), local, ProtocolJson.Options, cancellationToken);
+                using var response = await http.PostAsJsonAsync(new Uri(endpoint, TransferRoutes.Register), local, ProtocolJson.Options, cancellationToken);
                 if (!response.IsSuccessStatusCode) continue;
                 var info = await response.Content.ReadFromJsonAsync<DeviceInfo>(ProtocolJson.Options, cancellationToken);
                 if (info is not null && info.Version == "2.0" && info.Port is >= 1 and <= 65535)

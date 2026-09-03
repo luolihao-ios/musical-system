@@ -8,12 +8,12 @@ public final class BonjourLocalSendSender: @unchecked Sendable {
             let values = try url.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey]); let id = UUID().uuidString.lowercased()
             result[id] = FileMetadata(id: id, fileName: url.lastPathComponent, size: Int64(values.fileSize ?? 0), fileType: values.contentType?.preferredMIMEType ?? "application/octet-stream")
         }
-        let prepared = try await request(path: "/api/localsend/v2/prepare-upload", body: JSONEncoder().encode(PrepareUploadRequest(info: local, files: files)), device: device)
+        let prepared = try await request(path: "/api/aiyue/v1/prepare-upload", body: JSONEncoder().encode(PrepareUploadRequest(info: local, files: files)), device: device)
         guard prepared.0 != 403, (200..<300).contains(prepared.0) else { throw LocalSendSenderError.rejected }
         let response = try JSONDecoder().decode(PrepareUploadResponse.self, from: prepared.1)
         for (id, file) in files {
             guard let token = response.files[id], let source = urls.first(where: { $0.lastPathComponent == file.fileName }) else { throw LocalSendSenderError.invalidResponse }
-            let result = try await request(path: "/api/localsend/v2/upload?sessionId=\(response.sessionId)&fileId=\(id)&token=\(token)", body: Data(contentsOf: source), device: device)
+            let result = try await request(path: "/api/aiyue/v1/upload?sessionId=\(response.sessionId)&fileId=\(id)&token=\(token)", body: Data(contentsOf: source), device: device)
             guard (200..<300).contains(result.0) else { throw LocalSendSenderError.invalidResponse }
         }
     }

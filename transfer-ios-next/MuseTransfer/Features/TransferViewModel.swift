@@ -8,7 +8,13 @@ import UIKit
     var selectedFiles: [URL] = []
     var showImporter = false
     var incomingTransfer: IncomingTransfer?
-    var selectedSummary: String { selectedFiles.isEmpty ? "尚未选择文件" : "已选择 \(selectedFiles.count) 个文件" }
+    var isSending = false
+    var sendStatus: String?
+    var selectedSummary: String {
+        guard !selectedFiles.isEmpty else { return "尚未选择文件" }
+        let total = selectedFiles.reduce(Int64(0)) { $0 + Int64((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
+        return "文件：\(selectedFiles.count)  ·  大小：\(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))"
+    }
     private let browser: BonjourDeviceBrowser
     private let receiver: LocalSendReceiver
     private let local: DeviceInfo
@@ -26,10 +32,22 @@ import UIKit
     // released. It caused address-in-use failures and made a previously working
     // iOS advertisement disappear. Refreshing the browser is sufficient here.
     func refresh() { DiagnosticLog.write("User requested discovery refresh."); browser.stop(); browser.start() }
-    func select(_ result: Result<[URL], Error>) { if case let .success(urls) = result { selectedFiles = urls } }
+    func select(_ result: Result<[URL], Error>) { if case let .success(urls) = result { selectedFiles = urls; sendStatus = nil } }
+    func remove(_ url: URL) { selectedFiles.removeAll { $0 == url } }
     func send(to device: NearbyDevice) {
         guard !selectedFiles.isEmpty else { return }
-        Task { try? await BonjourLocalSendSender().send(files: selectedFiles, to: device, local: local) }
+        isSending = true; sendStatus = "正在请求 \(device.alias) 接收…"
+        Task {
+            do {
+                DiagnosticLog.write("Send started: target=\(device.serviceName); files=\(selectedFiles.count).")
+                try await BonjourLocalSendSender().send(files: selectedFiles, to: device, local: local)
+                await MainActor.run { self.sendStatus = "传输完成"; self.isSending = false }
+                DiagnosticLog.write("Send completed: target=\(device.serviceName).")
+            } catch {
+                DiagnosticLog.write("Send failed: target=\(device.serviceName); error=\(error.localizedDescription).")
+                await MainActor.run { self.sendStatus = "传输失败：\(error.localizedDescription)"; self.isSending = false }
+            }
+        }
     }
     func decideIncoming(_ accepted: Bool) { guard let request = incomingTransfer else { return }; receiver.decide(sessionID: request.id, accepted: accepted); incomingTransfer = nil }
 }

@@ -6,12 +6,12 @@ namespace AiyueTransfer.Protocol.Tests;
 public sealed class TransferRoutesTests
 {
     [Fact]
-    public void Routes_MatchLocalSendV2()
+    public void Routes_UsePrivateAiYueV1Prefix()
     {
-        Assert.Equal("/api/localsend/v2/register", TransferRoutes.Register);
-        Assert.Equal("/api/localsend/v2/prepare-upload", TransferRoutes.PrepareUpload);
-        Assert.Equal("/api/localsend/v2/upload", TransferRoutes.Upload);
-        Assert.Equal("/api/localsend/v2/cancel", TransferRoutes.Cancel);
+        Assert.Equal("/api/aiyue/v1/register", TransferRoutes.Register);
+        Assert.Equal("/api/aiyue/v1/prepare-upload", TransferRoutes.PrepareUpload);
+        Assert.Equal("/api/aiyue/v1/upload", TransferRoutes.Upload);
+        Assert.Equal("/api/aiyue/v1/cancel", TransferRoutes.Cancel);
     }
 
     [Fact]

@@ -29,9 +29,19 @@ public sealed class NearbyDeviceCard(string alias, string deviceType, Uri endpoi
     public ICommand SendCommand { get; } = new SimpleCommand(send);
 }
 
+public sealed class SelectedFileCard(string path)
+{
+    public string Path { get; } = path;
+    public string Name => System.IO.Path.GetFileName(Path);
+    public string Icon => System.IO.Path.GetExtension(Path).ToLowerInvariant() switch { ".mp3" or ".flac" or ".wav" or ".m4a" => "♫", ".jpg" or ".jpeg" or ".png" or ".webp" => "▣", ".mp4" or ".mkv" => "▶", _ => "▤" };
+    public string Size => new FileInfo(Path).Exists ? Format(new FileInfo(Path).Length) : "0 B";
+    private static string Format(long bytes) => bytes switch { < 1024 => $"{bytes} B", < 1024 * 1024 => $"{bytes / 1024d:F1} KB", < 1024L * 1024 * 1024 => $"{bytes / 1024d / 1024:F1} MB", _ => $"{bytes / 1024d / 1024 / 1024:F1} GB" };
+}
+
 public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyChanged
 {
     public ObservableCollection<NearbyDeviceCard> Devices { get; } = [];
+    public ObservableCollection<SelectedFileCard> SelectedItems { get; } = [];
     private readonly List<string> selectedFiles = [];
     private string? selectedFolder;
     public string SavePath { get; private set; }
@@ -42,9 +52,8 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     public ICommand ChooseFolderCommand { get; }
     public ICommand ClipboardCommand { get; }
     public ICommand ChooseSavePathCommand { get; }
-    public string SelectedSummary => selectedFiles.Count == 0 ? "尚未选择文件" : $"已选择 {selectedFiles.Count} 个文件";
+    public string SelectedSummary => selectedFiles.Count == 0 ? "尚未选择文件" : $"文件：{selectedFiles.Count}  ·  大小：{FormatSize(selectedFiles.Sum(path => new FileInfo(path).Length))}";
     public event PropertyChangedEventHandler? PropertyChanged;
-    private readonly LocalSendDiscovery discovery = new();
     private readonly DeviceInfo local;
     private readonly LocalSendReceiver receiver;
     private readonly BonjourAdvertiser bonjour = new();
@@ -64,7 +73,6 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         ChooseFolderCommand = new SimpleCommand(ChooseFolder);
         ClipboardCommand = new SimpleCommand(ChooseClipboard);
         ChooseSavePathCommand = new SimpleCommand(ChooseSavePath);
-        discovery.AnnouncementReceived += OnAnnouncement;
         bonjourBrowser.DeviceDiscovered += OnBonjourDevice;
         Devices.CollectionChanged += (_, _) => { Changed(nameof(EmptyText)); Changed(nameof(EmptyDevicesVisibility)); };
         _ = InitializeAsync();
@@ -111,15 +119,6 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
             }
         }
 
-        try
-        {
-            await discovery.StartAsync(local);
-            DiagnosticLog.Write("UDP discovery started and announcement sent.");
-        }
-        catch (Exception exception)
-        {
-            DiagnosticLog.Write($"UDP discovery start failed: {exception}");
-        }
     }
     private void OnIncomingRequest(IncomingRequest request) => System.Windows.Application.Current.Dispatcher.Invoke(() =>
     {
@@ -127,17 +126,6 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         var answer = System.Windows.MessageBox.Show($"{request.Sender.Alias} 要发送 {request.Files.Count} 个文件（{total:N0} 字节）。\n是否接收？", "爱乐互传", System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Question);
         receiver.Decide(request.SessionId, answer == System.Windows.MessageBoxResult.Yes);
     });
-    private void OnAnnouncement(System.Net.IPEndPoint endpoint, DiscoveryAnnouncement announcement)
-    {
-        DiagnosticLog.Write($"UDP announcement received from {endpoint}; alias={announcement.Info.Alias}; port={announcement.Info.Port}.");
-        if (announcement.Info.Fingerprint == local.Fingerprint) return;
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
-        {
-            lastSeen[announcement.Info.Fingerprint] = DateTimeOffset.UtcNow;
-            var existing = Devices.FirstOrDefault(device => device.Endpoint.Host == endpoint.Address.ToString());
-            if (existing is null) Devices.Add(new NearbyDeviceCard(announcement.Info.Alias, announcement.Info.DeviceType, new Uri($"http://{endpoint.Address}:{announcement.Info.Port}"), announcement.Info.Fingerprint, () => _ = SendAsync(new Uri($"http://{endpoint.Address}:{announcement.Info.Port}"))));
-        });
-    }
     private void OnBonjourDevice(BonjourDevice device)
     {
         DiagnosticLog.Write($"Bonjour device delivered to UI: {device.Alias}; {device.Address}:{device.Port}.");
@@ -153,18 +141,18 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     private void ChooseFiles()
     {
         var picker = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = "选择要发送的文件" };
-        if (picker.ShowDialog() == true) { selectedFolder = null; selectedFiles.Clear(); selectedFiles.AddRange(picker.FileNames); Changed(nameof(SelectedSummary)); }
+        if (picker.ShowDialog() == true) { selectedFolder = null; selectedFiles.Clear(); selectedFiles.AddRange(picker.FileNames); RefreshSelectedItems(); }
     }
     private void ChooseFolder()
     {
         using var picker = new System.Windows.Forms.FolderBrowserDialog { Description = "选择要发送的文件夹" };
-        if (picker.ShowDialog() == System.Windows.Forms.DialogResult.OK) { selectedFolder = picker.SelectedPath; selectedFiles.Clear(); selectedFiles.AddRange(Directory.EnumerateFiles(picker.SelectedPath, "*", SearchOption.AllDirectories)); Changed(nameof(SelectedSummary)); }
+        if (picker.ShowDialog() == System.Windows.Forms.DialogResult.OK) { selectedFolder = picker.SelectedPath; selectedFiles.Clear(); selectedFiles.AddRange(Directory.EnumerateFiles(picker.SelectedPath, "*", SearchOption.AllDirectories)); RefreshSelectedItems(); }
     }
     private void ChooseClipboard()
     {
         if (!System.Windows.Clipboard.ContainsText()) { System.Windows.MessageBox.Show("剪贴板中没有文本。", "爱乐互传"); return; }
         var folder = Path.Combine(Path.GetTempPath(), "AiYueTransfer"); Directory.CreateDirectory(folder);
-        var path = Path.Combine(folder, $"clipboard-{DateTime.Now:yyyyMMdd-HHmmss}.txt"); File.WriteAllText(path, System.Windows.Clipboard.GetText()); selectedFolder = null; selectedFiles.Clear(); selectedFiles.Add(path); Changed(nameof(SelectedSummary));
+        var path = Path.Combine(folder, $"clipboard-{DateTime.Now:yyyyMMdd-HHmmss}.txt"); File.WriteAllText(path, System.Windows.Clipboard.GetText()); selectedFolder = null; selectedFiles.Clear(); selectedFiles.Add(path); RefreshSelectedItems();
     }
     private void ChooseSavePath()
     {
@@ -175,20 +163,21 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     private async Task SendAsync(Uri endpoint)
     {
         if (selectedFiles.Count == 0) { System.Windows.MessageBox.Show("请先选择文件。", "爱乐互传"); return; }
-        try { var sender = new LocalSendSender(new HttpClient()); if (selectedFolder is not null) await sender.SendFolderAsync(endpoint, local, selectedFolder); else await sender.SendAsync(endpoint, local, selectedFiles); System.Windows.MessageBox.Show("传输完成。", "爱乐互传"); }
-        catch (Exception exception) { System.Windows.MessageBox.Show($"传输失败：{exception.Message}", "爱乐互传", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning); }
+        try { DiagnosticLog.Write($"Send started: endpoint={endpoint}; files={selectedFiles.Count}."); var sender = new LocalSendSender(new HttpClient()); if (selectedFolder is not null) await sender.SendFolderAsync(endpoint, local, selectedFolder); else await sender.SendAsync(endpoint, local, selectedFiles); DiagnosticLog.Write($"Send completed: endpoint={endpoint}."); System.Windows.MessageBox.Show("传输完成。", "爱乐互传"); }
+        catch (Exception exception) { DiagnosticLog.Write($"Send failed: endpoint={endpoint}; error={exception}"); System.Windows.MessageBox.Show($"传输失败：{exception.Message}", "爱乐互传", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning); }
     }
     private async Task RefreshAsync()
     {
         DiagnosticLog.Write("User requested discovery refresh.");
         bonjour.Announce();
         bonjourBrowser.Refresh();
-        await discovery.AnnounceAsync(local);
         var expired = lastSeen.Where(pair => DateTimeOffset.UtcNow - pair.Value > TimeSpan.FromMinutes(2)).Select(pair => pair.Key).ToHashSet(StringComparer.Ordinal);
         foreach (var device in Devices.Where(device => expired.Contains(device.Fingerprint)).ToArray()) Devices.Remove(device);
     }
     public void Refresh() => _ = RefreshAsync();
-    public async ValueTask DisposeAsync() { bonjourBrowser.Dispose(); bonjour.Dispose(); await discovery.DisposeAsync(); await receiver.DisposeAsync(); }
+    public async ValueTask DisposeAsync() { bonjourBrowser.Dispose(); bonjour.Dispose(); await receiver.DisposeAsync(); }
+    private void RefreshSelectedItems() { SelectedItems.Clear(); foreach (var path in selectedFiles) SelectedItems.Add(new SelectedFileCard(path)); Changed(nameof(SelectedSummary)); }
+    private static string FormatSize(long bytes) => bytes switch { < 1024 => $"{bytes} B", < 1024 * 1024 => $"{bytes / 1024d:F1} KB", < 1024L * 1024 * 1024 => $"{bytes / 1024d / 1024:F1} MB", _ => $"{bytes / 1024d / 1024 / 1024:F1} GB" };
     private void Changed([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
 
