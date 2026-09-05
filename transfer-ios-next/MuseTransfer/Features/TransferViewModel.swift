@@ -12,6 +12,10 @@ import UIKit
     var showSelectionWarning = false
     var isSending = false
     var sendStatus: String?
+    var receivingFiles: [ReceivedTransferFile] = []
+    var expectedIncomingFiles: [FileMetadata] = []
+    var isReceiving = false
+    var receiveCompleted = false
     var selectedSummary: String {
         guard !selectedFiles.isEmpty else { return "尚未选择文件" }
         let total = selectedFiles.reduce(Int64(0)) { $0 + Int64((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
@@ -29,6 +33,7 @@ import UIKit
         let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("爱乐互传", isDirectory: true)
         receiver = LocalSendReceiver(local: local, destination: folder)
         receiver.onIncomingTransfer = { [weak self] request in Task { @MainActor in self?.incomingTransfer = request } }
+        receiver.onFileReceived = { [weak self] file in Task { @MainActor in self?.recordReceived(file) } }
         do { try receiver.start() } catch { DiagnosticLog.write("iOS receiver start failed: \(error.localizedDescription)") }
         browser.onDevicesChanged = { [weak self] devices in Task { @MainActor in self?.devices = devices } }
         browser.start()
@@ -45,7 +50,9 @@ import UIKit
             selectedFiles = try urls.map { source in
                 guard source.startAccessingSecurityScopedResource() else { throw CocoaError(.fileReadNoPermission) }
                 defer { source.stopAccessingSecurityScopedResource() }
-                let target = outgoing.appendingPathComponent("\(UUID().uuidString)-\(source.lastPathComponent)")
+                let batch = outgoing.appendingPathComponent(UUID().uuidString, isDirectory: true)
+                try FileManager.default.createDirectory(at: batch, withIntermediateDirectories: true)
+                let target = batch.appendingPathComponent(source.lastPathComponent)
                 try FileManager.default.copyItem(at: source, to: target)
                 return target
             }
@@ -73,7 +80,34 @@ import UIKit
             }
         }
     }
-    func decideIncoming(_ accepted: Bool) { guard let request = incomingTransfer else { return }; receiver.decide(sessionID: request.id, accepted: accepted); incomingTransfer = nil }
+    func decideIncoming(_ accepted: Bool) {
+        guard let request = incomingTransfer else { return }
+        if accepted {
+            expectedIncomingFiles = request.files.values.sorted { $0.fileName.localizedCaseInsensitiveCompare($1.fileName) == .orderedAscending }
+            receivingFiles = []
+            receiveCompleted = false
+            isReceiving = true
+        }
+        receiver.decide(sessionID: request.id, accepted: accepted)
+        incomingTransfer = nil
+    }
+
+    func closeReceiveSummary() {
+        isReceiving = false
+        receiveCompleted = false
+        expectedIncomingFiles = []
+        receivingFiles = []
+    }
+
+    private func recordReceived(_ file: ReceivedTransferFile) {
+        receivingFiles.removeAll { $0.id == file.id }
+        receivingFiles.append(file)
+        if !expectedIncomingFiles.isEmpty && receivingFiles.count == expectedIncomingFiles.count {
+            receiveCompleted = true
+            isReceiving = false
+            sendStatus = "接收完成"
+        }
+    }
 }
 
 public struct NearbyDevice: Identifiable, Hashable { public let id: String; public let alias: String; public let deviceType: String; public let serviceName: String; public let serviceType: String; public let serviceDomain: String }

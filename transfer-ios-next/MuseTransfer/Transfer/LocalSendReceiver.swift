@@ -7,6 +7,14 @@ public struct IncomingTransfer: Identifiable, Sendable {
     public let files: [String: FileMetadata]
 }
 
+/// Reports the actual completed destination after the receiver has written it.
+public struct ReceivedTransferFile: Identifiable, Sendable {
+    public let id: String
+    public let fileName: String
+    public let size: Int64
+    public let savedDescription: String
+}
+
 public final class LocalSendReceiver: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.luolihao.aiyuetransfer.receiver")
     private let destination: URL
@@ -16,6 +24,7 @@ public final class LocalSendReceiver: @unchecked Sendable {
     private var tokens: [String: [String: String]] = [:]
     private var fileNames: [String: [String: String]] = [:]
     public var onIncomingTransfer: (@Sendable (IncomingTransfer) -> Void)?
+    public var onFileReceived: (@Sendable (ReceivedTransferFile) -> Void)?
 
     public init(local: DeviceInfo, destination: URL) { self.local = local; self.destination = destination }
 
@@ -77,7 +86,19 @@ public final class LocalSendReceiver: @unchecked Sendable {
             guard let query = URLComponents(string: "http://local" + request.path)?.queryItems, let sessionID = query.first(where: { $0.name == "sessionId" })?.value, let fileID = query.first(where: { $0.name == "fileId" })?.value, let token = query.first(where: { $0.name == "token" })?.value, tokens[sessionID]?[fileID] == token else { return Self.response(401) }
             let fileName = fileNames[sessionID]?[fileID] ?? fileID
             let target = destination.appendingPathComponent(sessionID).appendingPathComponent(URL(fileURLWithPath: fileName).lastPathComponent)
-            do { try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true); try request.body.write(to: target, options: .atomic); return Self.response(204) } catch { return Self.response(500) }
+            do {
+                try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try request.body.write(to: target, options: .atomic)
+                let savedDescription = "已保存到文件 > 爱乐互传"
+                let received = ReceivedTransferFile(id: fileID, fileName: target.lastPathComponent,
+                                                    size: Int64(request.body.count), savedDescription: savedDescription)
+                DiagnosticLog.write("Incoming upload saved: session=\(sessionID); file=\(received.fileName); bytes=\(received.size); destination=\(savedDescription).")
+                onFileReceived?(received)
+                return Self.response(204)
+            } catch {
+                DiagnosticLog.write("Incoming upload failed: session=\(sessionID); file=\(fileName); error=\(error.localizedDescription).")
+                return Self.response(500)
+            }
         }
         return Self.response(404)
     }
@@ -91,4 +112,5 @@ public final class LocalSendReceiver: @unchecked Sendable {
         return HTTPRequest(method: String(first[0]), path: String(first[1]), headers: headers, body: Data(data[start..<start + count]))
     }
     private static func response(_ status: Int, _ body: Data? = nil) -> Data { let value = body ?? Data(); return Data("HTTP/1.1 \(status) OK\r\nContent-Length: \(value.count)\r\nConnection: close\r\n\r\n".utf8) + value }
+
 }

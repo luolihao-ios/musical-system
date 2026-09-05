@@ -33,6 +33,9 @@ struct TransferView: View {
         .sheet(isPresented: Binding(get: { model.incomingTransfer != nil }, set: { if !$0, model.incomingTransfer != nil { model.decideIncoming(false) } })) {
             if let request = model.incomingTransfer { IncomingTransferSheet(request: request, decide: model.decideIncoming) }
         }
+        .fullScreenCover(isPresented: Binding(get: { model.isReceiving || model.receiveCompleted }, set: { if !$0 { model.closeReceiveSummary() } })) {
+            ReceiveProgressScreen(model: model)
+        }
         .alert("未选择文件", isPresented: $model.showSelectionWarning) { Button("关闭", role: .cancel) { } } message: { Text("请至少选择一个文件。") }
         .sheet(isPresented: $model.showEditor) { SelectionEditor(model: model) }
     }
@@ -43,6 +46,85 @@ struct TransferView: View {
         if type?.conforms(to: .audio) == true { return "music.note" }
         if type?.conforms(to: .movie) == true { return "film" }
         return "doc"
+    }
+}
+
+private struct ReceiveProgressScreen: View {
+    @Bindable var model: TransferViewModel
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 18) {
+                Text(model.receiveCompleted ? "已接收文件" : "正在接收文件")
+                    .font(.largeTitle.bold())
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(model.expectedIncomingFiles, id: \.id) { expected in
+                            let saved = model.receivingFiles.first { $0.id == expected.id }
+                            ReceiveFileRow(name: expected.fileName, size: saved?.size ?? expected.size,
+                                           savedDescription: saved?.savedDescription,
+                                           completed: saved != nil)
+                        }
+                    }
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(model.receiveCompleted ? "已完成" : "正在接收")
+                        .font(.title2.bold())
+                    ProgressView(value: totalProgress)
+                        .tint(.indigo)
+                    HStack {
+                        Text("\(model.receivingFiles.count) / \(model.expectedIncomingFiles.count) 个文件")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        if model.receiveCompleted {
+                            Button("完成", systemImage: "checkmark.circle.fill") { model.closeReceiveSummary() }
+                                .buttonStyle(.borderedProminent).tint(.indigo)
+                        }
+                    }
+                }
+                .padding()
+                .background(.indigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
+            }
+            .padding()
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .interactiveDismissDisabled(!model.receiveCompleted)
+    }
+
+    private var totalProgress: Double {
+        guard !model.expectedIncomingFiles.isEmpty else { return 0 }
+        return Double(model.receivingFiles.count) / Double(model.expectedIncomingFiles.count)
+    }
+}
+
+private struct ReceiveFileRow: View {
+    let name: String
+    let size: Int64
+    let savedDescription: String?
+    let completed: Bool
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: fileIcon)
+                .font(.title2).foregroundStyle(.indigo)
+                .frame(width: 52, height: 52)
+                .background(.indigo.opacity(0.12), in: RoundedRectangle(cornerRadius: 13))
+            VStack(alignment: .leading, spacing: 5) {
+                Text(name).font(.headline).lineLimit(1)
+                Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)).font(.subheadline).foregroundStyle(.secondary)
+                Text(savedDescription ?? "等待接收…")
+                    .font(.subheadline).foregroundStyle(completed ? .green : .secondary)
+                ProgressView(value: completed ? 1 : 0)
+                    .tint(.indigo)
+            }
+        }
+        .padding()
+        .background(.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var fileIcon: String {
+        let extensionName = URL(fileURLWithPath: name).pathExtension.lowercased()
+        return ["jpg", "jpeg", "png", "gif", "heic", "webp"].contains(extensionName) ? "photo" : "doc"
     }
 }
 
