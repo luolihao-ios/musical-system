@@ -30,10 +30,9 @@ struct TransferView: View {
             }.padding().navigationTitle("爱乐互传")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { ShareLink(item: DiagnosticLog.fileURL) { Image(systemName: "stethoscope") }.accessibilityLabel("导出诊断日志") } }
         }.fileImporter(isPresented: $model.showImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { model.select($0) }
-        .alert("接收文件？", isPresented: Binding(get: { model.incomingTransfer != nil }, set: { if !$0 { model.decideIncoming(false) } })) {
-            Button("拒绝", role: .destructive) { model.decideIncoming(false) }
-            Button("接受") { model.decideIncoming(true) }
-        } message: { Text("\(model.incomingTransfer?.sender.alias ?? "设备") 要发送 \(model.incomingTransfer?.files.count ?? 0) 个文件") }
+        .sheet(isPresented: Binding(get: { model.incomingTransfer != nil }, set: { if !$0, model.incomingTransfer != nil { model.decideIncoming(false) } })) {
+            if let request = model.incomingTransfer { IncomingTransferSheet(request: request, decide: model.decideIncoming) }
+        }
         .alert("未选择文件", isPresented: $model.showSelectionWarning) { Button("关闭", role: .cancel) { } } message: { Text("请至少选择一个文件。") }
         .sheet(isPresented: $model.showEditor) { SelectionEditor(model: model) }
     }
@@ -44,6 +43,24 @@ struct TransferView: View {
         if type?.conforms(to: .audio) == true { return "music.note" }
         if type?.conforms(to: .movie) == true { return "film" }
         return "doc"
+    }
+}
+
+private struct IncomingTransferSheet: View {
+    let request: IncomingTransfer
+    let decide: (Bool) -> Void
+    var body: some View {
+        VStack(spacing: 26) {
+            Image(systemName: request.sender.deviceType == "mobile" ? "iphone" : "desktopcomputer").font(.system(size: 58)).foregroundStyle(.indigo)
+            Text(request.sender.alias).font(.largeTitle.bold())
+            Text("想要发送给你 \(request.files.count) 个文件").font(.title3).foregroundStyle(.secondary)
+            Text(request.files.values.map(\.fileName).prefix(3).joined(separator: "\n"))
+                .multilineTextAlignment(.center).foregroundStyle(.secondary).lineLimit(3)
+            HStack(spacing: 18) {
+                Button("拒绝", systemImage: "xmark") { decide(false) }.buttonStyle(.borderedProminent).tint(.red)
+                Button("接受", systemImage: "checkmark") { decide(true) }.buttonStyle(.borderedProminent).tint(.indigo)
+            }
+        }.padding(36).presentationDetents([.medium]).interactiveDismissDisabled(false)
     }
 }
 

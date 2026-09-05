@@ -34,7 +34,25 @@ import UIKit
     // released. It caused address-in-use failures and made a previously working
     // iOS advertisement disappear. Refreshing the browser is sufficient here.
     func refresh() { DiagnosticLog.write("User requested discovery refresh."); browser.stop(); browser.start() }
-    func select(_ result: Result<[URL], Error>) { if case let .success(urls) = result { selectedFiles = urls; sendStatus = nil } }
+    func select(_ result: Result<[URL], Error>) {
+        guard case let .success(urls) = result else { return }
+        let outgoing = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("爱乐互传/待发送", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: outgoing, withIntermediateDirectories: true)
+            selectedFiles = try urls.map { source in
+                guard source.startAccessingSecurityScopedResource() else { throw CocoaError(.fileReadNoPermission) }
+                defer { source.stopAccessingSecurityScopedResource() }
+                let target = outgoing.appendingPathComponent("\(UUID().uuidString)-\(source.lastPathComponent)")
+                try FileManager.default.copyItem(at: source, to: target)
+                return target
+            }
+            sendStatus = nil
+        } catch {
+            selectedFiles = []
+            sendStatus = "无法读取所选文件：\(error.localizedDescription)"
+            DiagnosticLog.write("File import failed: \(error.localizedDescription)")
+        }
+    }
     func remove(_ url: URL) { selectedFiles.removeAll { $0 == url } }
     func removeAll() { selectedFiles.removeAll(); showEditor = false }
     func send(to device: NearbyDevice) {
@@ -44,7 +62,7 @@ import UIKit
             do {
                 DiagnosticLog.write("Send started: target=\(device.serviceName); files=\(selectedFiles.count).")
                 try await BonjourLocalSendSender().send(files: selectedFiles, to: device, local: local)
-                await MainActor.run { self.sendStatus = "传输完成"; self.isSending = false }
+                await MainActor.run { self.selectedFiles = []; self.sendStatus = "传输完成"; self.isSending = false }
                 DiagnosticLog.write("Send completed: target=\(device.serviceName).")
             } catch {
                 DiagnosticLog.write("Send failed: target=\(device.serviceName); error=\(error.localizedDescription).")

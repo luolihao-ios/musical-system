@@ -53,7 +53,11 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     public ICommand ClipboardCommand { get; }
     public ICommand ChooseSavePathCommand { get; }
     public ICommand CopyDiagnosticPathCommand { get; }
+    public ICommand CancelTransferCommand { get; }
     public string DiagnosticLogPath => DiagnosticLog.Path;
+    public string TransferTarget { get; private set; } = string.Empty;
+    public string TransferStatus { get; private set; } = string.Empty;
+    public Visibility TransferWaitingVisibility => isSending ? Visibility.Visible : Visibility.Collapsed;
     public string SelectedSummary => selectedFiles.Count == 0 ? "尚未选择文件" : $"文件：{selectedFiles.Count}  ·  大小：{FormatSize(selectedFiles.Sum(path => new FileInfo(path).Length))}";
     public event PropertyChangedEventHandler? PropertyChanged;
     private readonly DeviceInfo local;
@@ -61,6 +65,8 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     private readonly BonjourAdvertiser bonjour = new();
     private readonly BonjourBrowser bonjourBrowser = new();
     private readonly Dictionary<string, DateTimeOffset> lastSeen = new(StringComparer.Ordinal);
+    private CancellationTokenSource? transferCancellation;
+    private bool isSending;
 
     public NearbyDevicesViewModel()
     {
@@ -76,6 +82,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         ClipboardCommand = new SimpleCommand(ChooseClipboard);
         ChooseSavePathCommand = new SimpleCommand(ChooseSavePath);
         CopyDiagnosticPathCommand = new SimpleCommand(CopyDiagnosticPath);
+        CancelTransferCommand = new SimpleCommand(CancelTransfer);
         bonjourBrowser.DeviceDiscovered += OnBonjourDevice;
         Devices.CollectionChanged += (_, _) => { Changed(nameof(EmptyText)); Changed(nameof(EmptyDevicesVisibility)); };
         _ = InitializeAsync();
@@ -138,7 +145,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
             lastSeen[device.Fingerprint] = DateTimeOffset.UtcNow;
             var endpoint = new UriBuilder(Uri.UriSchemeHttp, device.Address.ToString(), device.Port).Uri;
             if (Devices.All(existing => existing.Endpoint != endpoint))
-                Devices.Add(new NearbyDeviceCard(device.Alias, device.DeviceType, endpoint, device.Fingerprint, () => BeginTransfer(endpoint)));
+                Devices.Add(new NearbyDeviceCard(device.Alias, device.DeviceType, endpoint, device.Fingerprint, () => BeginTransfer(endpoint, device.Alias)));
         });
     }
     private void ChooseFiles()
@@ -168,16 +175,24 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         System.Windows.Clipboard.SetText(DiagnosticLog.Path);
         System.Windows.MessageBox.Show("诊断日志路径已复制，可直接粘贴到文件资源管理器地址栏。", "爱乐互传", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
     }
-    private void BeginTransfer(Uri endpoint)
+    private void BeginTransfer(Uri endpoint, string alias)
     {
         if (selectedFiles.Count == 0) { System.Windows.MessageBox.Show("请先选择文件。", "爱乐互传"); return; }
-        _ = SendAsync(endpoint);
+        if (isSending) return;
+        TransferTarget = alias;
+        TransferStatus = "正在等待对方确认…";
+        isSending = true;
+        Changed(nameof(TransferTarget)); Changed(nameof(TransferStatus)); Changed(nameof(TransferWaitingVisibility));
+        transferCancellation = new CancellationTokenSource();
+        _ = SendAsync(endpoint, transferCancellation.Token);
     }
-    private async Task SendAsync(Uri endpoint)
+    private async Task SendAsync(Uri endpoint, CancellationToken cancellationToken)
     {
-        try { DiagnosticLog.Write($"Send started: endpoint={endpoint}; files={selectedFiles.Count}."); var sender = new LocalSendSender(new HttpClient()); if (selectedFolder is not null) await sender.SendFolderAsync(endpoint, local, selectedFolder); else await sender.SendAsync(endpoint, local, selectedFiles); DiagnosticLog.Write($"Send completed: endpoint={endpoint}."); System.Windows.MessageBox.Show("传输完成。", "爱乐互传"); }
-        catch (Exception exception) { DiagnosticLog.Write($"Send failed: endpoint={endpoint}; error={exception}"); System.Windows.MessageBox.Show($"传输失败：{exception.Message}", "爱乐互传", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning); }
+        try { DiagnosticLog.Write($"Send started: endpoint={endpoint}; files={selectedFiles.Count}."); var sender = new LocalSendSender(new HttpClient()); if (selectedFolder is not null) await sender.SendFolderAsync(endpoint, local, selectedFolder, cancellationToken); else await sender.SendAsync(endpoint, local, selectedFiles, cancellationToken); DiagnosticLog.Write($"Send completed: endpoint={endpoint}."); TransferStatus = "传输完成"; Changed(nameof(TransferStatus)); isSending = false; Changed(nameof(TransferWaitingVisibility)); System.Windows.MessageBox.Show("传输完成。", "爱乐互传"); ClearSelection(); }
+        catch (OperationCanceledException) { DiagnosticLog.Write($"Send cancelled: endpoint={endpoint}."); isSending = false; Changed(nameof(TransferWaitingVisibility)); }
+        catch (Exception exception) { DiagnosticLog.Write($"Send failed: endpoint={endpoint}; error={exception}"); isSending = false; Changed(nameof(TransferWaitingVisibility)); System.Windows.MessageBox.Show($"传输失败：{exception.Message}", "爱乐互传", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning); }
     }
+    private void CancelTransfer() => transferCancellation?.Cancel();
     private async Task RefreshAsync()
     {
         DiagnosticLog.Write("User requested discovery refresh.");
@@ -189,6 +204,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     public void Refresh() => _ = RefreshAsync();
     public async ValueTask DisposeAsync() { bonjourBrowser.Dispose(); bonjour.Dispose(); await receiver.DisposeAsync(); }
     private void RefreshSelectedItems() { SelectedItems.Clear(); foreach (var path in selectedFiles) SelectedItems.Add(new SelectedFileCard(path)); Changed(nameof(SelectedSummary)); }
+    private void ClearSelection() { selectedFolder = null; selectedFiles.Clear(); RefreshSelectedItems(); }
     private static string FormatSize(long bytes) => bytes switch { < 1024 => $"{bytes} B", < 1024 * 1024 => $"{bytes / 1024d:F1} KB", < 1024L * 1024 * 1024 => $"{bytes / 1024d / 1024:F1} MB", _ => $"{bytes / 1024d / 1024 / 1024:F1} GB" };
     private void Changed([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
