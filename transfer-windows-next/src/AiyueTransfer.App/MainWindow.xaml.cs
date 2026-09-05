@@ -76,7 +76,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     {
         SavePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "爱乐互传");
         var port = WindowsTransferPort.Select();
-        local = new DeviceInfo("爱乐互传", "2.0", Environment.MachineName, "desktop", Guid.NewGuid().ToString("N"), port, "http");
+        local = new DeviceInfo("爱乐互传", "2.0", Environment.MachineName, "desktop", DeviceIdentity.Fingerprint, port, "http");
         DiagnosticLog.Write($"Selected TCP transfer port: {local.Port}.");
         receiver = new LocalSendReceiver(local, SavePath);
         receiver.RequestReceived += OnIncomingRequest;
@@ -219,4 +219,18 @@ public sealed class SimpleCommand(Action execute) : ICommand
     public event EventHandler? CanExecuteChanged { add { } remove { } }
     public bool CanExecute(object? parameter) => true;
     public void Execute(object? parameter) => execute();
+}
+
+internal static class DeviceIdentity
+{
+    private static readonly string file = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "luolihao", "AiYueTransfer", "device-id.txt");
+    public static string Fingerprint
+    {
+        get
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            if (File.Exists(file) && Guid.TryParse(File.ReadAllText(file).Trim(), out var existing)) return existing.ToString("N");
+            var value = Guid.NewGuid().ToString("N"); File.WriteAllText(file, value); return value;
+        }
+    }
 }

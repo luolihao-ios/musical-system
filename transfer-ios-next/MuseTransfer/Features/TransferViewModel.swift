@@ -21,7 +21,10 @@ import UIKit
     private let receiver: LocalSendReceiver
     private let local: DeviceInfo
     init() {
-        local = DeviceInfo(alias: UIDevice.current.name, deviceModel: "iPhone", deviceType: "mobile", fingerprint: UUID().uuidString)
+        let key = "aiyue.transfer.deviceFingerprint"
+        let fingerprint = UserDefaults.standard.string(forKey: key) ?? UUID().uuidString
+        UserDefaults.standard.set(fingerprint, forKey: key)
+        local = DeviceInfo(alias: UIDevice.current.name, deviceModel: "iPhone", deviceType: "mobile", fingerprint: fingerprint)
         browser = BonjourDeviceBrowser(localFingerprint: local.fingerprint)
         let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("爱乐互传", isDirectory: true)
         receiver = LocalSendReceiver(local: local, destination: folder)
