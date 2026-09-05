@@ -10,7 +10,8 @@ public final class BonjourLocalSendSender: @unchecked Sendable {
         }
         let prepared = try await request(path: "/api/aiyue/v1/prepare-upload", body: JSONEncoder().encode(PrepareUploadRequest(info: local, files: files)), device: device)
         DiagnosticLog.write("iOS prepare response: status=\(prepared.0); bytes=\(prepared.1.count).")
-        guard prepared.0 != 403, (200..<300).contains(prepared.0) else { throw LocalSendSenderError.rejected }
+        if prepared.0 == 403 { throw LocalSendSenderError.rejected }
+        guard (200..<300).contains(prepared.0) else { throw LocalSendSenderError.invalidResponse }
         let response = try JSONDecoder().decode(PrepareUploadResponse.self, from: prepared.1)
         for (id, file) in files {
             guard let token = response.files[id], let source = urls.first(where: { $0.lastPathComponent == file.fileName }) else { throw LocalSendSenderError.invalidResponse }
@@ -21,7 +22,7 @@ public final class BonjourLocalSendSender: @unchecked Sendable {
     }
     private func request(path: String, body: Data, device: NearbyDevice) async throws -> (Int, Data) {
         let connection = NWConnection(to: .service(name: device.serviceName, type: device.serviceType, domain: device.serviceDomain, interface: nil), using: .tcp)
-        let bytes = Data("POST \(path) HTTP/1.1\r\nHost: aiyue\r\nConnection: close\r\nContent-Length: \(body.count)\r\n\r\n".utf8) + body
+        let bytes = Data("POST \(path) HTTP/1.1\r\nHost: aiyue\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\n\r\n".utf8) + body
         return try await withCheckedThrowingContinuation { continuation in
             var data = Data(); var finished = false
             func finish(_ result: Result<(Int, Data), Error>) { guard !finished else { return }; finished = true; connection.cancel(); continuation.resume(with: result) }
