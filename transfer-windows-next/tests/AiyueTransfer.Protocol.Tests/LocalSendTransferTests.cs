@@ -9,6 +9,29 @@ namespace AiyueTransfer.Protocol.Tests;
 public sealed class LocalSendTransferTests
 {
     [Fact]
+    public async Task Sender_PrepareRequest_HasContentLengthForSimpleHttpReceivers()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "aiyue-transfer-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "hello.txt");
+            await File.WriteAllTextAsync(source, "payload");
+            var handler = new PrepareRequestCaptureHandler();
+            var sender = new LocalSendSender(new HttpClient(handler));
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => sender.SendAsync(
+                new Uri("http://receiver"),
+                new DeviceInfo("发送端", "2.0", "Windows", "desktop", "sender", 54218, "http"),
+                [source]));
+
+            Assert.Equal(TransferRoutes.PrepareUpload, handler.Path);
+            Assert.True(handler.ContentLength is > 0, "准备请求必须发送明确的 Content-Length，供 iOS 接收端读取正文。");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task Sender_TransfersFileAfterReceiverAccepts()
     {
         var root = Path.Combine(Path.GetTempPath(), "aiyue-transfer-" + Guid.NewGuid().ToString("N"));
@@ -107,5 +130,18 @@ public sealed class LocalSendTransferTests
             Assert.Empty(Directory.EnumerateFiles(Path.Combine(root, "received"), "*", SearchOption.AllDirectories));
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    private sealed class PrepareRequestCaptureHandler : HttpMessageHandler
+    {
+        public string? Path { get; private set; }
+        public long? ContentLength { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Path = request.RequestUri?.AbsolutePath;
+            ContentLength = request.Content?.Headers.ContentLength;
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.Forbidden));
+        }
     }
 }

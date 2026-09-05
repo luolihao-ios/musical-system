@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Net.Http;
 using System.IO;
 using System.Security.Cryptography;
+using System.Text.Json;
 using AiyueTransfer.Protocol;
 
 namespace AiyueTransfer.App;
@@ -26,7 +27,12 @@ public sealed class LocalSendSender(HttpClient http)
         var sources = entries.ToArray();
         if (sources.Length == 0) throw new InvalidDataException("没有可发送的文件。");
         var files = sources.Select(source => new FileMetadata(Guid.NewGuid().ToString("N"), source.TransferName.Replace('\\', '/'), new FileInfo(source.Path).Length, Mime(source.Path), Hash(source.Path))).ToDictionary(file => file.Id, StringComparer.Ordinal);
-        using var prepare = await http.PostAsJsonAsync(new Uri(endpoint, TransferRoutes.PrepareUpload), new PrepareUploadRequest(local, files), ProtocolJson.Options, cancellationToken);
+        var preparePayload = JsonSerializer.SerializeToUtf8Bytes(new PrepareUploadRequest(local, files), ProtocolJson.Options);
+        using var prepareContent = new ByteArrayContent(preparePayload);
+        prepareContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+        // JsonContent is streamed as chunked HTTP on this runtime. The iOS receiver
+        // intentionally uses a small LAN-only parser and requires a known length.
+        using var prepare = await http.PostAsync(new Uri(endpoint, TransferRoutes.PrepareUpload), prepareContent, cancellationToken);
         if (!prepare.IsSuccessStatusCode)
         {
             var details = await prepare.Content.ReadAsStringAsync(cancellationToken);
