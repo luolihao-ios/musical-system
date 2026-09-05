@@ -57,7 +57,10 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     public string DiagnosticLogPath => DiagnosticLog.Path;
     public string TransferTarget { get; private set; } = string.Empty;
     public string TransferStatus { get; private set; } = string.Empty;
-    public Visibility TransferWaitingVisibility => isSending ? Visibility.Visible : Visibility.Collapsed;
+    public double TransferProgress { get; private set; }
+    public bool TransferIndeterminate => isSending;
+    public string TransferActionText => transferCompleted ? "完成" : "取消";
+    public Visibility TransferWaitingVisibility => isSending || transferCompleted ? Visibility.Visible : Visibility.Collapsed;
     public string SelectedSummary => selectedFiles.Count == 0 ? "尚未选择文件" : $"文件：{selectedFiles.Count}  ·  大小：{FormatSize(selectedFiles.Sum(path => new FileInfo(path).Length))}";
     public event PropertyChangedEventHandler? PropertyChanged;
     private readonly DeviceInfo local;
@@ -67,6 +70,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     private readonly Dictionary<string, DateTimeOffset> lastSeen = new(StringComparer.Ordinal);
     private CancellationTokenSource? transferCancellation;
     private bool isSending;
+    private bool transferCompleted;
 
     public NearbyDevicesViewModel()
     {
@@ -182,17 +186,18 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         TransferTarget = alias;
         TransferStatus = "正在等待对方确认…";
         isSending = true;
-        Changed(nameof(TransferTarget)); Changed(nameof(TransferStatus)); Changed(nameof(TransferWaitingVisibility));
+        transferCompleted = false; TransferProgress = 0;
+        Changed(nameof(TransferTarget)); Changed(nameof(TransferStatus)); Changed(nameof(TransferProgress)); Changed(nameof(TransferIndeterminate)); Changed(nameof(TransferActionText)); Changed(nameof(TransferWaitingVisibility));
         transferCancellation = new CancellationTokenSource();
         _ = SendAsync(endpoint, transferCancellation.Token);
     }
     private async Task SendAsync(Uri endpoint, CancellationToken cancellationToken)
     {
-        try { DiagnosticLog.Write($"Send started: endpoint={endpoint}; files={selectedFiles.Count}."); var sender = new LocalSendSender(new HttpClient()); if (selectedFolder is not null) await sender.SendFolderAsync(endpoint, local, selectedFolder, cancellationToken); else await sender.SendAsync(endpoint, local, selectedFiles, cancellationToken); DiagnosticLog.Write($"Send completed: endpoint={endpoint}."); TransferStatus = "传输完成"; Changed(nameof(TransferStatus)); isSending = false; Changed(nameof(TransferWaitingVisibility)); System.Windows.MessageBox.Show("传输完成。", "爱乐互传"); ClearSelection(); }
+        try { DiagnosticLog.Write($"Send started: endpoint={endpoint}; files={selectedFiles.Count}."); var sender = new LocalSendSender(new HttpClient()); if (selectedFolder is not null) await sender.SendFolderAsync(endpoint, local, selectedFolder, cancellationToken); else await sender.SendAsync(endpoint, local, selectedFiles, cancellationToken); DiagnosticLog.Write($"Send completed: endpoint={endpoint}."); TransferStatus = "已完成"; TransferProgress = 100; isSending = false; transferCompleted = true; Changed(nameof(TransferStatus)); Changed(nameof(TransferProgress)); Changed(nameof(TransferIndeterminate)); Changed(nameof(TransferActionText)); Changed(nameof(TransferWaitingVisibility)); }
         catch (OperationCanceledException) { DiagnosticLog.Write($"Send cancelled: endpoint={endpoint}."); isSending = false; Changed(nameof(TransferWaitingVisibility)); }
         catch (Exception exception) { DiagnosticLog.Write($"Send failed: endpoint={endpoint}; error={exception}"); isSending = false; Changed(nameof(TransferWaitingVisibility)); System.Windows.MessageBox.Show($"传输失败：{exception.Message}", "爱乐互传", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning); }
     }
-    private void CancelTransfer() => transferCancellation?.Cancel();
+    private void CancelTransfer() { if (transferCompleted) { transferCompleted = false; ClearSelection(); Changed(nameof(TransferActionText)); Changed(nameof(TransferWaitingVisibility)); return; } transferCancellation?.Cancel(); }
     private async Task RefreshAsync()
     {
         DiagnosticLog.Write("User requested discovery refresh.");
