@@ -9,11 +9,13 @@ public final class BonjourLocalSendSender: @unchecked Sendable {
             result[id] = FileMetadata(id: id, fileName: url.lastPathComponent, size: Int64(values.fileSize ?? 0), fileType: values.contentType?.preferredMIMEType ?? "application/octet-stream")
         }
         let prepared = try await request(path: "/api/aiyue/v1/prepare-upload", body: JSONEncoder().encode(PrepareUploadRequest(info: local, files: files)), device: device)
+        DiagnosticLog.write("iOS prepare response: status=\(prepared.0); bytes=\(prepared.1.count).")
         guard prepared.0 != 403, (200..<300).contains(prepared.0) else { throw LocalSendSenderError.rejected }
         let response = try JSONDecoder().decode(PrepareUploadResponse.self, from: prepared.1)
         for (id, file) in files {
             guard let token = response.files[id], let source = urls.first(where: { $0.lastPathComponent == file.fileName }) else { throw LocalSendSenderError.invalidResponse }
             let result = try await request(path: "/api/aiyue/v1/upload?sessionId=\(response.sessionId)&fileId=\(id)&token=\(token)", body: Data(contentsOf: source), device: device)
+            DiagnosticLog.write("iOS upload response: file=\(file.fileName); status=\(result.0); bytes=\(result.1.count).")
             guard (200..<300).contains(result.0) else { throw LocalSendSenderError.invalidResponse }
         }
     }

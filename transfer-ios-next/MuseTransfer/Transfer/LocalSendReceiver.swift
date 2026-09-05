@@ -33,7 +33,10 @@ public final class LocalSendReceiver: @unchecked Sendable {
         ])
         listener.service = NWListener.Service(name: "aiyue-\(local.fingerprint.prefix(12))", type: "_aiyue._tcp", domain: nil, txtRecord: txtRecord)
         listener.stateUpdateHandler = { state in DiagnosticLog.write("iOS receiver state: \(String(describing: state)).") }
-        listener.newConnectionHandler = { [weak self] connection in self?.receive(connection) }
+        listener.newConnectionHandler = { [weak self] connection in
+            DiagnosticLog.write("iOS receiver accepted a TCP connection.")
+            self?.receive(connection)
+        }
         self.listener = listener; listener.start(queue: queue)
     }
 
@@ -43,7 +46,8 @@ public final class LocalSendReceiver: @unchecked Sendable {
     private func receive(_ connection: NWConnection) {
         var buffer = Data()
         func read() { connection.receive(minimumIncompleteLength: 1, maximumLength: 2 * 1024 * 1024) { [weak self] data, _, complete, error in
-            guard let self else { return }; if let data { buffer.append(data) }; if error != nil { connection.cancel(); return }
+            guard let self else { return }; if let data { buffer.append(data) }
+            if let error { DiagnosticLog.write("iOS receiver connection failed: \(error.localizedDescription)."); connection.cancel(); return }
             guard let request = Self.parse(buffer) else { if !complete { read() }; return }
             Task { let response = await self.route(request); connection.send(content: response, completion: .contentProcessed { _ in connection.cancel() }) }
         } }

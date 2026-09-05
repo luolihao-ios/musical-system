@@ -32,20 +32,25 @@ public sealed class LocalSendReceiver : IAsyncDisposable
         application.MapPost(TransferRoutes.Register, () => Results.Json(local, ProtocolJson.Options));
         application.MapPost(TransferRoutes.PrepareUpload, async (HttpContext context) =>
         {
-            var request = await context.Request.ReadFromJsonAsync<PrepareUploadRequest>(ProtocolJson.Options, context.RequestAborted);
-            if (request is null || request.Files.Count == 0) return Results.BadRequest(new { message = "需要至少一个文件。" });
-            if (request.Files.Values.Any(file => !IsSafeRelativeName(file.FileName) || file.Size < 0)) return Results.BadRequest(new { message = "文件名或大小无效。" });
+            DiagnosticLog.Write($"Incoming prepare request: contentLength={context.Request.ContentLength}; contentType={context.Request.ContentType ?? "none"}.");
+            PrepareUploadRequest? request;
+            try { request = await context.Request.ReadFromJsonAsync<PrepareUploadRequest>(ProtocolJson.Options, context.RequestAborted); }
+            catch (Exception exception) { DiagnosticLog.Write($"Incoming prepare rejected: JSON decode error={exception.Message}."); return Results.BadRequest(new { message = "请求格式无效。" }); }
+            if (request is null || request.Files.Count == 0) { DiagnosticLog.Write("Incoming prepare rejected: no files."); return Results.BadRequest(new { message = "需要至少一个文件。" }); }
+            if (request.Files.Values.Any(file => !IsSafeRelativeName(file.FileName) || file.Size < 0)) { DiagnosticLog.Write("Incoming prepare rejected: unsafe metadata."); return Results.BadRequest(new { message = "文件名或大小无效。" }); }
+            DiagnosticLog.Write($"Incoming prepare accepted for confirmation: sender={request.Info.Alias}; files={request.Files.Count}.");
             var session = new PendingUpload(Guid.NewGuid().ToString("N"), request);
             sessions[session.Id] = session;
             RequestReceived?.Invoke(new IncomingRequest(session.Id, request.Info, request.Files));
             var accepted = await session.Decision.Task.WaitAsync(TimeSpan.FromMinutes(2), context.RequestAborted);
-            if (!accepted) return Results.StatusCode(StatusCodes.Status403Forbidden);
+            if (!accepted) { DiagnosticLog.Write($"Incoming prepare refused: session={session.Id}."); return Results.StatusCode(StatusCodes.Status403Forbidden); }
+            DiagnosticLog.Write($"Incoming prepare approved: session={session.Id}.");
             return Results.Json(new PrepareUploadResponse(session.Id, session.Tokens), ProtocolJson.Options, statusCode: StatusCodes.Status200OK);
         });
         application.MapPost(TransferRoutes.Upload, async (HttpContext context) =>
         {
             var sessionId = context.Request.Query["sessionId"].ToString(); var fileId = context.Request.Query["fileId"].ToString(); var token = context.Request.Query["token"].ToString();
-            if (!sessions.TryGetValue(sessionId, out var session) || !session.Tokens.TryGetValue(fileId, out var expected) || !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(token), Encoding.UTF8.GetBytes(expected))) return Results.Unauthorized();
+            if (!sessions.TryGetValue(sessionId, out var session) || !session.Tokens.TryGetValue(fileId, out var expected) || !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(token), Encoding.UTF8.GetBytes(expected))) { DiagnosticLog.Write($"Incoming upload rejected: unknown session or token; session={sessionId}; file={fileId}."); return Results.Unauthorized(); }
             if (!session.Request.Files.TryGetValue(fileId, out var file)) return Results.BadRequest();
             var folder = destination; Directory.CreateDirectory(folder);
             var path = Path.GetFullPath(Path.Combine(folder, file.FileName.Replace('/', Path.DirectorySeparatorChar)));
@@ -66,6 +71,7 @@ public sealed class LocalSendReceiver : IAsyncDisposable
                 try { AiyuePack.Extract(path, musicRoot); await MusicHandoff.CreateAsync(musicRoot, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "luolihao", "AiYueTransfer", "MusicHandoff"), context.RequestAborted); }
                 catch (InvalidDataException) { return Results.UnprocessableEntity(new { message = "音乐包无效，文件已保留。" }); }
             }
+            DiagnosticLog.Write($"Incoming upload completed: session={sessionId}; file={file.FileName}; bytes={length}.");
             return Results.NoContent();
         });
         application.MapPost(TransferRoutes.Cancel, (string sessionId) => { sessions.TryRemove(sessionId, out _); return Results.NoContent(); });
