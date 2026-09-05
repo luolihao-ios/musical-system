@@ -12,10 +12,9 @@ namespace AiyueTransfer.App;
 public partial class MainWindow : Window
 {
     public MainWindow() { InitializeComponent(); DiagnosticLog.Write("Windows client launched."); DataContext = new NearbyDevicesViewModel(); }
-    private void Show(FrameworkElement panel) { ReceivePanel.Visibility = Visibility.Collapsed; SendPanel.Visibility = Visibility.Collapsed; SettingsPanel.Visibility = Visibility.Collapsed; panel.Visibility = Visibility.Visible; }
-    private void Receive_Click(object sender, RoutedEventArgs e) => Show(ReceivePanel);
-    private void Send_Click(object sender, RoutedEventArgs e) => Show(SendPanel);
-    private void Settings_Click(object sender, RoutedEventArgs e) => Show(SettingsPanel);
+    private void Show(FrameworkElement panel, System.Windows.Controls.Button selected) { SendPanel.Visibility = Visibility.Collapsed; SettingsPanel.Visibility = Visibility.Collapsed; panel.Visibility = Visibility.Visible; SendNavigation.Background = System.Windows.Media.Brushes.Transparent; SendNavigation.Foreground = System.Windows.Media.Brushes.Black; SettingsNavigation.Background = System.Windows.Media.Brushes.Transparent; SettingsNavigation.Foreground = System.Windows.Media.Brushes.Black; selected.Background = (System.Windows.Media.Brush)FindResource("AccentBrush"); selected.Foreground = System.Windows.Media.Brushes.White; }
+    private void Send_Click(object sender, RoutedEventArgs e) => Show(SendPanel, SendNavigation);
+    private void Settings_Click(object sender, RoutedEventArgs e) => Show(SettingsPanel, SettingsNavigation);
     private void Refresh_Click(object sender, RoutedEventArgs e) { ((System.Windows.Media.Animation.Storyboard)FindResource("RefreshSpin")).Begin(); if (DataContext is NearbyDevicesViewModel model) model.Refresh(); }
     protected override async void OnClosed(EventArgs e) { if (DataContext is NearbyDevicesViewModel model) await model.DisposeAsync(); base.OnClosed(e); }
 }
@@ -70,6 +69,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     public ICommand ChooseFilesCommand { get; }
     public ICommand ChooseFolderCommand { get; }
     public ICommand ClipboardCommand { get; }
+    public ICommand TextCommand { get; }
     public ICommand ChooseSavePathCommand { get; }
     public ICommand CopyDiagnosticPathCommand { get; }
     public ICommand CancelTransferCommand { get; }
@@ -104,6 +104,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         ChooseFilesCommand = new SimpleCommand(ChooseFiles);
         ChooseFolderCommand = new SimpleCommand(ChooseFolder);
         ClipboardCommand = new SimpleCommand(ChooseClipboard);
+        TextCommand = new SimpleCommand(ChooseText);
         ChooseSavePathCommand = new SimpleCommand(ChooseSavePath);
         CopyDiagnosticPathCommand = new SimpleCommand(CopyDiagnosticPath);
         CancelTransferCommand = new SimpleCommand(CancelTransfer);
@@ -187,6 +188,22 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         if (!System.Windows.Clipboard.ContainsText()) { System.Windows.MessageBox.Show("剪贴板中没有文本。", "爱乐互传"); return; }
         var folder = Path.Combine(Path.GetTempPath(), "AiYueTransfer"); Directory.CreateDirectory(folder);
         var path = Path.Combine(folder, $"clipboard-{DateTime.Now:yyyyMMdd-HHmmss}.txt"); File.WriteAllText(path, System.Windows.Clipboard.GetText()); selectedFolder = null; selectedFiles.Clear(); selectedFiles.Add(path); RefreshSelectedItems();
+    }
+    private void ChooseText()
+    {
+        var input = new System.Windows.Controls.TextBox { AcceptsReturn = true, MinWidth = 360, MinHeight = 140, TextWrapping = TextWrapping.Wrap };
+        var confirm = new System.Windows.Controls.Button { Content = "添加文本", IsDefault = true, Padding = new Thickness(16, 7, 16, 7), Margin = new Thickness(8, 0, 0, 0) };
+        var cancel = new System.Windows.Controls.Button { Content = "取消", IsCancel = true, Padding = new Thickness(16, 7, 16, 7) };
+        var buttons = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };
+        buttons.Children.Add(cancel); buttons.Children.Add(confirm);
+        var layout = new System.Windows.Controls.StackPanel { Margin = new Thickness(20) };
+        layout.Children.Add(new System.Windows.Controls.TextBlock { Text = "输入要发送的文本" }); layout.Children.Add(input); layout.Children.Add(buttons);
+        var dialog = new Window { Title = "爱乐互传", Content = layout, SizeToContent = SizeToContent.WidthAndHeight, Owner = System.Windows.Application.Current.MainWindow, WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize };
+        confirm.Click += (_, _) => dialog.DialogResult = true;
+        if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(input.Text)) return;
+        var folder = Path.Combine(Path.GetTempPath(), "AiYueTransfer"); Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, $"text-{DateTime.Now:yyyyMMdd-HHmmss}.txt"); File.WriteAllText(path, input.Text);
+        selectedFolder = null; selectedFiles.Clear(); selectedFiles.Add(path); RefreshSelectedItems();
     }
     private void ChooseSavePath()
     {
