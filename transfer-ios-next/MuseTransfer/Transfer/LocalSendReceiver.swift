@@ -20,6 +20,9 @@ public final class LocalSendReceiver: @unchecked Sendable {
     private let destination: URL
     private let local: DeviceInfo
     private var listener: NWListener?
+    private var shouldListen = false
+    private var restartGeneration = 0
+    private var consecutiveRestartFailures = 0
     private var pending: [String: CheckedContinuation<Bool, Never>] = [:]
     private var tokens: [String: [String: String]] = [:]
     private var fileNames: [String: [String: String]] = [:]
@@ -30,6 +33,11 @@ public final class LocalSendReceiver: @unchecked Sendable {
 
     public func start() throws {
         guard listener == nil else { return }
+        shouldListen = true
+        try startListener()
+    }
+
+    private func startListener() throws {
         DiagnosticLog.write("iOS receiver starting on TCP \(local.port).")
         let listener = try NWListener(using: .tcp, on: NWEndpoint.Port(rawValue: UInt16(local.port))!)
         // A listener alone is not discoverable. Publishing this Bonjour service is
@@ -41,7 +49,12 @@ public final class LocalSendReceiver: @unchecked Sendable {
             "protocol": Data("http".utf8)
         ])
         listener.service = NWListener.Service(name: "aiyue-\(local.fingerprint.prefix(12))", type: "_aiyue._tcp", domain: nil, txtRecord: txtRecord)
-        listener.stateUpdateHandler = { state in DiagnosticLog.write("iOS receiver state: \(String(describing: state)).") }
+        listener.stateUpdateHandler = { [weak self, weak listener] state in
+            DiagnosticLog.write("iOS receiver state: \(String(describing: state)).")
+            if case .ready = state { self?.resetRestartFailures(for: listener) }
+            guard case let .failed(error) = state, let listener else { return }
+            self?.recoverAfterListenerFailure(listener, error: error)
+        }
         listener.newConnectionHandler = { [weak self] connection in
             DiagnosticLog.write("iOS receiver accepted a TCP connection.")
             self?.receive(connection)
@@ -49,7 +62,13 @@ public final class LocalSendReceiver: @unchecked Sendable {
         self.listener = listener; listener.start(queue: queue)
     }
 
-    public func stop() { queue.async { DiagnosticLog.write("iOS receiver stopped."); self.listener?.cancel(); self.listener = nil } }
+    public func stop() { queue.async {
+        self.shouldListen = false
+        self.restartGeneration += 1
+        DiagnosticLog.write("iOS receiver stopped.")
+        self.listener?.cancel()
+        self.listener = nil
+    } }
     public func decide(sessionID: String, accepted: Bool) { queue.async { self.pending.removeValue(forKey: sessionID)?.resume(returning: accepted) } }
 
     private func receive(_ connection: NWConnection) {
@@ -61,6 +80,54 @@ public final class LocalSendReceiver: @unchecked Sendable {
             Task { let response = await self.route(request); connection.send(content: response, completion: .contentProcessed { _ in connection.cancel() }) }
         } }
         connection.start(queue: queue); read()
+    }
+
+    private func resetRestartFailures(for readyListener: NWListener?) {
+        queue.async {
+            guard let readyListener, self.listener === readyListener else { return }
+            self.consecutiveRestartFailures = 0
+            DiagnosticLog.write("iOS receiver is ready on TCP \(self.local.port).")
+        }
+    }
+
+    private func recoverAfterListenerFailure(_ failedListener: NWListener, error: NWError) {
+        queue.async {
+            // A terminal callback from an old listener must not tear down a newer
+            // replacement, and an explicit stop must never trigger a restart.
+            guard self.shouldListen, self.listener === failedListener else { return }
+            self.listener = nil
+            failedListener.cancel()
+            self.consecutiveRestartFailures += 1
+            let generation = self.restartGeneration
+            let delay = min(5.0, 0.75 * Double(self.consecutiveRestartFailures))
+            DiagnosticLog.write("iOS receiver listener failed: \(error.localizedDescription); scheduling restart in \(delay)s; attempt=\(self.consecutiveRestartFailures).")
+            self.queue.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, self.shouldListen, self.restartGeneration == generation, self.listener == nil else { return }
+                do {
+                    try self.startListener()
+                    DiagnosticLog.write("iOS receiver listener restart initiated; attempt=\(self.consecutiveRestartFailures).")
+                } catch {
+                    DiagnosticLog.write("iOS receiver listener restart could not start: \(error.localizedDescription).")
+                    self.scheduleRetryAfterStartFailure(generation: generation)
+                }
+            }
+        }
+    }
+
+    private func scheduleRetryAfterStartFailure(generation: Int) {
+        guard shouldListen, restartGeneration == generation, listener == nil else { return }
+        consecutiveRestartFailures += 1
+        let delay = min(5.0, 0.75 * Double(consecutiveRestartFailures))
+        queue.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self, self.shouldListen, self.restartGeneration == generation, self.listener == nil else { return }
+            do {
+                try self.startListener()
+                DiagnosticLog.write("iOS receiver listener retry initiated; attempt=\(self.consecutiveRestartFailures).")
+            } catch {
+                DiagnosticLog.write("iOS receiver listener retry failed: \(error.localizedDescription).")
+                self.scheduleRetryAfterStartFailure(generation: generation)
+            }
+        }
     }
 
     private func route(_ request: HTTPRequest) async -> Data {

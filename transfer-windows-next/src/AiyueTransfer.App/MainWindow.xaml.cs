@@ -38,10 +38,29 @@ public sealed class SelectedFileCard(string path)
     private static string Format(long bytes) => bytes switch { < 1024 => $"{bytes} B", < 1024 * 1024 => $"{bytes / 1024d:F1} KB", < 1024L * 1024 * 1024 => $"{bytes / 1024d / 1024:F1} MB", _ => $"{bytes / 1024d / 1024 / 1024:F1} GB" };
 }
 
+public sealed class TransferFileProgressCard(string fileName, long size) : INotifyPropertyChanged
+{
+    private double progress;
+    private string status = "等待传输";
+    public string FileName { get; } = fileName;
+    public string Size { get; } = Format(size);
+    public double Progress { get => progress; private set { progress = value; Changed(); } }
+    public string Status { get => status; private set { status = value; Changed(); } }
+    public event PropertyChangedEventHandler? PropertyChanged;
+    public void SetProgress(long bytes, long total)
+    {
+        Progress = total <= 0 ? 0 : Math.Clamp(bytes * 100d / total, 0, 100);
+        Status = Progress >= 100 ? "已完成" : "正在传输";
+    }
+    private static string Format(long bytes) => bytes switch { < 1024 => $"{bytes} B", < 1024 * 1024 => $"{bytes / 1024d:F1} KB", < 1024L * 1024 * 1024 => $"{bytes / 1024d / 1024:F1} MB", _ => $"{bytes / 1024d / 1024 / 1024:F1} GB" };
+    private void Changed([CallerMemberName] string? propertyName = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+}
+
 public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyChanged
 {
     public ObservableCollection<NearbyDeviceCard> Devices { get; } = [];
     public ObservableCollection<SelectedFileCard> SelectedItems { get; } = [];
+    public ObservableCollection<TransferFileProgressCard> TransferItems { get; } = [];
     private readonly List<string> selectedFiles = [];
     private string? selectedFolder;
     public string SavePath { get; private set; }
@@ -58,7 +77,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     public string TransferTarget { get; private set; } = string.Empty;
     public string TransferStatus { get; private set; } = string.Empty;
     public double TransferProgress { get; private set; }
-    public bool TransferIndeterminate => isSending;
+    public bool TransferIndeterminate => isSending && !hasByteProgress;
     public string TransferActionText => transferCompleted ? "完成" : "取消";
     public Visibility TransferWaitingVisibility => isSending || transferCompleted ? Visibility.Visible : Visibility.Collapsed;
     public string SelectedSummary => selectedFiles.Count == 0 ? "尚未选择文件" : $"文件：{selectedFiles.Count}  ·  大小：{FormatSize(selectedFiles.Sum(path => new FileInfo(path).Length))}";
@@ -71,6 +90,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     private CancellationTokenSource? transferCancellation;
     private bool isSending;
     private bool transferCompleted;
+    private bool hasByteProgress;
 
     public NearbyDevicesViewModel()
     {
@@ -186,18 +206,41 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         TransferTarget = alias;
         TransferStatus = "正在等待对方确认…";
         isSending = true;
-        transferCompleted = false; TransferProgress = 0;
+        transferCompleted = false; TransferProgress = 0; hasByteProgress = false;
+        PrepareTransferItems();
         Changed(nameof(TransferTarget)); Changed(nameof(TransferStatus)); Changed(nameof(TransferProgress)); Changed(nameof(TransferIndeterminate)); Changed(nameof(TransferActionText)); Changed(nameof(TransferWaitingVisibility));
         transferCancellation = new CancellationTokenSource();
         _ = SendAsync(endpoint, transferCancellation.Token);
     }
     private async Task SendAsync(Uri endpoint, CancellationToken cancellationToken)
     {
-        try { DiagnosticLog.Write($"Send started: endpoint={endpoint}; files={selectedFiles.Count}."); var sender = new LocalSendSender(new HttpClient()); if (selectedFolder is not null) await sender.SendFolderAsync(endpoint, local, selectedFolder, cancellationToken); else await sender.SendAsync(endpoint, local, selectedFiles, cancellationToken); DiagnosticLog.Write($"Send completed: endpoint={endpoint}."); TransferStatus = "已完成"; TransferProgress = 100; isSending = false; transferCompleted = true; Changed(nameof(TransferStatus)); Changed(nameof(TransferProgress)); Changed(nameof(TransferIndeterminate)); Changed(nameof(TransferActionText)); Changed(nameof(TransferWaitingVisibility)); }
+        try { DiagnosticLog.Write($"Send started: endpoint={endpoint}; files={selectedFiles.Count}."); var sender = new LocalSendSender(new HttpClient()); if (selectedFolder is not null) await sender.SendFolderAsync(endpoint, local, selectedFolder, cancellationToken, UpdateTransferProgress); else await sender.SendAsync(endpoint, local, selectedFiles, cancellationToken, UpdateTransferProgress); DiagnosticLog.Write($"Send completed: endpoint={endpoint}."); TransferStatus = "已完成"; TransferProgress = 100; isSending = false; transferCompleted = true; Changed(nameof(TransferStatus)); Changed(nameof(TransferProgress)); Changed(nameof(TransferIndeterminate)); Changed(nameof(TransferActionText)); Changed(nameof(TransferWaitingVisibility)); }
         catch (OperationCanceledException) { DiagnosticLog.Write($"Send cancelled: endpoint={endpoint}."); isSending = false; Changed(nameof(TransferWaitingVisibility)); }
         catch (Exception exception) { DiagnosticLog.Write($"Send failed: endpoint={endpoint}; error={exception}"); isSending = false; Changed(nameof(TransferWaitingVisibility)); System.Windows.MessageBox.Show($"传输失败：{exception.Message}", "爱乐互传", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning); }
     }
     private void CancelTransfer() { if (transferCompleted) { transferCompleted = false; ClearSelection(); Changed(nameof(TransferActionText)); Changed(nameof(TransferWaitingVisibility)); return; } transferCancellation?.Cancel(); }
+
+    private void PrepareTransferItems()
+    {
+        TransferItems.Clear();
+        foreach (var path in selectedFiles)
+        {
+            var info = new FileInfo(path);
+            TransferItems.Add(new TransferFileProgressCard(Path.GetFileName(path), info.Exists ? info.Length : 0));
+        }
+    }
+
+    private void UpdateTransferProgress(TransferSendProgress update)
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            TransferStatus = $"正在传输 {update.FileIndex} / {update.FileCount} 个文件";
+            TransferProgress = update.TotalBytes <= 0 ? 0 : Math.Clamp(update.TotalBytesTransferred * 100d / update.TotalBytes, 0, 100);
+            hasByteProgress = true;
+            TransferItems.FirstOrDefault(item => string.Equals(item.FileName, update.FileName, StringComparison.Ordinal))?.SetProgress(update.FileBytesTransferred, update.FileSize);
+            Changed(nameof(TransferStatus)); Changed(nameof(TransferProgress)); Changed(nameof(TransferIndeterminate));
+        });
+    }
     private async Task RefreshAsync()
     {
         DiagnosticLog.Write("User requested discovery refresh.");

@@ -51,6 +51,37 @@ public sealed class LocalSendTransferTests
     }
 
     [Fact]
+    public async Task Sender_ReportsActualByteProgressForEachUploadedFile()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "aiyue-transfer-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var receiverInfo = new DeviceInfo("接收端", "2.0", "Windows", "desktop", "receiver", 55325, "http");
+            await using var receiver = new LocalSendReceiver(receiverInfo, Path.Combine(root, "received"));
+            receiver.RequestReceived += request => receiver.Decide(request.SessionId, true);
+            await receiver.StartAsync();
+            var source = Path.Combine(root, "large.bin");
+            var bytes = RandomNumberGenerator.GetBytes(180_000);
+            await File.WriteAllBytesAsync(source, bytes);
+            var progress = new List<TransferSendProgress>();
+
+            await new LocalSendSender(new HttpClient()).SendAsync(
+                new Uri("http://127.0.0.1:55325"),
+                new DeviceInfo("发送端", "2.0", "Windows", "desktop", "sender", 55326, "http"),
+                [source], progress: progress.Add);
+
+            Assert.NotEmpty(progress);
+            var final = progress.Last();
+            Assert.Equal(bytes.Length, final.FileBytesTransferred);
+            Assert.Equal(bytes.Length, final.TotalBytesTransferred);
+            Assert.Equal(1, final.FileIndex);
+            Assert.Equal(1, final.FileCount);
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task Sender_TransfersNestedFolderWithRelativePaths()
     {
         var root = Path.Combine(Path.GetTempPath(), "aiyue-transfer-" + Guid.NewGuid().ToString("N"));
