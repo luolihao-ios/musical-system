@@ -4,7 +4,6 @@ on:
   push:
     branches: [codex/aiyue-greenfield]
     paths:
-      - "transfer-windows-next/**"
       - "transfer-ios-next/**"
       - "shared-swift/**"
       - ".github/workflows/aiyue-next-release.yml"
@@ -14,28 +13,6 @@ permissions:
   contents: read
 
 jobs:
-  windows:
-    name: Windows installer
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v5
-        with: { dotnet-version: "10.0.x" }
-      - name: Install Inno Setup
-        shell: pwsh
-        run: |
-          winget source reset --force
-          winget source update
-          winget install --id JRSoftware.InnoSetup.7 --exact --source winget --silent --accept-package-agreements --accept-source-agreements
-      - name: Test and package
-        shell: pwsh
-        run: ./transfer-windows-next/scripts/package.ps1
-      - uses: actions/upload-artifact@v7
-        with:
-          name: AiYueTransfer-Windows-x64
-          path: transfer-windows-next/artifacts/installer/AiYueTransfer-Setup.exe
-          if-no-files-found: error
-
   ios:
     name: iOS IPA and TestFlight
     runs-on: macos-latest
