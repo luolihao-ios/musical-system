@@ -6,6 +6,7 @@ struct TransferView: View {
     @State private var model = TransferViewModel()
     @State private var mediaItems: [PhotosPickerItem] = []
     @State private var textToSend = ""
+    @State private var refreshRotation = 0.0
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 18) {
@@ -30,9 +31,12 @@ struct TransferView: View {
                 }
                 HStack(spacing: 8) {
                     Text("附近设备").font(.title.bold())
-                    Button { model.refresh() } label: {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.7)) { refreshRotation += 720 }
+                        model.refresh()
+                    } label: {
                         Image(systemName: "arrow.clockwise")
-                            .symbolEffect(.rotate, options: .repeat(2), value: model.refreshToken)
+                            .rotationEffect(.degrees(refreshRotation))
                     }.buttonStyle(.plain).foregroundStyle(.indigo).accessibilityLabel("刷新附近设备")
                 }
                 if let status = model.sendStatus { Text(status).foregroundStyle(status == "传输完成" ? .green : .secondary) }
