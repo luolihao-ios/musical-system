@@ -1,0 +1,31 @@
+name: AiYue browser and music verification
+on:
+  push:
+    branches: [codex/aiyue-greenfield]
+    paths:
+      - 'transfer-ios-next/**'
+      - 'shared-swift/**'
+      - '.github/workflows/aiyue-browser-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ios-tests:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: brew install xcodegen
+      - name: Browser packaging tests
+        run: node transfer-ios-next/scripts/test-web.cjs
+      - name: iPhone HTTP streaming and music package tests
+        working-directory: transfer-ios-next
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          SIMULATOR_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; print(next(d["udid"] for ds in json.load(sys.stdin)["devices"].values() for d in ds if d["name"].startswith("iPhone") and d.get("isAvailable")))')
+          xcodebuild test -project AiYueTransferNext.xcodeproj -scheme AiyueTransfer -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -resultBundlePath build/Tests.xcresult CODE_SIGNING_ALLOWED=NO
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: AiYue-iOS-test-results
+          path: transfer-ios-next/build/Tests.xcresult

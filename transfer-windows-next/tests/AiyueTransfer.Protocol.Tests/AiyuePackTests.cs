@@ -8,6 +8,25 @@ namespace AiyueTransfer.Protocol.Tests;
 public sealed class AiyuePackTests
 {
     [Fact]
+    public void Mp3OnlyAndExplicitMixedCaseCompanionsAreSupported()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
+        try
+        {
+            var audio = Path.Combine(root, "Song.MP3"); File.WriteAllText(audio, "audio");
+            var solo = Path.Combine(root, "solo.aiyuepack"); AiyuePack.Create(audio, solo);
+            var manifest = AiyuePack.Extract(solo, Path.Combine(root, "solo"));
+            Assert.Null(manifest.LyricsPath); Assert.Null(manifest.CoverPath);
+            var lyrics = Path.Combine(root, "song.LRC"); File.WriteAllText(lyrics, "lyrics");
+            var cover = Path.Combine(root, "SONG.PNG"); File.WriteAllText(cover, "cover");
+            var full = Path.Combine(root, "full.aiyuepack"); AiyuePack.Create(audio, full, companions: [lyrics, cover]);
+            manifest = AiyuePack.Extract(full, Path.Combine(root, "full"));
+            Assert.NotNull(manifest.LyricsPath); Assert.NotNull(manifest.CoverPath);
+            Assert.Throws<InvalidDataException>(() => AiyuePack.Create(lyrics, Path.Combine(root, "bad.aiyuepack")));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+    [Fact]
     public void Create_IncludesAudioLyricsAndCover()
     {
         var root = Path.Combine(Path.GetTempPath(), "aiyue-pack-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);

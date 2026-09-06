@@ -9,7 +9,14 @@ struct LocalMusicPlayerApp: App {
         WindowGroup {
             BootstrapView(bootstrap: bootstrap)
                 .preferredColorScheme(.dark)
-                .onOpenURL { url in Task { try? await bootstrap.container?.transferHandoffImporter.importURL(url) } }
+                .onOpenURL { url in Task {
+                    bootstrap.start()
+                    do {
+                        try await bootstrap.container?.transferHandoffImporter.importURL(url)
+                        try bootstrap.container?.libraryModel.reload()
+                        await bootstrap.container?.libraryModel.completeMissingResources()
+                    } catch { bootstrap.container?.libraryModel.showImportError(error.localizedDescription) }
+                } }
         }
     }
 }

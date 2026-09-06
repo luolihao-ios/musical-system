@@ -13,6 +13,7 @@ public struct ReceivedTransferFile: Identifiable, Sendable {
     public let fileName: String
     public let size: Int64
     public let savedDescription: String
+    public let url: URL
 }
 
 public final class LocalSendReceiver: @unchecked Sendable {
@@ -158,7 +159,7 @@ public final class LocalSendReceiver: @unchecked Sendable {
                 try request.body.write(to: target, options: .atomic)
                 let savedDescription = "已保存到文件 > 爱乐互传"
                 let received = ReceivedTransferFile(id: fileID, fileName: target.lastPathComponent,
-                                                    size: Int64(request.body.count), savedDescription: savedDescription)
+                                                    size: Int64(request.body.count), savedDescription: savedDescription, url: target)
                 DiagnosticLog.write("Incoming upload saved: session=\(sessionID); file=\(received.fileName); bytes=\(received.size); destination=\(savedDescription).")
                 onFileReceived?(received)
                 return Self.response(204)

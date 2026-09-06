@@ -186,7 +186,19 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         if (picker.ShowDialog() != true) return;
         var files = picker.FileNames.ToList();
         if (!files.Any(p => string.Equals(Path.GetExtension(p), ".mp3", StringComparison.OrdinalIgnoreCase))) { System.Windows.MessageBox.Show("音乐包至少需要一个 MP3 文件。", "爱乐互传"); return; }
-        selectedFolder = null; selectedFiles.Clear(); selectedFiles.AddRange(files); RefreshSelectedItems();
+        try
+        {
+            var folder = Path.Combine(Path.GetTempPath(), "AiYueTransfer", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(folder);
+            var packages = new List<string>();
+            foreach (var audio in files.Where(p => string.Equals(Path.GetExtension(p), ".mp3", StringComparison.OrdinalIgnoreCase)))
+            {
+                var package = Path.Combine(folder, Path.GetFileNameWithoutExtension(audio) + "-" + Guid.NewGuid().ToString("N")[..8] + ".aiyuepack");
+                AiyueTransfer.Core.AiyuePack.Create(audio, package, companions: files); packages.Add(package);
+            }
+            selectedFolder = null; selectedFiles.Clear(); selectedFiles.AddRange(packages); RefreshSelectedItems();
+        }
+        catch (Exception error) { DiagnosticLog.Write($"Music packaging failed: {error}"); System.Windows.MessageBox.Show("音乐打包失败：" + error.Message, "爱乐互传"); }
     }
     private void ChooseFolder()
     {

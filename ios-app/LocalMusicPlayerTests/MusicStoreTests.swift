@@ -4,6 +4,21 @@ import XCTest
 
 @MainActor
 final class MusicStoreTests: XCTestCase {
+    func testDuplicateSongFromDifferentSourcesKeepsOneLibraryEntry() throws {
+        let container = try ModelContainerFactory.make(inMemory: true)
+        let store = try MusicStore(context: container.mainContext)
+        let first = makeTrack(id: "first", title: "同一首歌")
+        let second = makeTrack(id: "second", title: "同一首歌")
+        first.artist = "歌手"; second.artist = "歌手"
+        first.duration = 180; second.duration = 180
+        try store.upsert(first); try store.setLiked(trackID: first.id, isLiked: true)
+        try store.upsert(second)
+        XCTAssertEqual(try store.tracks().count, 1)
+        XCTAssertTrue(try store.tracks()[0].isLiked)
+        let live = makeTrack(id: "live", title: "同一首歌 (Live)")
+        try store.upsert(live)
+        XCTAssertEqual(try store.tracks().count, 2)
+    }
     func testTrackLikeAndPlaybackPreferencesRoundTrip() throws {
         let container = try ModelContainerFactory.make(inMemory: true)
         let store = try MusicStore(context: container.mainContext)

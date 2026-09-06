@@ -77,13 +77,13 @@ import PhotosUI
             let folder = try outgoingBatch()
             var copied: [URL] = []
             for source in audio + companions {
-                guard source.startAccessingSecurityScopedResource() else { continue }
-                defer { source.stopAccessingSecurityScopedResource() }
+                let access = source.startAccessingSecurityScopedResource()
+                defer { if access { source.stopAccessingSecurityScopedResource() } }
                 let target = folder.appendingPathComponent(source.lastPathComponent)
                 try FileManager.default.copyItem(at: source, to: target)
                 copied.append(target)
             }
-            selectedFiles = copied
+            selectedFiles = try MusicPackage.create(files: copied, destination: try outgoingBatch())
             sendStatus = companions.isEmpty ? "已添加 MP3（未找到歌词或封面，可直接发送）" : "已添加音乐及可用歌词/封面"
         } catch { sendStatus = "无法读取音乐文件：\(error.localizedDescription)" }
     }

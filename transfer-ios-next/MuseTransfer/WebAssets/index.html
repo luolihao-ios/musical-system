@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>爱乐互传</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body><aside><h1>爱乐互传</h1><button id="sendTab" class="active">发送</button><button id="settingsTab">设置</button></aside><main>
+<section id="login" class="card"><h2>连接 iPhone</h2><p>输入手机“电脑传文件”页面上的访问码</p><input id="code" inputmode="numeric" maxlength="6" aria-label="访问码"><button id="connect">连接</button></section>
+<section id="send" hidden><h2 class="selection-title">选择</h2><div class="actions"><button id="choose">文件</button><button id="folder">文件夹</button><button id="music">音乐</button></div>
+<input type="file" id="fileInput" multiple hidden><input type="file" id="folderInput" webkitdirectory multiple hidden><input type="file" id="musicInput" accept=".mp3,.lrc,.jpg,.jpeg,.png,.webp" multiple hidden>
+<div class="card" id="drop"><div class="selection-heading"><p id="summary">尚未选择文件</p><button id="edit" hidden>编辑</button></div><div id="selected"></div><button id="clear" hidden>全部删除</button><button id="recover" hidden>结束上一批未完成传输</button></div>
+<h2 class="nearby-title">附近的设备 <button id="refresh" aria-label="刷新">↻</button></h2><p class="muted">点击设备开始传输；对方确认后才会发送文件</p><div class="card devices"><button class="device" id="device"><span class="device-icon">▣</span><span><strong id="deviceName">iPhone</strong><small>mobile</small></span></button></div><div class="device-tools"><button id="filesTab">浏览手机文件 / 下载</button><span class="muted">文件也可以拖到上方选择框</span></div></section>
+<section id="settings" hidden><h2>设置</h2><div class="card"><h3>文件保存位置</h3><p class="muted" id="savePath">文件 › 爱乐互传</p><button id="chooseDestination">选择保存位置</button><h3>诊断日志</h3><p class="muted">手机“文件”App 中的诊断日志</p><a class="button" href="/web/diagnostics" download>下载日志</a><button id="copyAddress">复制连接地址</button><p class="muted" id="version">爱乐互传 · 浏览器已连接手机</p></div></section>
+<section id="files" hidden><h2>手机文件</h2><p>文件 › 爱乐互传</p><div class="actions"><button id="up">返回上级</button><button id="mkdir">新建文件夹</button><button id="reload">刷新</button></div><p id="path"></p><div class="card" id="listing"></div></section>
+<section id="progress" hidden><h2 id="phase">等待手机响应…</h2><div id="rows"></div><div class="card"><progress id="total" max="1" value="0"></progress><p id="result"></p><button id="cancel">取消</button><button id="done" hidden>完成</button></div></section>
+<p id="message" role="status"></p></main></body></html>

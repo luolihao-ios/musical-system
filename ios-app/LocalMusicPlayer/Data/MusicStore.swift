@@ -13,18 +13,28 @@ final class MusicStore {
     }
 
     func upsert(_ incoming: TrackRecord) throws {
-        if let existing = try track(id: incoming.id) {
+        let exact = try track(id: incoming.id)
+        let duplicate = exact == nil && !incoming.artist.isEmpty && incoming.duration > 0 ? try tracks().first {
+            !$0.artist.isEmpty && $0.duration > 0 &&
+            OnlineMusicResources.normalized($0.title) == OnlineMusicResources.normalized(incoming.title) &&
+            OnlineMusicResources.normalized($0.artist) == OnlineMusicResources.normalized(incoming.artist) &&
+            OnlineMusicResources.normalized($0.album) == OnlineMusicResources.normalized(incoming.album) &&
+            abs($0.duration - incoming.duration) <= 1
+        } : nil
+        if let existing = exact ?? duplicate {
             let liked = existing.isLiked
             let lastPlayedAt = existing.lastPlayedAt
             existing.title = incoming.title
             existing.artist = incoming.artist
             existing.album = incoming.album
             existing.duration = incoming.duration
-            existing.sourceKind = incoming.sourceKind
-            existing.sourceReference = incoming.sourceReference
-            existing.artworkReference = incoming.artworkReference
-            existing.lyricsReference = incoming.lyricsReference
-            existing.isAvailable = incoming.isAvailable
+            if existing.sourceKind != .mediaLibrary || incoming.sourceKind == .mediaLibrary || !existing.isAvailable {
+                existing.sourceKind = incoming.sourceKind
+                existing.sourceReference = incoming.sourceReference
+                existing.isAvailable = incoming.isAvailable
+            }
+            existing.artworkReference = incoming.artworkReference ?? existing.artworkReference
+            existing.lyricsReference = incoming.lyricsReference ?? existing.lyricsReference
             existing.isLiked = liked
             existing.lastPlayedAt = lastPlayedAt
         } else {

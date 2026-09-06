@@ -70,6 +70,7 @@ final class LibraryModel {
     private(set) var tracks: [TrackSnapshot] = []
     var searchText = ""
     private(set) var isImporting = false
+    private(set) var isCompletingResources = false
     var systemPermissionDenied = false
     private(set) var errorMessage: String?
     private(set) var currentTrackID: String?
@@ -82,17 +83,23 @@ final class LibraryModel {
     private let systemImporter: any SystemLibraryImporting
     private let playback: any LibraryPlaybackControlling
     private var playbackObserverID: UUID?
+    private let online: (any MusicResourceSearching)?
+    private let scansAuthorizedFolders: Bool
 
     init(
         store: MusicStore,
         fileImporter: any FileImporting,
         systemImporter: any SystemLibraryImporting,
-        playback: any LibraryPlaybackControlling
+        playback: any LibraryPlaybackControlling,
+        online: (any MusicResourceSearching)? = nil,
+        scansAuthorizedFolders: Bool = false
     ) {
         self.store = store
         self.fileImporter = fileImporter
         self.systemImporter = systemImporter
         self.playback = playback
+        self.online = online
+        self.scansAuthorizedFolders = scansAuthorizedFolders
         playbackObserverID = playback.observeState { [weak self] state in
             self?.currentTrackID = state.currentTrack?.id
             self?.isCurrentTrackPlaying = state.isPlaying
@@ -181,6 +188,11 @@ final class LibraryModel {
             case .permissionDenied:
                 systemPermissionDenied = true
             }
+            if scansAuthorizedFolders {
+                for record in await DeviceMusicFolders.scan(using: fileImporter) { try store.upsert(record) }
+                try reload()
+            }
+            if online != nil { Task { await self.completeMissingResources() } }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -193,6 +205,31 @@ final class LibraryModel {
 
     func clearError() {
         errorMessage = nil
+    }
+    func showImportError(_ message: String) { errorMessage = message }
+    func completeMissingResources() async {
+        guard !isImporting, !isCompletingResources, let online else { return }
+        isCompletingResources = true; defer { isCompletingResources = false }
+        do {
+            let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("OnlineMusicResources")
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            for snapshot in try store.tracks().map(TrackSnapshot.init) where snapshot.lyricsReference == nil || snapshot.artworkReference == nil {
+                let result = await online.search(MusicResourceQuery(title: snapshot.title, artist: snapshot.artist, album: snapshot.album, duration: snapshot.duration), lyrics: snapshot.lyricsReference == nil, cover: snapshot.artworkReference == nil)
+                guard let track = try store.track(id: snapshot.id) else { continue }
+                let directory = root.appendingPathComponent(track.id)
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                if track.lyricsReference == nil, let lyrics = result.lyrics, !lyrics.isEmpty {
+                    let url = directory.appendingPathComponent("lyrics.lrc")
+                    try lyrics.write(to: url, atomically: true, encoding: .utf8); track.lyricsReference = url.path
+                }
+                if track.artworkReference == nil, let cover = result.cover {
+                    let url = directory.appendingPathComponent("artwork")
+                    try cover.write(to: url, options: .atomic); track.artworkReference = url.path
+                }
+                try store.upsert(track)
+            }
+            try reload()
+        } catch { errorMessage = error.localizedDescription }
     }
 
     func play(_ track: TrackSnapshot) async throws {
@@ -223,6 +260,7 @@ final class LibraryModel {
                 try store.upsert(record)
             }
             try reload()
+            if online != nil { Task { await self.completeMissingResources() } }
         } catch {
             errorMessage = error.localizedDescription
         }

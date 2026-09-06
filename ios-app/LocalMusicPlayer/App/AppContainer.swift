@@ -25,7 +25,9 @@ final class AppContainer {
             store: store,
             fileImporter: FileImportService(),
             systemImporter: SystemLibraryImporter(),
-            playback: playback
+            playback: playback,
+            online: OnlineMusicResources.shared,
+            scansAuthorizedFolders: true
         )
         let playlistsModel = PlaylistsModel(
             store: store,

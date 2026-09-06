@@ -8,13 +8,16 @@ public sealed record AiyuePackManifest(string Title, string? Artist, string? Alb
 public static class AiyuePack
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
-    public static void Create(string audioPath, string outputPath, string? title = null, string? artist = null, string? album = null)
+    public static void Create(string audioPath, string outputPath, string? title = null, string? artist = null, string? album = null, IEnumerable<string>? companions = null)
     {
         if (!File.Exists(audioPath)) throw new FileNotFoundException("Audio file was not found.", audioPath);
+        if (!string.Equals(Path.GetExtension(audioPath), ".mp3", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("音乐包需要 MP3 文件。");
         var stem = Path.GetFileNameWithoutExtension(audioPath);
         var directory = Path.GetDirectoryName(audioPath) ?? ".";
-        var lyrics = FindSibling(directory, stem, ".lrc", ".txt");
-        var cover = FindSibling(directory, stem, ".jpg", ".jpeg", ".png") ?? FindSibling(directory, "cover", ".jpg", ".jpeg", ".png");
+        var candidates = (companions ?? Directory.EnumerateFiles(directory)).Where(File.Exists).ToArray();
+        string? Match(string name, params string[] extensions) => candidates.FirstOrDefault(path => string.Equals(Path.GetFileNameWithoutExtension(path), name, StringComparison.OrdinalIgnoreCase) && extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase));
+        var lyrics = Match(stem, ".lrc");
+        var cover = Match(stem, ".jpg", ".jpeg", ".png", ".webp") ?? Match("cover", ".jpg", ".jpeg", ".png", ".webp");
         var manifest = new AiyuePackManifest(title ?? stem, artist, album, "audio/" + Path.GetFileName(audioPath), lyrics is null ? null : "lyrics/" + Path.GetFileName(lyrics), cover is null ? null : "cover/" + Path.GetFileName(cover));
         using var archive = ZipFile.Open(outputPath, ZipArchiveMode.Create);
         archive.CreateEntryFromFile(audioPath, manifest.AudioPath, CompressionLevel.Fastest);

@@ -1,10 +1,12 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct LibraryView: View {
     @Bindable var model: LibraryModel
     @Bindable var playlists: PlaylistsModel
 
     @State private var showDocumentPicker = false
+    @State private var showFolderPicker = false
 
     var body: some View {
         Group {
@@ -54,6 +56,10 @@ struct LibraryView: View {
                     showDocumentPicker = true
                 } importSystemLibrary: {
                     Task { await model.importSystemLibrary() }
+                } completeResources: {
+                    Task { await model.completeMissingResources() }
+                } authorizeFolders: {
+                    showFolderPicker = true
                 }
             }
         }
@@ -69,6 +75,13 @@ struct LibraryView: View {
                 showDocumentPicker = false
                 Task { await model.importFiles(files) }
             }
+        }
+        .fileImporter(isPresented: $showFolderPicker, allowedContentTypes: [.folder], allowsMultipleSelection: true) { result in
+            do { try DeviceMusicFolders.authorize(result.get()) }
+            catch { model.showImportError(error.localizedDescription) }
+        }
+        .overlay(alignment: .bottom) {
+            if model.isCompletingResources { Text("正在联网补全缺失歌词与封面，可继续播放").font(.caption).padding(10).background(.regularMaterial, in: Capsule()).allowsHitTesting(false) }
         }
         .alert(
             "无法导入",

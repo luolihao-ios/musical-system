@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>UIFileSharingEnabled</key><true/>
+    <key>LSSupportsOpeningDocumentsInPlace</key><true/>
+    <key>CFBundleDocumentTypes</key>
+    <array><dict><key>CFBundleTypeName</key><string>爱乐音乐包</string><key>CFBundleTypeRole</key><string>Viewer</string><key>LSHandlerRank</key><string>Owner</string><key>LSItemContentTypes</key><array><string>com.luolihao.aiyuepack</string></array></dict></array>
+    <key>UTExportedTypeDeclarations</key>
+    <array><dict><key>UTTypeIdentifier</key><string>com.luolihao.aiyuepack</string><key>UTTypeDescription</key><string>爱乐音乐包</string><key>UTTypeConformsTo</key><array><string>public.data</string><string>public.archive</string></array><key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>aiyuepack</string></array></dict></dict></array>
     <key>CFBundleDevelopmentRegion</key>
     <string>zh_CN</string>
     <key>CFBundleDisplayName</key>

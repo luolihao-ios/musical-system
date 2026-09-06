@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - "ios-app/**"
+      - "shared-swift/**"
       - ".github/workflows/ios-native.yml"
   pull_request:
     paths:
       - "ios-app/**"
+      - "shared-swift/**"
       - ".github/workflows/ios-native.yml"
   workflow_dispatch:
 

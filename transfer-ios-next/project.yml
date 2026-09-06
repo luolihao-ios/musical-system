@@ -1,4 +1,8 @@
 name: AiYueTransferNext
+packages:
+  ZIPFoundation:
+    url: https://github.com/weichsel/ZIPFoundation.git
+    from: 0.9.19
 options:
   bundleIdPrefix: com.luolihao
   deploymentTarget:
@@ -13,9 +17,17 @@ settings:
 targets:
   AiyueTransfer:
     type: application
+    dependencies:
+      - package: ZIPFoundation
     platform: iOS
     sources:
+      - path: ../shared-swift/MusicPackage.swift
       - path: MuseTransfer
+        excludes:
+          - WebAssets
+      - path: MuseTransfer/WebAssets
+        type: folder
+        buildPhase: resources
       - path: ../transfer-ios/MuseTransfer/Resources
         buildPhase: resources
     settings:

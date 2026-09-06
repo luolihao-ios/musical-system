@@ -4,6 +4,8 @@ struct ImportedFile: Equatable, Sendable {
     enum Kind: Equatable, Sendable {
         case audio
         case lyrics
+        case cover
+        case package
     }
 
     let sourceURL: URL

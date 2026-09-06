@@ -153,6 +153,11 @@ final class NowPlayingModel {
                 return
             }
             self.lyricLines = LRCParser.parse(source ?? "")
+            if self.lyricLines.isEmpty, let source {
+                self.lyricLines = source.split(whereSeparator: \.isNewline).map {
+                    LyricLine(timestamp: .infinity, text: String($0))
+                }
+            }
             self.lyricTrackID = requestedID
             self.updateCurrentLyricIndex()
         }

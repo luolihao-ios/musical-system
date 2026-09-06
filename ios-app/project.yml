@@ -1,4 +1,8 @@
 name: LocalMusicPlayer
+packages:
+  ZIPFoundation:
+    url: https://github.com/weichsel/ZIPFoundation.git
+    from: 0.9.19
 
 options:
   bundleIdPrefix: com.luolihao
@@ -17,8 +21,11 @@ settings:
 targets:
   LocalMusicPlayer:
     type: application
+    dependencies:
+      - package: ZIPFoundation
     platform: iOS
     sources:
+      - path: ../shared-swift/MusicPackage.swift
       - path: LocalMusicPlayer
         excludes:
           - Resources
