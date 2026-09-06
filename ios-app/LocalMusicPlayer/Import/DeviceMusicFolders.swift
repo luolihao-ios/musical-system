@@ -25,9 +25,9 @@ import Foundation
         for root in roots where seen.insert(root.standardizedFileURL).inserted {
             let access = root.startAccessingSecurityScopedResource()
             defer { if access { root.stopAccessingSecurityScopedResource() } }
-            guard let iterator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey], options: [.skipsHiddenFiles]) else { continue }
+            let urls = enumerateFiles(in: root)
             var folders: [URL: [ImportedFile]] = [:]
-            for case let url as URL in iterator {
+            for url in urls {
                 guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]), values.isRegularFile == true, values.isSymbolicLink != true else { continue }
                 let ext = url.pathExtension.lowercased()
                 let kind: ImportedFile.Kind
@@ -47,5 +47,10 @@ import Foundation
             }
         }
         return tracks
+    }
+
+    private static func enumerateFiles(in root: URL) -> [URL] {
+        guard let iterator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey], options: [.skipsHiddenFiles]) else { return [] }
+        return iterator.compactMap { $0 as? URL }
     }
 }
