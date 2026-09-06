@@ -14,8 +14,7 @@ struct TransferView: View {
                 if model.selectedFiles.isEmpty {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         PhotosPicker(selection: $mediaItems, maxSelectionCount: 50, matching: .any(of: [.images, .videos])) { SelectionTile(title: "媒体", icon: "photo.on.rectangle") }
-                        Button { model.showTextEntry = true } label: { SelectionTile(title: "文本", icon: "text.alignleft") }
-                        Button { model.addClipboard() } label: { SelectionTile(title: "剪贴板", icon: "clipboard") }
+                        Button { model.showMusicImporter = true } label: { SelectionTile(title: "音乐", icon: "music.note") }
                         Button { model.showImporter = true } label: { SelectionTile(title: "文件", icon: "doc") }
                         Button { model.showFolderImporter = true } label: { SelectionTile(title: "文件夹", icon: "folder") }
                     }
@@ -49,6 +48,7 @@ struct TransferView: View {
             }.padding().navigationTitle("爱乐互传")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { ShareLink(item: DiagnosticLog.fileURL) { Image(systemName: "stethoscope") }.accessibilityLabel("导出诊断日志") } }
         }.fileImporter(isPresented: $model.showImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { model.select($0) }
+        .fileImporter(isPresented: $model.showMusicImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { model.selectMusic($0) }
         .fileImporter(isPresented: $model.showFolderImporter, allowedContentTypes: [.folder], allowsMultipleSelection: false) { model.selectFolder($0) }
         .onChange(of: mediaItems) { _, items in Task { await model.selectMedia(items); mediaItems = [] } }
         .sheet(isPresented: Binding(get: { model.incomingTransfer != nil }, set: { if !$0, model.incomingTransfer != nil { model.decideIncoming(false) } })) {
@@ -58,7 +58,6 @@ struct TransferView: View {
             ReceiveProgressScreen(model: model)
         }
         .alert("未选择文件", isPresented: $model.showSelectionWarning) { Button("关闭", role: .cancel) { } } message: { Text("请至少选择一个文件。") }
-        .alert("发送文本", isPresented: $model.showTextEntry) { TextField("输入文本", text: $textToSend, axis: .vertical); Button("取消", role: .cancel) { textToSend = "" }; Button("添加") { model.addText(textToSend); textToSend = "" } } message: { Text("文本会以 .txt 文件发送。") }
         .sheet(isPresented: $model.showEditor) { SelectionEditor(model: model) }
     }
 

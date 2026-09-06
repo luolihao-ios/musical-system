@@ -67,6 +67,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     public Visibility EmptyDevicesVisibility => Devices.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     public ICommand RefreshCommand { get; }
     public ICommand ChooseFilesCommand { get; }
+    public ICommand ChooseMusicCommand { get; }
     public ICommand ChooseFolderCommand { get; }
     public ICommand ClipboardCommand { get; }
     public ICommand TextCommand { get; }
@@ -102,6 +103,7 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
         receiver.RequestReceived += OnIncomingRequest;
         RefreshCommand = new SimpleCommand(() => _ = RefreshAsync());
         ChooseFilesCommand = new SimpleCommand(ChooseFiles);
+        ChooseMusicCommand = new SimpleCommand(ChooseMusic);
         ChooseFolderCommand = new SimpleCommand(ChooseFolder);
         ClipboardCommand = new SimpleCommand(ChooseClipboard);
         TextCommand = new SimpleCommand(ChooseText);
@@ -177,6 +179,14 @@ public sealed class NearbyDevicesViewModel : IAsyncDisposable, INotifyPropertyCh
     {
         var picker = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = "选择要发送的文件" };
         if (picker.ShowDialog() == true) { selectedFolder = null; selectedFiles.Clear(); selectedFiles.AddRange(picker.FileNames); RefreshSelectedItems(); }
+    }
+    private void ChooseMusic()
+    {
+        var picker = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = "选择 MP3、歌词或封面文件", Filter = "音乐资源|*.mp3;*.lrc;*.jpg;*.jpeg;*.png;*.webp" };
+        if (picker.ShowDialog() != true) return;
+        var files = picker.FileNames.ToList();
+        if (!files.Any(p => string.Equals(Path.GetExtension(p), ".mp3", StringComparison.OrdinalIgnoreCase))) { System.Windows.MessageBox.Show("音乐包至少需要一个 MP3 文件。", "爱乐互传"); return; }
+        selectedFolder = null; selectedFiles.Clear(); selectedFiles.AddRange(files); RefreshSelectedItems();
     }
     private void ChooseFolder()
     {
