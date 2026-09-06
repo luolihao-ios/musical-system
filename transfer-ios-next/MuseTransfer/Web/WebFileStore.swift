@@ -19,9 +19,19 @@ final class WebFileStore {
         guard !path.hasPrefix("/"), !path.contains("\\"), !path.contains(":"),
               !path.unicodeScalars.contains(where: { $0.value < 32 }),
               !path.split(separator: "/").contains(where: { $0 == ".." || $0.hasPrefix(".") || $0 == "待发送" }) else { throw WebFailure.invalidPath }
+        guard !containsSymlink(in: path) else { throw WebFailure.invalidPath }
         let url = root.appendingPathComponent(path).standardizedFileURL.resolvingSymlinksInPath()
         guard url == root || url.path.hasPrefix(root.path + "/") else { throw WebFailure.invalidPath }
         return url
+    }
+
+    private func containsSymlink(in path: String) -> Bool {
+        var current = root
+        for component in path.split(separator: "/") {
+            current.appendPathComponent(String(component))
+            if (try? FileManager.default.destinationOfSymbolicLink(atPath: current.path)) != nil { return true }
+        }
+        return false
     }
     func list(_ path: String) throws -> [WebFileEntry] {
         let folder = try resolve(path)
