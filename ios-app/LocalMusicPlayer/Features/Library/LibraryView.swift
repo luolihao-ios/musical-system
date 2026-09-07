@@ -6,7 +6,6 @@ struct LibraryView: View {
     @Bindable var playlists: PlaylistsModel
 
     @State private var showDocumentPicker = false
-    @State private var showFolderPicker = false
 
     var body: some View {
         Group {
@@ -54,15 +53,9 @@ struct LibraryView: View {
         )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                ImportMenu {
-                    showDocumentPicker = true
-                } importSystemLibrary: {
-                    Task { await model.importSystemLibrary() }
-                } completeResources: {
-                    Task { await model.completeMissingResources() }
-                } authorizeFolders: {
-                    showFolderPicker = true
-                }
+                ImportMenu(importFiles: { showDocumentPicker = true }, scanLocalAudio: {
+                    Task { await model.scanLocalAudio() }
+                })
             }
         }
         .overlay {
@@ -77,10 +70,6 @@ struct LibraryView: View {
                 showDocumentPicker = false
                 Task { await model.importFiles(files) }
             }
-        }
-        .fileImporter(isPresented: $showFolderPicker, allowedContentTypes: [.folder], allowsMultipleSelection: true) { result in
-            do { try DeviceMusicFolders.authorize(result.get()) }
-            catch { model.showImportError(error.localizedDescription) }
         }
         .overlay(alignment: .bottom) {
             if model.isCompletingResources { Text("正在联网补全缺失歌词与封面，可继续播放").font(.caption).padding(10).background(.regularMaterial, in: Capsule()).allowsHitTesting(false) }

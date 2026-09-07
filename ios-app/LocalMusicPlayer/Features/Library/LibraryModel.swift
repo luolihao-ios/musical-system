@@ -176,6 +176,12 @@ final class LibraryModel {
         }
     }
 
+    func scanLocalAudio() async {
+        await performImport {
+            await DeviceMusicFolders.scan(using: fileImporter)
+        }
+    }
+
     func importSystemLibrary() async {
         isImporting = true
         errorMessage = nil
@@ -188,11 +194,6 @@ final class LibraryModel {
             case .permissionDenied:
                 systemPermissionDenied = true
             }
-            if scansAuthorizedFolders {
-                for record in await DeviceMusicFolders.scan(using: fileImporter) { try store.upsert(record) }
-                try reload()
-            }
-            if online != nil { Task { await self.completeMissingResources() } }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -265,7 +266,6 @@ final class LibraryModel {
                 try store.upsert(record)
             }
             try reload()
-            if online != nil { Task { await self.completeMissingResources() } }
         } catch {
             errorMessage = error.localizedDescription
         }
