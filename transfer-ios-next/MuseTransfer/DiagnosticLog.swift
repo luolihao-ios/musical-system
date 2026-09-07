@@ -3,12 +3,13 @@ import Foundation
 public enum DiagnosticLog {
     private static let queue = DispatchQueue(label: "com.luolihao.aiyuetransfer.diagnostics")
     public static let fileURL: URL = {
-        let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("爱乐互传", isDirectory: true)
         return folder.appendingPathComponent("aiyue-transfer-diagnostics.log")
     }()
 
     public static func write(_ message: String) {
         queue.async {
+            try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             let line = "\(ISO8601DateFormatter().string(from: Date())) \(message)\n"
             if FileManager.default.fileExists(atPath: fileURL.path), let handle = try? FileHandle(forWritingTo: fileURL) {
                 defer { try? handle.close() }; try? handle.seekToEnd(); try? handle.write(contentsOf: Data(line.utf8))

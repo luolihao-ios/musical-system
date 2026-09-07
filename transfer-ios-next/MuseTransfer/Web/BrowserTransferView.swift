@@ -44,7 +44,7 @@ struct BrowserTransferView: View {
                     Text("访问码：\(model.code)").font(.title.bold())
                 }
                 Text("请保持此页面打开。切换到后台后服务关闭，返回后显示新的访问码。").foregroundStyle(.secondary)
-                Text("文件保存到：文件 › 我的 iPhone › 爱乐互传 › 爱乐互传").font(.footnote)
+                Text("文件保存到：文件 › 我的 iPhone › 爱乐互传 › 按日期分类").font(.footnote)
                 HStack {
                     Button("添加手机文件供电脑下载") { importing = true }
                     PhotosPicker(selection: $photos, maxSelectionCount: 50, matching: .any(of: [.images, .videos])) { Text("添加媒体") }

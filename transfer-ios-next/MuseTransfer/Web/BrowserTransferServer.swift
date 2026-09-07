@@ -6,6 +6,7 @@ struct WebUploadFile: Codable, Identifiable { let id: String; let name: String; 
 struct WebUpload: Codable, Identifiable {
     let id: String
     let files: [WebUploadFile]
+    let folder: String
     var state: String = "waiting"
     var saved: [String: String] = [:]
     var progress: [String: Int64] = [:]
@@ -135,7 +136,7 @@ final class BrowserTransferServer: @unchecked Sendable {
                 guard !files.isEmpty, files.count <= 1000, Set(files.map(\.id)).count == files.count,
                       files.allSatisfy({ UUID(uuidString: $0.id) != nil && $0.size >= 0 && $0.size <= 100 * 1024 * 1024 * 1024 }) else { throw WebFailure.invalidRequest }
                 for file in files { _ = try store.resolve(file.name) }
-                let batch = WebUpload(id: UUID().uuidString, files: files)
+                let batch = WebUpload(id: UUID().uuidString, files: files, folder: Self.transferFolderName())
                 uploads = [batch.id: batch]
                 DiagnosticLog.write("Browser upload request received: batch=\(batch.id); files=\(files.count).")
                 onUpload?(batch); client.reply(200, batch)
@@ -154,7 +155,8 @@ final class BrowserTransferServer: @unchecked Sendable {
                     onUpload?(batch); client.reply(200, batch); return
                 }
                 if request.method == "PUT", parts.count == 4, batch.state == "accepted", let file = batch.files.first(where: { $0.id == parts[3] }) {
-                    batch.saved[file.id] = try store.save(body, as: file.name)
+                    let name = URL(fileURLWithPath: file.name).lastPathComponent
+                    batch.saved[file.id] = try store.save(body, as: batch.folder + "/" + name)
                     if batch.saved.count == batch.files.count { batch.state = "completed" }
                     uploads[batch.id] = batch; onUpload?(batch)
                     DiagnosticLog.write("Browser file saved: batch=\(batch.id); bytes=\(file.size).")
@@ -179,5 +181,13 @@ final class BrowserTransferServer: @unchecked Sendable {
             if getnameinfo(address, socklen_t(address.pointee.sa_len), &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST) == 0 { return String(cString: host) }
         }
         return nil
+    }
+
+    private static func transferFolderName() -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: Date())
     }
 }

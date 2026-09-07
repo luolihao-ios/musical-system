@@ -153,11 +153,11 @@ public final class LocalSendReceiver: @unchecked Sendable {
         if request.method == "POST", request.path.hasPrefix("/api/aiyue/v1/upload") {
             guard let query = URLComponents(string: "http://local" + request.path)?.queryItems, let sessionID = query.first(where: { $0.name == "sessionId" })?.value, let fileID = query.first(where: { $0.name == "fileId" })?.value, let token = query.first(where: { $0.name == "token" })?.value, tokens[sessionID]?[fileID] == token else { return Self.response(401) }
             let fileName = fileNames[sessionID]?[fileID] ?? fileID
-            let target = destination.appendingPathComponent(sessionID).appendingPathComponent(URL(fileURLWithPath: fileName).lastPathComponent)
+            let target = destination.appendingPathComponent(Self.transferFolderName(), isDirectory: true).appendingPathComponent(URL(fileURLWithPath: fileName).lastPathComponent)
             do {
                 try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try request.body.write(to: target, options: .atomic)
-                let savedDescription = "已保存到文件 > 爱乐互传"
+                let savedDescription = "已保存到文件 > 爱乐互传 > \(Self.transferFolderName())"
                 let received = ReceivedTransferFile(id: fileID, fileName: target.lastPathComponent,
                                                     size: Int64(request.body.count), savedDescription: savedDescription, url: target)
                 DiagnosticLog.write("Incoming upload saved: session=\(sessionID); file=\(received.fileName); bytes=\(received.size); destination=\(savedDescription).")
@@ -172,6 +172,14 @@ public final class LocalSendReceiver: @unchecked Sendable {
     }
 
     private struct HTTPRequest { let method: String; let path: String; let headers: [String: String]; let body: Data }
+
+    private static func transferFolderName() -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: Date())
+    }
     private static func parse(_ data: Data) -> HTTPRequest? {
         guard let boundary = data.range(of: Data("\r\n\r\n".utf8)), let header = String(data: data[..<boundary.lowerBound], encoding: .utf8) else { return nil }
         let lines = header.components(separatedBy: "\r\n"); guard let first = lines.first?.split(separator: " "), first.count >= 2 else { return nil }
