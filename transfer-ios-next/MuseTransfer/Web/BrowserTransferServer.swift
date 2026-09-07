@@ -114,6 +114,7 @@ final class BrowserTransferServer: @unchecked Sendable {
             if request.path == "/web/session", request.method == "POST" {
                 let value = try JSONDecoder().decode([String: String].self, from: Data(contentsOf: body)); attempts += 1
                 guard value["code"] == code else { client.reply(403, ["error": "访问码不正确"]); return }
+                DiagnosticLog.write("Browser session authenticated.")
                 client.reply(200, data: Data("{}".utf8), type: "application/json", extra: "Set-Cookie: aiyue=\(token); HttpOnly; SameSite=Strict; Path=/\r\n"); return
             }
             if request.path == "/web/files", request.method == "GET" { client.reply(200, try store.list(request.query("path"))); return }
@@ -135,7 +136,9 @@ final class BrowserTransferServer: @unchecked Sendable {
                       files.allSatisfy({ UUID(uuidString: $0.id) != nil && $0.size >= 0 && $0.size <= 100 * 1024 * 1024 * 1024 }) else { throw WebFailure.invalidRequest }
                 for file in files { _ = try store.resolve(file.name) }
                 let batch = WebUpload(id: UUID().uuidString, files: files)
-                uploads = [batch.id: batch]; onUpload?(batch); client.reply(200, batch)
+                uploads = [batch.id: batch]
+                DiagnosticLog.write("Browser upload request received: batch=\(batch.id); files=\(files.count).")
+                onUpload?(batch); client.reply(200, batch)
                 queue.asyncAfter(deadline: .now() + 300) { [weak self] in
                     guard var pending = self?.uploads[batch.id], pending.state == "waiting" else { return }
                     pending.state = "expired"; self?.uploads[batch.id] = pending; self?.onUpload?(pending)

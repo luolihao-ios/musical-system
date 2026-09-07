@@ -4,14 +4,46 @@ import PhotosUI
 
 struct TransferView: View {
     @State private var model = TransferViewModel()
+    @State private var transferMode = 0
     @State private var mediaItems: [PhotosPickerItem] = []
     @State private var textToSend = ""
     @State private var refreshRotation = 0.0
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 18) {
+                Picker("传输方式", selection: $transferMode) {
+                    Text("浏览器传文件").tag(0)
+                    Text("客户端传文件").tag(1)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityLabel("传输方式")
+                if transferMode == 0 {
+                    BrowserTransferView()
+                } else {
+                    clientTransferContent
+                }
+            }
+            .padding()
+            .navigationTitle("爱乐互传")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { ShareLink(item: DiagnosticLog.fileURL) { Image(systemName: "stethoscope") }.accessibilityLabel("导出诊断日志") } }
+        }
+        .fileImporter(isPresented: $model.showImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { model.select($0) }
+        .fileImporter(isPresented: $model.showMusicImporter, allowedContentTypes: [.mp3, UTType(filenameExtension: "lrc") ?? .plainText, .jpeg, .png, UTType(filenameExtension: "webp") ?? .image], allowsMultipleSelection: true) { model.selectMusic($0) }
+        .fileImporter(isPresented: $model.showFolderImporter, allowedContentTypes: [.folder], allowsMultipleSelection: false) { model.selectFolder($0) }
+        .onChange(of: mediaItems) { _, items in Task { await model.selectMedia(items); mediaItems = [] } }
+        .sheet(isPresented: Binding(get: { model.incomingTransfer != nil }, set: { if !$0, model.incomingTransfer != nil { model.decideIncoming(false) } })) {
+            if let request = model.incomingTransfer { IncomingTransferSheet(request: request, decide: model.decideIncoming) }
+        }
+        .fullScreenCover(isPresented: Binding(get: { model.isReceiving || model.receiveCompleted }, set: { if !$0 { model.closeReceiveSummary() } })) {
+            ReceiveProgressScreen(model: model)
+        }
+        .alert("未选择文件", isPresented: $model.showSelectionWarning) { Button("关闭", role: .cancel) { } } message: { Text("请至少选择一个文件。") }
+        .sheet(isPresented: $model.showEditor) { SelectionEditor(model: model) }
+    }
+
+    @ViewBuilder
+    private var clientTransferContent: some View {
                 Text("选择").font(.title.bold())
-                NavigationLink("电脑传文件", destination: BrowserTransferView()).buttonStyle(.bordered)
                 if model.selectedFiles.isEmpty {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         PhotosPicker(selection: $mediaItems, maxSelectionCount: 50, matching: .any(of: [.images, .videos])) { SelectionTile(title: "媒体", icon: "photo.on.rectangle") }
@@ -46,20 +78,7 @@ struct TransferView: View {
                     .padding().background(.indigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 16)).contentShape(RoundedRectangle(cornerRadius: 16)).onTapGesture { model.send(to: device) }
                 }
                 Spacer()
-            }.padding().navigationTitle("爱乐互传")
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { ShareLink(item: DiagnosticLog.fileURL) { Image(systemName: "stethoscope") }.accessibilityLabel("导出诊断日志") } }
-        }.fileImporter(isPresented: $model.showImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { model.select($0) }
-        .fileImporter(isPresented: $model.showMusicImporter, allowedContentTypes: [.mp3, UTType(filenameExtension: "lrc") ?? .plainText, .jpeg, .png, UTType(filenameExtension: "webp") ?? .image], allowsMultipleSelection: true) { model.selectMusic($0) }
-        .fileImporter(isPresented: $model.showFolderImporter, allowedContentTypes: [.folder], allowsMultipleSelection: false) { model.selectFolder($0) }
-        .onChange(of: mediaItems) { _, items in Task { await model.selectMedia(items); mediaItems = [] } }
-        .sheet(isPresented: Binding(get: { model.incomingTransfer != nil }, set: { if !$0, model.incomingTransfer != nil { model.decideIncoming(false) } })) {
-            if let request = model.incomingTransfer { IncomingTransferSheet(request: request, decide: model.decideIncoming) }
-        }
-        .fullScreenCover(isPresented: Binding(get: { model.isReceiving || model.receiveCompleted }, set: { if !$0 { model.closeReceiveSummary() } })) {
-            ReceiveProgressScreen(model: model)
-        }
-        .alert("未选择文件", isPresented: $model.showSelectionWarning) { Button("关闭", role: .cancel) { } } message: { Text("请至少选择一个文件。") }
-        .sheet(isPresented: $model.showEditor) { SelectionEditor(model: model) }
+            }
     }
 
     private func thumbnailIcon(_ url: URL) -> String {

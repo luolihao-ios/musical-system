@@ -72,7 +72,7 @@ struct BrowserTransferView: View {
                 }
                 Button("重新开启服务") { model.start() }
             }.padding()
-        }.navigationTitle("电脑传文件").tint(.indigo)
+        }.navigationTitle("浏览器传文件").tint(.indigo)
         .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             do {
                 let store = try WebFileStore(root: sharedRoot)
