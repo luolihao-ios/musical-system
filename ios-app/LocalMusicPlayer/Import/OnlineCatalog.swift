@@ -34,9 +34,9 @@ actor OnlineCatalog {
         guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
         // Jamendo 的 client_id 是必需的。没有配置时使用无需密钥的开放许可目录。
         var results = try await searchInternetArchive(query: query)
-        if let clientID = UserDefaults.standard.string(forKey: "jamendoClientID"), !clientID.isEmpty {
-            results.append(contentsOf: try await searchJamendo(query: query, clientID: clientID))
-        }
+        // Jamendo 官方文档提供的只读测试 ID，用于测试构建；正式发布前替换为开发者应用 ID。
+        let clientID = UserDefaults.standard.string(forKey: "jamendoClientID") ?? "709fa152"
+        if !clientID.isEmpty { results.append(contentsOf: try await searchJamendo(query: query, clientID: clientID)) }
         return results.removingDuplicates()
     }
 
