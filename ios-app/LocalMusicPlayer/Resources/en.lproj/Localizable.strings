@@ -53,6 +53,14 @@
 "好" = "OK";
 "可从音乐库的歌曲菜单添加" = "Add songs from the music library menu";
 "扫描本地音频" = "Scan local audio";
+"在线搜索" = "Online search";
+"在线音乐" = "Online music";
+"下载" = "Download";
+"提示" = "Notice";
+"搜索公开音乐" = "Search open music";
+"搜索 Jamendo 等开放许可音乐" = "Search open licensed music such as Jamendo";
+"搜索歌曲或艺术家" = "Search songs or artists";
+"已下载并加入全部歌曲" = "Downloaded and added to All songs";
 "资料库无法打开" = "The library could not be opened";
 "正在准备本地资料库…" = "Preparing local library…";
 "打开正在播放" = "Open now playing";

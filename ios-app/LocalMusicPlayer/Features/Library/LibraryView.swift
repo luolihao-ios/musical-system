@@ -6,6 +6,7 @@ struct LibraryView: View {
     @Bindable var playlists: PlaylistsModel
 
     @State private var showDocumentPicker = false
+    @State private var showOnlineSearch = false
 
     var body: some View {
         Group {
@@ -53,11 +54,13 @@ struct LibraryView: View {
         )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                ImportMenu(importFiles: { showDocumentPicker = true }, scanLocalAudio: {
-                    Task { await model.scanLocalAudio() }
-                })
+                HStack {
+                    Button { showOnlineSearch = true } label: { Image(systemName: "globe") }.accessibilityLabel("在线搜索")
+                    ImportMenu(importFiles: { showDocumentPicker = true }, scanLocalAudio: { Task { await model.scanLocalAudio() } })
+                }
             }
         }
+        .sheet(isPresented: $showOnlineSearch) { OnlineCatalogSearchView(model: model) }
         .overlay {
             if model.isImporting {
                 ProgressView("正在整理本地音乐…")
