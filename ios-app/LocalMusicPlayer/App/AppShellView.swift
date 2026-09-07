@@ -82,9 +82,6 @@ struct AppShellView: View {
             }
         }
         .tint(PlayerTheme.accent)
-        .environment(\.showMiniPlayer) {
-            miniPlayerVisibility.show()
-        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if container.nowPlayingModel.state.currentTrack != nil,
                miniPlayerVisibility.isVisible {
@@ -104,6 +101,9 @@ struct AppShellView: View {
             }
         }
         .onChange(of: container.nowPlayingModel.state.currentTrack?.id) { _, _ in
+            miniPlayerVisibility.show()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showMiniPlayer)) { _ in
             miniPlayerVisibility.show()
         }
     }
