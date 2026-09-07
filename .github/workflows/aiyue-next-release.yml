@@ -23,6 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: brew install xcodegen
+      - name: Browser verification
+        run: node transfer-ios-next/scripts/test-web.cjs
       - name: Import signing material
         env:
           P12: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
@@ -60,7 +62,6 @@ jobs:
         run: |
           set -euo pipefail
           xcodegen generate
-          node scripts/test-web.cjs
           SIMULATOR_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; print(next(d["udid"] for ds in json.load(sys.stdin)["devices"].values() for d in ds if d["name"].startswith("iPhone") and d.get("isAvailable")))')
           xcodebuild test -project AiYueTransferNext.xcodeproj -scheme AiyueTransfer -destination "platform=iOS Simulator,id=$SIMULATOR_ID" CODE_SIGNING_ALLOWED=NO
           xcodebuild archive -project AiYueTransferNext.xcodeproj -scheme AiyueTransfer -configuration Release -destination 'generic/platform=iOS' -archivePath build/AiyueTransfer.xcarchive CODE_SIGNING_ALLOWED=NO CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"
