@@ -125,8 +125,6 @@ private struct ReceiveProgressScreen: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(model.receiveCompleted ? "已完成" : "正在接收")
                         .font(.title2.bold())
-                    ProgressView(value: totalProgress)
-                        .tint(.indigo)
                     HStack {
                         Text("\(model.receivingFiles.count) / \(model.expectedIncomingFiles.count) 个文件")
                             .foregroundStyle(.secondary)
@@ -146,10 +144,6 @@ private struct ReceiveProgressScreen: View {
         .interactiveDismissDisabled(!model.receiveCompleted)
     }
 
-    private var totalProgress: Double {
-        guard !model.expectedIncomingFiles.isEmpty else { return 0 }
-        return Double(model.receivingFiles.count) / Double(model.expectedIncomingFiles.count)
-    }
 }
 
 private struct ReceiveFileRow: View {

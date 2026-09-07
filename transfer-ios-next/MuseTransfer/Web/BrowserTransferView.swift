@@ -101,7 +101,6 @@ struct BrowserTransferView: View {
                                 ProgressView(value: batch.saved[file.id] != nil ? 1 : min(0.99, Double(batch.progress[file.id] ?? 0) / Double(max(1, file.size))))
                             }
                         }
-                        ProgressView(value: batch.state == "completed" ? 1 : min(0.99, Double(batch.files.reduce(Int64(0)) { $0 + (batch.progress[$1.id] ?? 0) }) / Double(max(1, batch.files.reduce(Int64(0)) { $0 + $1.size }))))
                         if batch.state == "waiting" { HStack { Button("拒绝", role: .destructive) { model.decide(false) }; Spacer(); Button("接受") { model.decide(true) }.buttonStyle(.borderedProminent) } }
                         if ["completed", "rejected", "expired", "cancelled"].contains(batch.state) { Button("完成") { model.upload = nil } }
                     }.padding().background(.indigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
