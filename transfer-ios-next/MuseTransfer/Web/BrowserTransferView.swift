@@ -39,7 +39,7 @@ struct BrowserTransferView: View {
         case receive = "接收"
         case send = "发送"
         var id: String { rawValue }
-        var localizedTitle: String { String(localized: rawValue) }
+        var localizedTitle: String { NSLocalizedString(rawValue, comment: "Transfer direction tab") }
     }
     @StateObject private var model = BrowserTransferModel()
     @Environment(\.scenePhase) private var scenePhase
