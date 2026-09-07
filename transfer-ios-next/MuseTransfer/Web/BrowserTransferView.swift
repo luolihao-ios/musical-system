@@ -31,6 +31,7 @@ import CoreTransferable
     }
     func stop() { server?.stop(); try? FileManager.default.removeItem(at: outboundRoot); outboundFiles = []; address = ""; code = ""; UIApplication.shared.isIdleTimerDisabled = false }
     func decide(_ accepted: Bool) { if let upload { server?.decide(upload.id, accepted: accepted) } }
+    func publishOutbound() { server?.publishOutbound() }
     var outboundRoot: URL { FileManager.default.temporaryDirectory.appendingPathComponent("AiYueBrowserOutbound", isDirectory: true) }
 }
 
@@ -80,7 +81,9 @@ struct BrowserTransferView: View {
                                     if editingOutbound { Button("删除", role: .destructive) { model.outboundFiles.removeAll { $0.id == file.id }; try? FileManager.default.removeItem(atPath: file.url) }.font(.caption) }
                                 }
                             }
-                        }.padding().background(.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+                        }
+                        Button("发送给电脑") { model.publishOutbound() }.buttonStyle(.borderedProminent)
+                    .padding().background(.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
                     }
                 }
                 if let batch = model.upload {

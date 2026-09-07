@@ -21,6 +21,7 @@ final class BrowserTransferServer: @unchecked Sendable {
     private var uploads: [String: WebUpload] = [:]
     private var activeFiles: Set<String> = []
     private var outboundStates: [String: String] = [:]
+    private var outboundPublished = false
     private var connectionBatches: [UUID: String] = [:]
     private var token = ""
     private var code = ""
@@ -39,7 +40,7 @@ final class BrowserTransferServer: @unchecked Sendable {
     private func stopNow() {
         listener?.cancel(); listener = nil
         Array(connections.values).forEach { $0.close() }; connections.removeAll()
-        uploads.removeAll(); activeFiles.removeAll(); connectionBatches.removeAll(); outboundStates.removeAll(); token = ""
+        uploads.removeAll(); activeFiles.removeAll(); connectionBatches.removeAll(); outboundStates.removeAll(); outboundPublished = false; token = ""
         DiagnosticLog.write("Browser server stopped; sessions cleared.")
     }
     private func listen(port: UInt16) {
@@ -109,6 +110,7 @@ final class BrowserTransferServer: @unchecked Sendable {
         DiagnosticLog.write("Browser upload decision: \(id); accepted=\(accepted).")
         self.onUpload?(batch)
     } }
+    func publishOutbound() { queue.async { self.outboundPublished = true } }
     private func route(_ request: WebRequest, body: URL, client: WebHTTPConnection) {
         do {
             if request.method == "GET", ["/", "/app.js", "/style.css"].contains(request.path) {
@@ -124,10 +126,18 @@ final class BrowserTransferServer: @unchecked Sendable {
             }
             if request.path == "/web/files", request.method == "GET" { client.reply(200, try store.list(request.query("path"))); return }
             if request.path == "/web/outbound", request.method == "GET" {
-                let entries = try outboundStore.list("").filter { !$0.directory }.map {
+                let entries = self.outboundPublished ? try outboundStore.list("").filter { !$0.directory }.map {
                     BrowserOutboundTask(id: $0.name, name: $0.name, bytes: $0.size, url: $0.path, state: self.outboundStates[$0.name] ?? "waiting")
                 }
+                } : []
                 client.reply(200, entries); return
+            }
+            if request.path == "/web/outbound/publish", request.method == "POST" { outboundPublished = true; client.reply(200, ["ok": true]); return }
+            if request.path == "/web/outbound/decision", request.method == "POST" {
+                let value = try JSONDecoder().decode([String: String].self, from: Data(contentsOf: body)); let accepted = value["accepted"] == "true"
+                let names = try outboundStore.list("").filter { !$0.directory }.map(\.name)
+                for name in names { outboundStates[name] = accepted ? "accepted" : "rejected"; if !accepted { try? FileManager.default.removeItem(at: outboundStore.resolve(name)) } }
+                client.reply(200, ["ok": true]); return
             }
             if request.path.hasPrefix("/web/outbound/"), request.method == "POST", request.path.hasSuffix("/decision") {
                 let raw = String(request.path.dropFirst("/web/outbound/".count).dropLast("/decision".count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
