@@ -29,7 +29,10 @@ struct OnlineCatalogSearchView: View {
     private func search() async {
         loading = true; defer { loading = false }
         do { results = try await OnlineCatalog.shared.search(query: query) }
-        catch { message = error.localizedDescription }
+        catch {
+            // 搜索服务不可用时保持空结果，不把网络或供应商错误暴露给用户。
+            results = []
+        }
     }
 
     private func download(_ track: CatalogTrack) async {
