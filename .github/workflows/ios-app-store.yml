@@ -1,6 +1,11 @@
 name: iOS App Store Connect upload
 
 on:
+  push:
+    paths:
+      - "ios-app/**"
+      - "shared-swift/**"
+      - ".github/workflows/ios-app-store.yml"
   workflow_dispatch:
 
 permissions:
@@ -79,6 +84,7 @@ jobs:
             CODE_SIGN_IDENTITY="Apple Distribution" \
             AIYUE_TEAM_ID="$TEAM_ID" \
             AIYUE_PROFILE_NAME="$PROFILE_NAME" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
 
