@@ -201,6 +201,9 @@ final class BrowserTransferServer: @unchecked Sendable {
                 if request.method == "PUT", parts.count == 4, batch.state == "accepted", let file = batch.files.first(where: { $0.id == parts[3] }) {
                     let name = URL(fileURLWithPath: file.name).lastPathComponent
                     batch.saved[file.id] = try store.save(body, as: batch.folder + "/" + name)
+                    if let savedPath = batch.saved[file.id] {
+                        TransferStorage.mirrorForMusicPlayer(try store.resolve(savedPath), relativePath: savedPath)
+                    }
                     if batch.saved.count == batch.files.count { batch.state = "completed" }
                     uploads[batch.id] = batch; onUpload?(batch)
                     DiagnosticLog.write("Browser file saved: batch=\(batch.id); bytes=\(file.size).")

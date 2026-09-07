@@ -29,7 +29,7 @@ class ReleaseMetadataTests(unittest.TestCase):
         workflow = (IOS_ROOT.parent / ".github" / "workflows" / "ios-app-store.yml").read_text(
             encoding="utf-8"
         )
-        self.assertNotIn("CODE_SIGN_ENTITLEMENTS", project)
+        self.assertIn("CODE_SIGN_ENTITLEMENTS", project)
         self.assertNotIn('PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME"', workflow)
         self.assertIn('AIYUE_PROFILE_NAME="$PROFILE_NAME"', workflow)
         self.assertIn("CODE_SIGNING_ALLOWED=NO", workflow)

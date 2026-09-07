@@ -1,8 +1,18 @@
 import Foundation
 
 enum TransferStorage {
+    static let appGroupID = "group.com.luolihao.aiyuetransfer"
     static var documents: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    }
+
+    static func mirrorForMusicPlayer(_ source: URL, relativePath: String) {
+        guard let group = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) else { return }
+        let targetRoot = group.appendingPathComponent("MusicHandoff", isDirectory: true)
+        let target = targetRoot.appendingPathComponent(relativePath)
+        try? FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? FileManager.default.removeItem(at: target)
+        try? FileManager.default.copyItem(at: source, to: target)
     }
 
     /// Earlier builds created Documents/爱乐互传 inside the app Documents container.

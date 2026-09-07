@@ -28,6 +28,7 @@ private struct BootstrapView: View {
         Group {
             if let container = bootstrap.container {
                 AppShellView(container: container)
+                    .task { await container.libraryModel.scanLocalAudio() }
             } else if let error = bootstrap.errorMessage {
                 ContentUnavailableView(
                     "资料库无法打开",
