@@ -11,7 +11,7 @@ class ReleaseMetadataTests(unittest.TestCase):
         info = plistlib.loads((IOS_ROOT / "LocalMusicPlayer" / "Info.plist").read_bytes())
         project = (IOS_ROOT / "project.yml").read_text(encoding="utf-8")
 
-        self.assertEqual(info["CFBundleDisplayName"], "爱乐之城-musicPlayer")
+        self.assertEqual(info["CFBundleDisplayName"], "爱乐之城")
         self.assertIn('MARKETING_VERSION: "0.1"', project)
         self.assertIn('CURRENT_PROJECT_VERSION: "1"', project)
 

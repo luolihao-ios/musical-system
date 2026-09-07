@@ -9,9 +9,11 @@
     <key>UTExportedTypeDeclarations</key>
     <array><dict><key>UTTypeIdentifier</key><string>com.luolihao.aiyuepack</string><key>UTTypeDescription</key><string>爱乐音乐包</string><key>UTTypeConformsTo</key><array><string>public.data</string><string>public.archive</string></array><key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>aiyuepack</string></array></dict></dict></array>
     <key>CFBundleDevelopmentRegion</key>
-    <string>zh_CN</string>
+    <string>en</string>
+    <key>CFBundleLocalizations</key>
+    <array><string>en</string><string>zh-Hans</string><string>zh-Hant</string></array>
     <key>CFBundleDisplayName</key>
-    <string>爱乐之城-musicPlayer</string>
+    <string>爱乐之城</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -31,7 +33,7 @@
     <key>LSRequiresIPhoneOS</key>
     <true/>
     <key>NSAppleMusicUsageDescription</key>
-    <string>爱乐之城-musicPlayer 只读取这台设备上已有且可本地播放的音乐，不会下载或上传歌曲。</string>
+    <string>爱乐之城只读取这台设备上已有且可本地播放的音乐，不会下载或上传歌曲。</string>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
