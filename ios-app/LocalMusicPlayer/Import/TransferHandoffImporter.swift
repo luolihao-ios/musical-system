@@ -24,6 +24,9 @@ final class TransferHandoffImporter {
               let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "handoff" })?.value,
               id.unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.contains($0) || $0.value == 45 }) else { return }
         let processedKey = "ProcessedMusicHandoff.\(id)"; guard !defaults.bool(forKey: processedKey) else { return }
+        // App Store builds may not include the optional shared App Group entitlement.
+        // Direct .aiyuepack imports remain supported; a URL handoff is ignored when
+        // the shared container is unavailable rather than failing the app launch.
         guard let group = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.com.luolihao.aiyuetransfer") else { return }
         let root = group.appending(path: "MusicHandoff/\(id)", directoryHint: .isDirectory)
         let document = try JSONDecoder().decode(Document.self, from: Data(contentsOf: root.appending(path: "music-handoff-v1.json")))

@@ -23,6 +23,15 @@ class ReleaseMetadataTests(unittest.TestCase):
         self.assertNotIn("base64 --decode", workflow)
         self.assertEqual(workflow.count("base64 -D"), 3)
 
+    def test_app_store_signing_settings_are_target_scoped(self) -> None:
+        project = (IOS_ROOT / "project.yml").read_text(encoding="utf-8")
+        workflow = (IOS_ROOT.parent / ".github" / "workflows" / "ios-app-store.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("CODE_SIGN_ENTITLEMENTS", project)
+        self.assertNotIn('PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME"', workflow)
+        self.assertIn('AIYUE_PROFILE_NAME="$PROFILE_NAME"', workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
