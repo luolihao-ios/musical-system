@@ -9,6 +9,10 @@ vm.runInContext(fs.readFileSync('transfer-ios-next/MuseTransfer/WebAssets/app.js
   vm.runInContext("select(inputs,'files')",context);
   assert.equal(vm.runInContext('chosen.length',context),4);
   assert.equal(vm.runInContext('mode',context),'files');
+  context.inputs=[new File(['second'],'second.mp3'),new File(['mp3 bytes'],'你好.MP3')];
+  vm.runInContext("select(inputs,'files')",context);
+  assert.equal(vm.runInContext('chosen.length',context),5);
+  assert.equal(nodes.get('edit').hidden,false);
   console.log('Browser selection: MP3, lyrics, cover and ordinary files remain raw transfer items.');
   // Exercise the actual click handler, including a second batch and refusal.
   let uploads=0, decision='accepted';
