@@ -8,12 +8,13 @@ struct MiniPlayerVisibility: Sendable {
     mutating func show() { isVisible = true }
 }
 
+@MainActor
 private struct ShowMiniPlayerActionKey: EnvironmentKey {
-    static let defaultValue: () -> Void = {}
+    static let defaultValue: @MainActor () -> Void = {}
 }
 
 extension EnvironmentValues {
-    var showMiniPlayer: () -> Void {
+    var showMiniPlayer: @MainActor () -> Void {
         get { self[ShowMiniPlayerActionKey.self] }
         set { self[ShowMiniPlayerActionKey.self] = newValue }
     }
