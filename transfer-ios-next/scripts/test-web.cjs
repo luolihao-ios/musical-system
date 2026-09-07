@@ -7,6 +7,7 @@ vm.runInContext(fs.readFileSync('transfer-ios-next/MuseTransfer/WebAssets/app.js
 const browserJS=fs.readFileSync('transfer-ios-next/MuseTransfer/WebAssets/app.js','utf8');
 assert.match(browserJS,/\/web\/outbound/);
 assert.match(browserJS,/link\.click\(\)/);
+assert.match(browserJS,/const direct=Array\.from\(e\.dataTransfer\.files/);
 (async()=>{
   context.inputs=[new File(['mp3 bytes'],'你好.MP3'),new File(['[00:01]歌词'],'你好.lrc'),new File(['cover'],'你好.png'),new File(['ignore'],'notes.txt')];
   vm.runInContext("select(inputs,'files')",context);
@@ -18,6 +19,11 @@ assert.match(browserJS,/link\.click\(\)/);
   assert.equal(nodes.get('edit').hidden,false);
   const dropped=await vm.runInContext('droppedFiles({items:[],files:[new File(["a"],"a.txt"),new File(["b"],"b.txt")]})',context);
   assert.equal(dropped.length,2);
+  // Windows Explorer may expose an incomplete items list; the direct files list is authoritative.
+  vm.runInContext('chosen=[]; render()',context);
+  const dropEvent={preventDefault(){},dataTransfer:{items:[{kind:'file',getAsEntry(){return {isFile:true,file(cb){cb(new File(["one"],"one.txt"))}}},getAsFile(){return new File(["one"],"one.txt")}}],files:[new File(["one"],"one.txt"),new File(["two"],"two.txt")]}};
+  await nodes.get('drop').ondrop(dropEvent);
+  assert.equal(vm.runInContext('chosen.length',context),2);
   console.log('Browser selection: MP3, lyrics, cover and ordinary files remain raw transfer items.');
   // Exercise the actual click handler, including a second batch and refusal.
   let uploads=0, decision='accepted';
