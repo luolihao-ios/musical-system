@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   ios:
-    name: iOS IPA and TestFlight
+    name: iOS IPA artifact
     runs-on: macos-latest
     env:
       BUNDLE_ID: com.luolihao.aiyuetransfer
@@ -47,12 +47,8 @@ jobs:
           echo "PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
           echo "PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
           echo "TEAM_ID=$TEAM_ID" >> "$GITHUB_ENV"
-      - name: Test, archive, export and upload
+      - name: Test, archive and export IPA
         working-directory: transfer-ios-next
-        env:
-          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
         run: |
           set -euo pipefail
           xcodegen generate
@@ -64,10 +60,6 @@ jobs:
           EOF
           xcodebuild -exportArchive -archivePath build/AiyueTransfer.xcarchive -exportPath build/export -exportOptionsPlist "$SIGNING_DIR/ExportOptions.plist"
           mv "$(find build/export -maxdepth 1 -name '*.ipa' -print -quit)" build/export/AiYueTransfer.ipa
-          mkdir -p "$HOME/.appstoreconnect/private_keys"
-          echo "$API_PRIVATE_KEY" | base64 -D > "$HOME/.appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8"
-          xcrun altool --validate-app --type ios -f build/export/AiYueTransfer.ipa --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER_ID"
-          xcrun altool --upload-app --type ios -f build/export/AiYueTransfer.ipa --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER_ID"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -78,5 +70,5 @@ jobs:
         if: always()
         run: |
           security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
-          rm -rf "$SIGNING_DIR" "$HOME/.appstoreconnect/private_keys"
+          rm -rf "$SIGNING_DIR"
           rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/${PROFILE_UUID:-}.mobileprovision"
