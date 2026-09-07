@@ -44,8 +44,20 @@ actor OnlineMusicResources: MusicResourceSearching {
                 }
                 log("Lyrics lookup finished; found=\(result.lyrics != nil)")
             } catch { log("Lyrics lookup unavailable: \(error.localizedDescription)") }
+            if result.lyrics == nil {
+                result.lyrics = try? await searchNetEaseLyrics(query)
+                log("NetEase lyrics fallback finished; found=\(result.lyrics != nil)")
+            }
         }
         if cover {
+            result.cover = try? await searchITunesCover(query)
+            if result.cover != nil { log("iTunes cover lookup finished; found=true") }
+        }
+        if cover, result.cover == nil {
+            result.cover = try? await searchNetEaseCover(query)
+            if result.cover != nil { log("NetEase cover fallback finished; found=true") }
+        }
+        if cover, result.cover == nil {
             do {
                 let phrase: (String) -> String = { $0.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") }
                 let expression = "recording:\"\(phrase(query.title))\"" + (query.artist.isEmpty ? "" : " AND artist:\"\(phrase(query.artist))\"")
@@ -65,6 +77,66 @@ actor OnlineMusicResources: MusicResourceSearching {
             } catch { log("Cover lookup unavailable: \(error.localizedDescription)") }
         }
         return result
+    }
+
+    private func searchITunesCover(_ query: MusicResourceQuery) async throws -> Data? {
+        let term = [query.artist, query.title].filter { !$0.isEmpty }.joined(separator: " ")
+        let data = try await get("https://itunes.apple.com/search", [
+            "term": term, "entity": "song", "limit": "10", "country": "CN"
+        ])
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let rows = root["results"] as? [[String: Any]] else { return nil }
+        for row in rows {
+            let title = row["trackName"] as? String ?? ""
+            let artist = row["artistName"] as? String ?? ""
+            let duration = (row["trackTimeMillis"] as? Double).map { $0 / 1000 }
+                ?? (row["trackTimeMillis"] as? Int).map { Double($0) / 1000 }
+            guard Self.matches(query, title: title, artist: artist, duration: duration),
+                  let raw = row["artworkUrl100"] as? String,
+                  let url = URL(string: raw.replacingOccurrences(of: "100x100", with: "600x600")) else { continue }
+            let bytes = try await get(url.absoluteString, [:], maxBytes: 5 * 1024 * 1024)
+            return UIImage(data: bytes) == nil ? nil : bytes
+        }
+        return nil
+    }
+
+    private func searchNetEaseCover(_ query: MusicResourceQuery) async throws -> Data? {
+        let term = [query.title, query.artist].filter { !$0.isEmpty }.joined(separator: " ")
+        let data = try await get("https://music.163.com/api/search/get", ["s": term, "type": "1", "limit": "10"])
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let result = root["result"] as? [String: Any],
+              let songs = result["songs"] as? [[String: Any]] else { return nil }
+        for song in songs {
+            let title = song["name"] as? String ?? ""
+            let artists = (song["artists"] as? [[String: Any]] ?? []).compactMap { $0["name"] as? String }.joined()
+            let duration = (song["duration"] as? Double).map { $0 / 1000 } ?? (song["duration"] as? Int).map { Double($0) / 1000 }
+            guard Self.matches(query, title: title, artist: artists, duration: duration),
+                  let album = song["album"] as? [String: Any],
+                  let raw = album["picUrl"] as? String, let url = URL(string: raw) else { continue }
+            let bytes = try await get(url.absoluteString, [:], maxBytes: 5 * 1024 * 1024)
+            return UIImage(data: bytes) == nil ? nil : bytes
+        }
+        return nil
+    }
+
+    private func searchNetEaseLyrics(_ query: MusicResourceQuery) async throws -> String? {
+        let term = [query.title, query.artist].filter { !$0.isEmpty }.joined(separator: " ")
+        let searchData = try await get("https://music.163.com/api/search/get", ["s": term, "type": "1", "limit": "10"])
+        guard let root = try JSONSerialization.jsonObject(with: searchData) as? [String: Any],
+              let result = root["result"] as? [String: Any],
+              let songs = result["songs"] as? [[String: Any]] else { return nil }
+        for song in songs {
+            let title = song["name"] as? String ?? ""
+            let artists = (song["artists"] as? [[String: Any]] ?? []).compactMap { $0["name"] as? String }.joined()
+            let duration = (song["duration"] as? Double).map { $0 / 1000 } ?? (song["duration"] as? Int).map { Double($0) / 1000 }
+            guard Self.matches(query, title: title, artist: artists, duration: duration), let id = song["id"] else { continue }
+            let lyricData = try await get("https://music.163.com/api/song/lyric", ["id": "\(id)", "lv": "-1", "kv": "-1", "tv": "-1"])
+            guard let lyricRoot = try JSONSerialization.jsonObject(with: lyricData) as? [String: Any] else { continue }
+            for key in ["lrc", "tlyric", "romalrc"] {
+                if let value = lyricRoot[key] as? [String: Any], let lyric = value["lyric"] as? String, !lyric.isEmpty { return lyric }
+            }
+        }
+        return nil
     }
     private func get(_ endpoint: String, _ query: [String: String], maxBytes: Int = 2 * 1024 * 1024) async throws -> Data {
         // Schedule slots before suspending: actor reentrancy must not burst requests.

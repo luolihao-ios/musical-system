@@ -82,6 +82,9 @@ struct AppShellView: View {
             }
         }
         .tint(PlayerTheme.accent)
+        .environment(\.showMiniPlayer) {
+            miniPlayerVisibility.show()
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if container.nowPlayingModel.state.currentTrack != nil,
                miniPlayerVisibility.isVisible {

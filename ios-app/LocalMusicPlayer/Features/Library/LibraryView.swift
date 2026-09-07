@@ -7,6 +7,7 @@ struct LibraryView: View {
 
     @State private var showDocumentPicker = false
     @State private var showFolderPicker = false
+    @Environment(\.showMiniPlayer) private var showMiniPlayer
 
     var body: some View {
         Group {
@@ -152,6 +153,7 @@ struct LibraryView: View {
             isCurrent: model.currentTrackID == track.id,
             isPlaying: model.isCurrentTrackPlaying
         ) {
+            showMiniPlayer()
             Task { try? await model.play(track) }
         } toggleLike: {
             try? model.toggleLike(track)
@@ -231,6 +233,7 @@ private struct LibraryTracksView: View {
     let tracks: [TrackSnapshot]
     @Bindable var model: LibraryModel
     @Bindable var playlists: PlaylistsModel
+    @Environment(\.showMiniPlayer) private var showMiniPlayer
 
     var body: some View {
         List(tracks) { track in
@@ -239,6 +242,7 @@ private struct LibraryTracksView: View {
                 isCurrent: model.currentTrackID == track.id,
                 isPlaying: model.isCurrentTrackPlaying
             ) {
+                showMiniPlayer()
                 Task { try? await model.play(track, in: tracks) }
             } toggleLike: {
                 try? model.toggleLike(track)
