@@ -53,6 +53,7 @@
 "好" = "OK";
 "可从音乐库的歌曲菜单添加" = "Add songs from the music library menu";
 "扫描本地音频" = "Scan local audio";
+"选择扫描文件夹" = "Choose folders to scan";
 "在线搜索" = "Online search";
 "在线音乐" = "Online music";
 "下载" = "Download";

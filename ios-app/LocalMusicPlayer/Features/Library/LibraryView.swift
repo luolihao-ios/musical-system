@@ -7,6 +7,7 @@ struct LibraryView: View {
 
     @State private var showDocumentPicker = false
     @State private var showOnlineSearch = false
+    @State private var showMusicFolderPicker = false
 
     var body: some View {
         Group {
@@ -56,7 +57,7 @@ struct LibraryView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack {
                     Button { showOnlineSearch = true } label: { Image(systemName: "globe") }.accessibilityLabel("在线搜索")
-                    ImportMenu(importFiles: { showDocumentPicker = true }, scanLocalAudio: { Task { await model.scanLocalAudio() } })
+                    ImportMenu(importFiles: { showDocumentPicker = true }, scanLocalAudio: { Task { await model.scanLocalAudio() } }, chooseScanFolders: { showMusicFolderPicker = true })
                 }
             }
         }
@@ -76,6 +77,15 @@ struct LibraryView: View {
         }
         .overlay(alignment: .bottom) {
             if model.isCompletingResources { Text("正在联网补全缺失歌词与封面，可继续播放").font(.caption).padding(10).background(.regularMaterial, in: Capsule()).allowsHitTesting(false) }
+        }
+        .sheet(isPresented: $showMusicFolderPicker) {
+            MusicFolderPickerView { urls in
+                showMusicFolderPicker = false
+                Task {
+                    try? DeviceMusicFolders.authorize(urls)
+                    await model.scanLocalAudio()
+                }
+            }
         }
         .alert(
             "无法导入",
