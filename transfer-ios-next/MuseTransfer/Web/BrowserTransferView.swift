@@ -87,6 +87,8 @@ struct BrowserTransferView: View {
                     }.padding().background(.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
                 }
                 if let batch = model.upload {
+                    Divider()
+                    Text("接收文件").font(.title2.bold())
                     VStack(alignment: .leading, spacing: 16) {
                         Text(batch.state == "waiting" ? "电脑请求发送 \(batch.files.count) 个文件" : batch.state == "completed" ? "接收完成" : "传输状态：\(stateLabel(batch.state))").font(.headline)
                         ForEach(batch.files) { file in
