@@ -35,11 +35,18 @@ import CoreTransferable
 }
 
 struct BrowserTransferView: View {
+    private enum Tab: String, CaseIterable, Identifiable {
+        case receive = "接收"
+        case send = "发送"
+        var id: String { rawValue }
+    }
     @StateObject private var model = BrowserTransferModel()
     @Environment(\.scenePhase) private var scenePhase
     @State private var importing = false
     @State private var photos: [PhotosPickerItem] = []
     @State private var importMessage = ""
+    @State private var tab: Tab = .receive
+    @State private var editingOutbound = false
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -51,27 +58,35 @@ struct BrowserTransferView: View {
                 }
                 Text("不要关闭此应用。请保持此页面打开，切换到后台后服务会关闭。").foregroundStyle(.secondary)
                 Text("文件保存到：文件 › 我的 iPhone › 爱乐互传 › 按日期分类").font(.footnote)
-                HStack {
-                    Button("添加手机文件供电脑下载") { importing = true }
-                    PhotosPicker(selection: $photos, maxSelectionCount: 50, matching: .any(of: [.images, .videos])) { Text("添加媒体") }
-                }.buttonStyle(.bordered)
-                if !importMessage.isEmpty { Text(importMessage).foregroundStyle(.secondary) }
-                if !model.outboundFiles.isEmpty {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("发送给电脑").font(.headline)
-                        ForEach(model.outboundFiles) { file in
-                            HStack {
-                                Image(systemName: "doc").foregroundStyle(.indigo)
-                                VStack(alignment: .leading) { Text(file.name).lineLimit(1); Text(file.size).font(.caption).foregroundStyle(.secondary) }
-                                Spacer()
+                Picker("传输方向", selection: $tab) {
+                    ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                if tab == .send {
+                    HStack {
+                        Button("添加手机文件发送给电脑") { importing = true }
+                        PhotosPicker(selection: $photos, maxSelectionCount: 50, matching: .any(of: [.images, .videos])) { Text("添加媒体") }
+                    }.buttonStyle(.bordered)
+                    if !importMessage.isEmpty { Text(importMessage).foregroundStyle(.secondary) }
+                    if !model.outboundFiles.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack { Text("发送给电脑").font(.headline); Spacer(); Button(editingOutbound ? "完成" : "编辑") { editingOutbound.toggle() } }
+                            ForEach(model.outboundFiles) { file in
+                                HStack {
+                                    Image(systemName: "doc").foregroundStyle(.indigo)
+                                    VStack(alignment: .leading) { Text(file.name).lineLimit(1); Text(file.size).font(.caption).foregroundStyle(.secondary) }
+                                    Spacer()
+                                    if editingOutbound { Button("删除", role: .destructive) { model.outboundFiles.removeAll { $0.id == file.id }; try? FileManager.default.removeItem(atPath: file.url) }.font(.caption) }
+                                }
                             }
-                        }
-                    }.padding().background(.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+                        }.padding().background(.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+                    }
                 }
                 if let batch = model.upload {
-                    Divider()
-                    Text("接收文件").font(.title2.bold())
-                    VStack(alignment: .leading, spacing: 16) {
+                    if tab == .receive {
+                        Divider()
+                        Text("接收文件").font(.title2.bold())
+                        VStack(alignment: .leading, spacing: 16) {
                         Text(batch.state == "waiting" ? "电脑请求发送 \(batch.files.count) 个文件" : batch.state == "completed" ? "接收完成" : "传输状态：\(stateLabel(batch.state))").font(.headline)
                         ForEach(batch.files) { file in
                             VStack(alignment: .leading) {
@@ -87,7 +102,8 @@ struct BrowserTransferView: View {
                         }
                         if batch.state == "waiting" { HStack { Button("拒绝", role: .destructive) { model.decide(false) }; Spacer(); Button("接受") { model.decide(true) }.buttonStyle(.borderedProminent) } }
                         if ["completed", "rejected", "expired", "cancelled"].contains(batch.state) { Button("完成") { model.upload = nil } }
-                    }.padding().background(.indigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
+                        }.padding().background(.indigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
+                    }
                 }
                 Button("重新开启服务") { model.start() }
             }.padding()
@@ -137,10 +153,11 @@ struct BrowserOutboundTask: Identifiable, Codable, Equatable, Sendable {
     let name: String
     let bytes: Int64
     let url: String
+    let state: String
     var size: String { ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file) }
 
-    init(id: String = UUID().uuidString, name: String, bytes: Int64, url: String) {
-        self.id = id; self.name = name; self.bytes = bytes; self.url = url
+    init(id: String = UUID().uuidString, name: String, bytes: Int64, url: String, state: String = "waiting") {
+        self.id = id; self.name = name; self.bytes = bytes; self.url = url; self.state = state
     }
 }
 
