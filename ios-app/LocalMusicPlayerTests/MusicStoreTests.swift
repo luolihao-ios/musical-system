@@ -130,6 +130,19 @@ final class MusicStoreTests: XCTestCase {
         XCTAssertFalse(try store.deleteTrack(id: track.id))
     }
 
+    func testResolveImportedPathMigratesStaleContainerPrefix() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let songDirectory = root.appendingPathComponent("fingerprint", isDirectory: true)
+        try FileManager.default.createDirectory(at: songDirectory, withIntermediateDirectories: true)
+        let audio = songDirectory.appendingPathComponent("audio.mp3")
+        try Data([0x01]).write(to: audio)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let stale = "/var/mobile/Containers/Data/Application/old/Library/Application Support/ImportedMusic/fingerprint/audio.mp3"
+        XCTAssertEqual(MusicStore.resolveImportedPath(stale, root: root), audio.path)
+    }
+
     private func makeTrack(id: String, title: String) -> TrackRecord {
         TrackRecord(
             id: id,

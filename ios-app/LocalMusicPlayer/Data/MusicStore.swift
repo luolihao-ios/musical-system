@@ -52,12 +52,24 @@ final class MusicStore {
 
     func refreshAvailability(fileManager: FileManager = .default) throws {
         let records = try context.fetch(FetchDescriptor<TrackRecord>())
+        let importRoot = Self.defaultImportRoot(fileManager: fileManager)
         for record in records {
             switch record.sourceKind {
             case .importedFile:
-                record.isAvailable = fileManager.fileExists(
-                    atPath: record.sourceReference
-                )
+                if let resolved = Self.resolveImportedPath(record.sourceReference, root: importRoot, fileManager: fileManager) {
+                    record.sourceReference = resolved
+                    record.isAvailable = true
+                    if let artwork = record.artworkReference,
+                       let resolvedArtwork = Self.resolveImportedPath(artwork, root: importRoot, fileManager: fileManager) {
+                        record.artworkReference = resolvedArtwork
+                    }
+                    if let lyrics = record.lyricsReference,
+                       let resolvedLyrics = Self.resolveImportedPath(lyrics, root: importRoot, fileManager: fileManager) {
+                        record.lyricsReference = resolvedLyrics
+                    }
+                } else {
+                    record.isAvailable = false
+                }
             case .mediaLibrary:
                 guard let url = URL(string: record.sourceReference) else {
                     record.isAvailable = false
@@ -68,6 +80,21 @@ final class MusicStore {
             }
         }
         try context.save()
+    }
+
+    static func resolveImportedPath(_ path: String, root: URL, fileManager: FileManager = .default) -> String? {
+        if fileManager.fileExists(atPath: path) { return path }
+        let components = URL(fileURLWithPath: path).pathComponents
+        guard components.count >= 2 else { return nil }
+        let candidate = root
+            .appendingPathComponent(components[components.count - 2], isDirectory: true)
+            .appendingPathComponent(components[components.count - 1])
+        return fileManager.fileExists(atPath: candidate.path) ? candidate.path : nil
+    }
+
+    private static func defaultImportRoot(fileManager: FileManager) -> URL {
+        let applicationSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? fileManager.temporaryDirectory
+        return applicationSupport.appendingPathComponent("ImportedMusic", isDirectory: true)
     }
 
     func track(id: String) throws -> TrackRecord? {
