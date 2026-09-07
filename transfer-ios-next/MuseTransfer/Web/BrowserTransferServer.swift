@@ -23,13 +23,12 @@ final class BrowserTransferServer: @unchecked Sendable {
     private var token = ""
     private var code = ""
     private var attempts = 0
-    private var fallback = false
     private let alias: String
     var onReady: ((String, String) -> Void)?
     var onError: ((String) -> Void)?
     var onUpload: ((WebUpload) -> Void)?
     init(root: URL, alias: String = "iPhone") throws { store = try WebFileStore(root: root); self.alias = alias }
-    func start() { queue.async { self.stopNow(); self.code = String(Int.random(in: 100000...999999)); self.token = UUID().uuidString; self.attempts = 0; self.fallback = false; self.listen(port: 8080) } }
+    func start() { queue.async { self.stopNow(); self.code = String(Int.random(in: 100000...999999)); self.token = UUID().uuidString; self.attempts = 0; self.listen(port: 8080) } }
     func stop() { queue.async { self.stopNow() } }
     private func stopNow() {
         listener?.cancel(); listener = nil
@@ -50,8 +49,7 @@ final class BrowserTransferServer: @unchecked Sendable {
                 }
                 if case .failed = state {
                     next.cancel(); self.listener = nil
-                    if !self.fallback { self.fallback = true; self.listen(port: 0) }
-                    else { self.onError?("网页服务启动失败，请关闭后重试") }
+                    self.onError?("网页服务无法启动：固定端口 8080 可能已被占用，请关闭占用该端口的应用后重试")
                 }
             }
             next.newConnectionHandler = { [weak self] socket in self?.accept(socket) }
