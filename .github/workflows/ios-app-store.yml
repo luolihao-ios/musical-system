@@ -1,11 +1,6 @@
 name: iOS App Store Connect upload
 
 on:
-  push:
-    paths:
-      - "ios-app/**"
-      - "shared-swift/**"
-      - ".github/workflows/ios-app-store.yml"
   workflow_dispatch:
 
 permissions:
