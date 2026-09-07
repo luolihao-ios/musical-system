@@ -12,6 +12,7 @@ import CoreTransferable
     func start() {
         address = ""; code = ""; error = ""; upload = nil
         TransferStorage.normalize()
+        DiagnosticLog.reset()
         do {
             if server == nil {
                 let root = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]

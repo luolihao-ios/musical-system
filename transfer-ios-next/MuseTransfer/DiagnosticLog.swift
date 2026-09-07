@@ -16,4 +16,11 @@ public enum DiagnosticLog {
             } else { try? Data(line.utf8).write(to: fileURL, options: .atomic) }
         }
     }
+
+    public static func reset() {
+        queue.async {
+            try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? Data().write(to: fileURL, options: .atomic)
+        }
+    }
 }

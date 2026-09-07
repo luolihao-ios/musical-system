@@ -30,6 +30,7 @@ import PhotosUI
     private let local: DeviceInfo
     init() {
         TransferStorage.normalize()
+        DiagnosticLog.reset()
         let key = "aiyue.transfer.deviceFingerprint"
         let fingerprint = UserDefaults.standard.string(forKey: key) ?? UUID().uuidString
         UserDefaults.standard.set(fingerprint, forKey: key)
