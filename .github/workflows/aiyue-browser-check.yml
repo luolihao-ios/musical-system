@@ -1,7 +1,6 @@
 name: AiYue browser and music verification
 on:
-  push:
-    branches: [codex/aiyue-greenfield]
+  pull_request:
     paths:
       - 'transfer-ios-next/**'
       - 'shared-swift/**'
