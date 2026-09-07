@@ -28,3 +28,16 @@
 "删除" = "Delete";
 "改名" = "Rename";
 "保存" = "Save";
+"专辑" = "Albums";
+"歌手" = "Artists";
+"文件夹" = "Folders";
+"未知专辑" = "Unknown album";
+"未知歌手" = "Unknown artist";
+"系统音乐资料库" = "System music library";
+"“文件”App 导入" = "Imported from Files";
+"首" = "tracks";
+"已启用" = "Enabled";
+"iOS 版不支持 OGG" = "OGG is not supported on iOS";
+"正在联网补全缺失歌词与封面，可继续播放" = "Completing missing lyrics and artwork online. Playback can continue.";
+"全部歌曲 · %lld" = "All songs · %lld";
+"全部歌曲" = "All songs";

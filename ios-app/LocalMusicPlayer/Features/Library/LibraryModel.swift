@@ -43,9 +43,9 @@ enum LibraryGroupKind: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .albums: "专辑"
-        case .artists: "歌手"
-        case .folders: "文件夹"
+        case .albums: String(localized: "专辑")
+        case .artists: String(localized: "歌手")
+        case .folders: String(localized: "文件夹")
         }
     }
 
@@ -141,14 +141,14 @@ final class LibraryModel {
         let grouped = Dictionary(grouping: tracks) { track in
             switch kind {
             case .albums:
-                return track.album.isEmpty ? "未知专辑" : track.album
+                return track.album.isEmpty ? String(localized: "未知专辑") : track.album
             case .artists:
-                return track.artist.isEmpty ? "未知歌手" : track.artist
+                return track.artist.isEmpty ? String(localized: "未知歌手") : track.artist
             case .folders:
                 if track.sourceKind == .mediaLibrary {
-                    return "系统音乐资料库"
+                    return String(localized: "系统音乐资料库")
                 }
-                return "“文件”App 导入"
+                return String(localized: "“文件”App 导入")
             }
         }
         return grouped.map { key, value in

@@ -36,10 +36,12 @@ struct LibraryView: View {
                             )
                             .listRowBackground(Color.clear)
                     }
-                    Section("全部歌曲 · \(model.filteredTracks.count)") {
+                    Section {
                         ForEach(model.filteredTracks) { track in
                             trackRow(track)
                         }
+                    } header: {
+                        Text("\(String(localized: "全部歌曲")) · \(model.filteredTracks.count)")
                     }
                 }
                 .listStyle(.plain)
@@ -126,14 +128,14 @@ struct LibraryView: View {
                 }
                 NavigationLink {
                     LibraryTracksView(
-                        title: "最近播放",
+                        title: String(localized: "最近播放"),
                         tracks: model.recentlyPlayed,
                         model: model,
                         playlists: playlists
                     )
                 } label: {
                     LibraryEntranceCard(
-                        title: "最近播放",
+                        title: String(localized: "最近播放"),
                         systemImage: "clock.arrow.circlepath",
                         countText: "\(model.recentlyPlayed.count) 首"
                     )
@@ -209,7 +211,7 @@ private struct LibraryGroupsView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(group.title)
-                    Text("\(group.tracks.count) 首")
+                    Text("\(group.tracks.count) \(String(localized: "首"))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
