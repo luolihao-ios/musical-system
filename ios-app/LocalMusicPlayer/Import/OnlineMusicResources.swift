@@ -22,11 +22,26 @@ actor OnlineMusicResources: MusicResourceSearching {
             .components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
     }
     static func matches(_ query: MusicResourceQuery, title: String, artist: String, duration: Double?) -> Bool {
-        guard normalized(title) == normalized(query.title) else { return false }
+        guard titlesEquivalent(title, query.title) else { return false }
         if query.artist.isEmpty { guard query.duration > 0, duration != nil else { return false } }
         else if normalized(artist) != normalized(query.artist) { return false }
         if query.duration > 0, let duration { return abs(query.duration - duration) <= 3 }
         return true
+    }
+
+    static func titlesEquivalent(_ lhs: String, _ rhs: String) -> Bool {
+        let left = normalized(lhs)
+        let right = normalized(rhs)
+        if left == right { return true }
+        let suffixes = ["albumversion", "originalversion", "radioedit", "singleversion", "remaster"]
+        return suffixes.contains { left == right + $0 || right == left + $0 }
+    }
+
+    private static func matchesLookup(_ query: MusicResourceQuery, title: String, artist: String, duration: Double?) -> Bool {
+        if matches(query, title: title, artist: artist, duration: duration) { return true }
+        guard !query.artist.isEmpty else { return false }
+        let titleOnly = MusicResourceQuery(title: query.title, artist: "", album: query.album, duration: query.duration)
+        return matches(titleOnly, title: title, artist: artist, duration: duration)
     }
     func search(_ query: MusicResourceQuery, lyrics: Bool, cover: Bool) async -> MusicResourceResult {
         var result = MusicResourceResult()
@@ -38,7 +53,7 @@ actor OnlineMusicResources: MusicResourceSearching {
                 if !query.artist.isEmpty { parameters["artist_name"] = query.artist }
                 let data = try await get("https://lrclib.net/api/search", parameters)
                 let candidates = try JSONDecoder().decode([LyricCandidate].self, from: data)
-                let matches = candidates.filter { Self.matches(query, title: $0.trackName, artist: $0.artistName, duration: $0.duration) }
+                let matches = candidates.filter { Self.matchesLookup(query, title: $0.trackName, artist: $0.artistName, duration: $0.duration) }
                 if (query.artist.isEmpty ? Set(matches.map { Self.normalized($0.artistName) }).count == 1 : true), let match = matches.first {
                     result.lyrics = match.syncedLyrics?.isEmpty == false ? match.syncedLyrics : match.plainLyrics
                 }
@@ -64,7 +79,7 @@ actor OnlineMusicResources: MusicResourceSearching {
                 let data = try await get("https://musicbrainz.org/ws/2/recording", ["query": expression, "fmt": "json", "limit": "10"])
                 let response = try JSONDecoder().decode(RecordingResponse.self, from: data)
                 let matches = response.recordings.filter { record in
-                    Self.matches(query, title: record.title, artist: record.credits.map(\.name).joined(), duration: record.length.map { Double($0) / 1000 })
+                    Self.matchesLookup(query, title: record.title, artist: record.credits.map(\.name).joined(), duration: record.length.map { Double($0) / 1000 })
                 }
                 let unambiguous = !query.artist.isEmpty || Set(matches.map { Self.normalized($0.credits.map(\.name).joined()) }).count == 1
                 let releases = unambiguous ? (matches.first?.releases ?? []) : []
@@ -91,7 +106,7 @@ actor OnlineMusicResources: MusicResourceSearching {
             let artist = row["artistName"] as? String ?? ""
             let duration = (row["trackTimeMillis"] as? Double).map { $0 / 1000 }
                 ?? (row["trackTimeMillis"] as? Int).map { Double($0) / 1000 }
-            guard Self.matches(query, title: title, artist: artist, duration: duration),
+            guard Self.matchesLookup(query, title: title, artist: artist, duration: duration),
                   let raw = row["artworkUrl100"] as? String,
                   let url = URL(string: raw.replacingOccurrences(of: "100x100", with: "600x600")) else { continue }
             let bytes = try await get(url.absoluteString, [:], maxBytes: 5 * 1024 * 1024)
@@ -110,7 +125,7 @@ actor OnlineMusicResources: MusicResourceSearching {
             let title = song["name"] as? String ?? ""
             let artists = (song["artists"] as? [[String: Any]] ?? []).compactMap { $0["name"] as? String }.joined()
             let duration = (song["duration"] as? Double).map { $0 / 1000 } ?? (song["duration"] as? Int).map { Double($0) / 1000 }
-            guard Self.matches(query, title: title, artist: artists, duration: duration),
+            guard Self.matchesLookup(query, title: title, artist: artists, duration: duration),
                   let album = song["album"] as? [String: Any],
                   let raw = album["picUrl"] as? String, let url = URL(string: raw) else { continue }
             let bytes = try await get(url.absoluteString, [:], maxBytes: 5 * 1024 * 1024)
@@ -129,7 +144,7 @@ actor OnlineMusicResources: MusicResourceSearching {
             let title = song["name"] as? String ?? ""
             let artists = (song["artists"] as? [[String: Any]] ?? []).compactMap { $0["name"] as? String }.joined()
             let duration = (song["duration"] as? Double).map { $0 / 1000 } ?? (song["duration"] as? Int).map { Double($0) / 1000 }
-            guard Self.matches(query, title: title, artist: artists, duration: duration), let id = song["id"] else { continue }
+            guard Self.matchesLookup(query, title: title, artist: artists, duration: duration), let id = song["id"] else { continue }
             let lyricData = try await get("https://music.163.com/api/song/lyric", ["id": "\(id)", "lv": "-1", "kv": "-1", "tv": "-1"])
             guard let lyricRoot = try JSONSerialization.jsonObject(with: lyricData) as? [String: Any] else { continue }
             for key in ["lrc", "tlyric", "romalrc"] {
