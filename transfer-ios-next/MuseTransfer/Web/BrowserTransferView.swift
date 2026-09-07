@@ -8,6 +8,7 @@ import CoreTransferable
     @Published var code = ""
     @Published var error = ""
     @Published var upload: WebUpload?
+    @Published var offeredFiles: [OfferedBrowserFile] = []
     private var server: BrowserTransferServer?
     func start() {
         address = ""; code = ""; error = ""; upload = nil
@@ -52,6 +53,18 @@ struct BrowserTransferView: View {
                     PhotosPicker(selection: $photos, maxSelectionCount: 50, matching: .any(of: [.images, .videos])) { Text("添加媒体") }
                 }.buttonStyle(.bordered)
                 if !importMessage.isEmpty { Text(importMessage).foregroundStyle(.secondary) }
+                if !model.offeredFiles.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("已提供给电脑下载").font(.headline)
+                        ForEach(model.offeredFiles) { file in
+                            HStack {
+                                Image(systemName: "doc").foregroundStyle(.indigo)
+                                VStack(alignment: .leading) { Text(file.name).lineLimit(1); Text(file.size).font(.caption).foregroundStyle(.secondary) }
+                                Spacer()
+                            }
+                        }
+                    }.padding().background(.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+                }
                 if let batch = model.upload {
                     VStack(alignment: .leading, spacing: 16) {
                         Text(batch.state == "waiting" ? "电脑请求发送 \(batch.files.count) 个文件" : batch.state == "completed" ? "接收完成" : "传输状态：\(stateLabel(batch.state))").font(.headline)
@@ -85,8 +98,9 @@ struct BrowserTransferView: View {
                     defer { try? FileManager.default.removeItem(at: temporary) }
                     try FileManager.default.copyItem(at: url, to: temporary)
                     _ = try store.save(temporary, as: url.lastPathComponent)
+                    model.offeredFiles.append(OfferedBrowserFile(name: url.lastPathComponent, bytes: Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)))
                 }
-                importMessage = "已添加，请在电脑的手机文件页面点击刷新"
+                importMessage = "已添加，电脑端会自动显示"
             } catch { importMessage = error.localizedDescription }
         }
         .onChange(of: photos) { _, items in Task {
@@ -95,9 +109,11 @@ struct BrowserTransferView: View {
                 for item in items {
                     guard let file = try await item.loadTransferable(type: BrowserPickedMedia.self) else { continue }
                     defer { try? FileManager.default.removeItem(at: file.url) }
-                    _ = try store.save(file.url, as: "媒体-" + UUID().uuidString.prefix(8) + "." + file.url.pathExtension)
+                    let name = "媒体-" + UUID().uuidString.prefix(8) + "." + file.url.pathExtension
+                    _ = try store.save(file.url, as: name)
+                    model.offeredFiles.append(OfferedBrowserFile(name: name, bytes: Int64((try? file.url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)))
                 }
-                importMessage = "媒体已添加，请在电脑刷新手机文件"
+                importMessage = "媒体已添加，电脑端会自动显示"
             } catch { importMessage = error.localizedDescription }
             photos = []
         } }
@@ -108,6 +124,13 @@ struct BrowserTransferView: View {
     private func stateLabel(_ value: String) -> String {
         ["accepted": "正在接收", "rejected": "已拒绝", "cancelled": "已取消", "expired": "等待超时"][value] ?? value
     }
+}
+
+struct OfferedBrowserFile: Identifiable {
+    let id = UUID()
+    let name: String
+    let bytes: Int64
+    var size: String { ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file) }
 }
 
 struct BrowserPickedMedia: Transferable {
