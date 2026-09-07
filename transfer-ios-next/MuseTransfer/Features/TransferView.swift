@@ -60,9 +60,6 @@ struct TransferView: View {
                         Button("添加文件", systemImage: "plus") { model.showImporter = true }.buttonStyle(.bordered).tint(.indigo)
                     }.padding().background(.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 18))
                 }
-                Divider()
-                Text("接收文件").font(.title2.bold())
-                Text("收到文件请求后，会在接收卡片中确认并查看进度。").foregroundStyle(.secondary)
                 HStack(spacing: 8) {
                     Text("附近设备").font(.title.bold())
                     Button {
