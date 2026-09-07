@@ -9,6 +9,8 @@ import CoreTransferable
     @Published var error = ""
     @Published var upload: WebUpload?
     @Published var outboundFiles: [BrowserOutboundTask] = []
+    @Published var outboundProgress: [String: Double] = [:]
+    @Published var outboundCompleted = false
     private var server: BrowserTransferServer?
     func start() {
         address = ""; code = ""; error = ""; upload = nil
@@ -24,6 +26,7 @@ import CoreTransferable
                 server.onReady = { [weak self] address, code in Task { @MainActor in self?.address = address; self?.code = code } }
                 server.onError = { [weak self] error in Task { @MainActor in self?.error = error } }
                 server.onUpload = { [weak self] upload in Task { @MainActor in self?.upload = upload } }
+                server.onOutboundUpdate = { [weak self] id, progress, state in Task { @MainActor in self?.outboundProgress[id] = progress; if state == "completed", let self { self.outboundCompleted = self.outboundFiles.allSatisfy { (self.outboundProgress[$0.id] ?? 0) >= 1 } } } }
                 self.server = server
             }
             server?.start(); UIApplication.shared.isIdleTimerDisabled = true
@@ -31,7 +34,8 @@ import CoreTransferable
     }
     func stop() { server?.stop(); try? FileManager.default.removeItem(at: outboundRoot); outboundFiles = []; address = ""; code = ""; UIApplication.shared.isIdleTimerDisabled = false }
     func decide(_ accepted: Bool) { if let upload { server?.decide(upload.id, accepted: accepted) } }
-    func publishOutbound() { server?.publishOutbound() }
+    func publishOutbound() { outboundCompleted = false; outboundProgress = [:]; server?.publishOutbound() }
+    func clearOutbound() { outboundFiles = []; outboundProgress = [:]; outboundCompleted = false; server?.clearOutbound() }
     var outboundRoot: URL { FileManager.default.temporaryDirectory.appendingPathComponent("AiYueBrowserOutbound", isDirectory: true) }
 }
 
@@ -76,13 +80,13 @@ struct BrowserTransferView: View {
                             ForEach(model.outboundFiles) { file in
                                 HStack {
                                     Image(systemName: "doc").foregroundStyle(.indigo)
-                                    VStack(alignment: .leading) { Text(file.name).lineLimit(1); Text(file.size).font(.caption).foregroundStyle(.secondary) }
+                                    VStack(alignment: .leading) { Text(file.name).lineLimit(1); Text(file.size).font(.caption).foregroundStyle(.secondary); ProgressView(value: model.outboundProgress[file.id] ?? file.progress) }
                                     Spacer()
                                     if editingOutbound { Button("删除", role: .destructive) { model.outboundFiles.removeAll { $0.id == file.id }; try? FileManager.default.removeItem(atPath: file.url) }.font(.caption) }
                                 }
                             }
                         }
-                        Button("发送给电脑") { model.publishOutbound() }.buttonStyle(.borderedProminent)
+                        Button(model.outboundCompleted ? "完成" : "发送给电脑") { model.outboundCompleted ? model.clearOutbound() : model.publishOutbound() }.buttonStyle(.borderedProminent)
                     .padding().background(.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
                     }
                 }
@@ -158,10 +162,11 @@ struct BrowserOutboundTask: Identifiable, Codable, Equatable, Sendable {
     let bytes: Int64
     let url: String
     let state: String
+    let progress: Double
     var size: String { ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file) }
 
-    init(id: String = UUID().uuidString, name: String, bytes: Int64, url: String, state: String = "waiting") {
-        self.id = id; self.name = name; self.bytes = bytes; self.url = url; self.state = state
+    init(id: String = UUID().uuidString, name: String, bytes: Int64, url: String, state: String = "waiting", progress: Double = 0) {
+        self.id = id; self.name = name; self.bytes = bytes; self.url = url; self.state = state; self.progress = progress
     }
 }
 

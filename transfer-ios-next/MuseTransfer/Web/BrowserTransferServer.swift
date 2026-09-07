@@ -22,6 +22,7 @@ final class BrowserTransferServer: @unchecked Sendable {
     private var activeFiles: Set<String> = []
     private var outboundStates: [String: String] = [:]
     private var outboundPublished = false
+    private var outboundProgress: [String: Double] = [:]
     private var connectionBatches: [UUID: String] = [:]
     private var token = ""
     private var code = ""
@@ -30,6 +31,7 @@ final class BrowserTransferServer: @unchecked Sendable {
     var onReady: ((String, String) -> Void)?
     var onError: ((String) -> Void)?
     var onUpload: ((WebUpload) -> Void)?
+    var onOutboundUpdate: ((String, Double, String) -> Void)?
     init(root: URL, alias: String = "iPhone", outboundRoot: URL? = nil) throws {
         store = try WebFileStore(root: root)
         outboundStore = try WebFileStore(root: outboundRoot ?? FileManager.default.temporaryDirectory.appendingPathComponent("AiYueBrowserOutbound"))
@@ -40,7 +42,7 @@ final class BrowserTransferServer: @unchecked Sendable {
     private func stopNow() {
         listener?.cancel(); listener = nil
         Array(connections.values).forEach { $0.close() }; connections.removeAll()
-        uploads.removeAll(); activeFiles.removeAll(); connectionBatches.removeAll(); outboundStates.removeAll(); outboundPublished = false; token = ""
+        uploads.removeAll(); activeFiles.removeAll(); connectionBatches.removeAll(); outboundStates.removeAll(); outboundProgress.removeAll(); outboundPublished = false; token = ""
         DiagnosticLog.write("Browser server stopped; sessions cleared.")
     }
     private func listen(port: UInt16) {
@@ -111,6 +113,7 @@ final class BrowserTransferServer: @unchecked Sendable {
         self.onUpload?(batch)
     } }
     func publishOutbound() { queue.async { self.outboundPublished = true } }
+    func clearOutbound() { queue.async { try? self.outboundStore.list("").filter { !$0.directory }.forEach { try? FileManager.default.removeItem(at: try self.outboundStore.resolve($0.path)) }; self.outboundStates.removeAll(); self.outboundProgress.removeAll(); self.outboundPublished = false } }
     private func route(_ request: WebRequest, body: URL, client: WebHTTPConnection) {
         do {
             if request.method == "GET", ["/", "/app.js", "/style.css"].contains(request.path) {
@@ -126,9 +129,8 @@ final class BrowserTransferServer: @unchecked Sendable {
             }
             if request.path == "/web/files", request.method == "GET" { client.reply(200, try store.list(request.query("path"))); return }
             if request.path == "/web/outbound", request.method == "GET" {
-                let entries = self.outboundPublished ? try outboundStore.list("").filter { !$0.directory }.map {
-                    BrowserOutboundTask(id: $0.name, name: $0.name, bytes: $0.size, url: $0.path, state: self.outboundStates[$0.name] ?? "waiting")
-                }
+                let entries: [BrowserOutboundTask] = self.outboundPublished ? try outboundStore.list("").filter { !$0.directory }.map {
+                    BrowserOutboundTask(id: $0.name, name: $0.name, bytes: $0.size, url: $0.path, state: self.outboundStates[$0.name] ?? "waiting", progress: self.outboundProgress[$0.name] ?? 0)
                 } : []
                 client.reply(200, entries); return
             }
@@ -138,6 +140,11 @@ final class BrowserTransferServer: @unchecked Sendable {
                 let names = try outboundStore.list("").filter { !$0.directory }.map(\.name)
                 for name in names { outboundStates[name] = accepted ? "accepted" : "rejected"; if !accepted { try? FileManager.default.removeItem(at: outboundStore.resolve(name)) } }
                 client.reply(200, ["ok": true]); return
+            }
+            if request.path.hasPrefix("/web/outbound/"), request.method == "POST", request.path.hasSuffix("/progress") {
+                let raw = String(request.path.dropFirst("/web/outbound/".count).dropLast("/progress".count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                let value = try JSONDecoder().decode([String: Double].self, from: Data(contentsOf: body)); let progress = min(1, max(0, value["progress"] ?? 0))
+                outboundProgress[raw] = progress; outboundStates[raw] = progress >= 1 ? "completed" : "downloading"; onOutboundUpdate?(raw, progress, outboundStates[raw]!); client.reply(200, ["ok": true]); return
             }
             if request.path.hasPrefix("/web/outbound/"), request.method == "POST", request.path.hasSuffix("/decision") {
                 let raw = String(request.path.dropFirst("/web/outbound/".count).dropLast("/decision".count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -154,7 +161,7 @@ final class BrowserTransferServer: @unchecked Sendable {
             }
             if request.path.hasPrefix("/web/outbound/"), request.method == "POST", request.path.hasSuffix("/complete") {
                 let raw = String(request.path.dropFirst("/web/outbound/".count).dropLast("/complete".count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                try? FileManager.default.removeItem(at: outboundStore.resolve(raw)); client.reply(200, ["ok": true]); return
+                outboundStates[raw] = "completed"; outboundProgress[raw] = 1; onOutboundUpdate?(raw, 1, "completed"); client.reply(200, ["ok": true]); return
             }
             if request.path == "/web/info", request.method == "GET" {
                 let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
