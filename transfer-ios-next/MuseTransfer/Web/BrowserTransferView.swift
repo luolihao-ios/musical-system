@@ -14,6 +14,9 @@ import CoreTransferable
         address = ""; code = ""; error = ""; upload = nil
         TransferStorage.normalize()
         DiagnosticLog.reset()
+        try? FileManager.default.removeItem(at: offeredRoot)
+        try? FileManager.default.createDirectory(at: offeredRoot, withIntermediateDirectories: true)
+        offeredFiles = []
         do {
             if server == nil {
                 let root = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -26,8 +29,9 @@ import CoreTransferable
             server?.start(); UIApplication.shared.isIdleTimerDisabled = true
         } catch { self.error = error.localizedDescription }
     }
-    func stop() { server?.stop(); address = ""; code = ""; UIApplication.shared.isIdleTimerDisabled = false }
+    func stop() { server?.stop(); try? FileManager.default.removeItem(at: offeredRoot); offeredFiles = []; address = ""; code = ""; UIApplication.shared.isIdleTimerDisabled = false }
     func decide(_ accepted: Bool) { if let upload { server?.decide(upload.id, accepted: accepted) } }
+    var offeredRoot: URL { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("电脑临时下载", isDirectory: true) }
 }
 
 struct BrowserTransferView: View {
@@ -90,7 +94,7 @@ struct BrowserTransferView: View {
         }.navigationTitle("浏览器传文件").tint(.indigo)
         .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             do {
-                let store = try WebFileStore(root: sharedRoot)
+                let store = try WebFileStore(root: model.offeredRoot)
                 for url in try result.get() {
                     let access = url.startAccessingSecurityScopedResource()
                     defer { if access { url.stopAccessingSecurityScopedResource() } }
@@ -105,7 +109,7 @@ struct BrowserTransferView: View {
         }
         .onChange(of: photos) { _, items in Task {
             do {
-                let store = try WebFileStore(root: sharedRoot)
+                let store = try WebFileStore(root: model.offeredRoot)
                 for item in items {
                     guard let file = try await item.loadTransferable(type: BrowserPickedMedia.self) else { continue }
                     defer { try? FileManager.default.removeItem(at: file.url) }
