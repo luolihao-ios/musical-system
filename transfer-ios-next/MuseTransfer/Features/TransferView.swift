@@ -4,24 +4,13 @@ import PhotosUI
 
 struct TransferView: View {
     @State private var model = TransferViewModel()
-    @State private var transferMode = 0
     @State private var mediaItems: [PhotosPickerItem] = []
     @State private var textToSend = ""
     @State private var refreshRotation = 0.0
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 18) {
-                Picker("传输方式", selection: $transferMode) {
-                    Text("浏览器传文件").tag(0)
-                    Text("客户端传文件").tag(1)
-                }
-                .pickerStyle(.segmented)
-                .accessibilityLabel("传输方式")
-                if transferMode == 0 {
-                    BrowserTransferView()
-                } else {
-                    clientTransferContent
-                }
+                BrowserTransferView()
             }
             .padding()
             .navigationTitle("爱乐互传")
