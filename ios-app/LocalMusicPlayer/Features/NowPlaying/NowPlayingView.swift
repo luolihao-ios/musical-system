@@ -320,9 +320,9 @@ struct NowPlayingView: View {
 
     private var modeLabel: String {
         switch model.state.mode {
-        case .repeatAll: "列表循环"
-        case .repeatOne: "单曲循环"
-        case .shuffle: "随机播放"
+        case .repeatAll: String(localized: "列表循环")
+        case .repeatOne: String(localized: "单曲循环")
+        case .shuffle: String(localized: "随机播放")
         }
     }
 }
