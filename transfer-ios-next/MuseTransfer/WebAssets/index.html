@@ -5,7 +5,7 @@
 <section id="send" hidden><h2 class="selection-title">选择</h2><div class="actions"><button id="choose">文件</button><button id="folder">文件夹</button></div>
 <input type="file" id="fileInput" multiple hidden><input type="file" id="folderInput" webkitdirectory multiple hidden>
 <div class="card" id="drop"><div class="selection-heading"><p id="summary">尚未选择文件</p><button id="edit" hidden>编辑</button></div><p id="dropHint" class="muted">文件或文件夹可以拖到这里</p><div id="selected"></div><button id="clear" hidden>全部删除</button><button id="recover" hidden>结束上一批未完成传输</button></div>
-<button id="sendNow" class="send-now">发送到手机</button><div class="device-tools"><button id="filesTab">浏览手机文件 / 下载</button></div></section>
+<button id="sendNow" class="send-now">发送到手机</button></section>
 <section id="settings" hidden><h2>设置</h2><div class="card"><h3>文件保存位置</h3><p class="muted" id="savePath">文件 › 爱乐互传</p><button id="chooseDestination">选择保存位置</button><h3>诊断日志</h3><p class="muted">手机“文件”App 中的诊断日志</p><a class="button" href="/web/diagnostics" download>下载日志</a><button id="copyAddress">复制连接地址</button><p class="muted" id="version">爱乐互传 · 浏览器已连接手机</p></div></section>
 <section id="files" hidden><h2>手机文件</h2><p>文件 › 爱乐互传</p><div class="actions"><button id="up">返回上级</button><button id="mkdir">新建文件夹</button><button id="reload">刷新</button></div><p id="path"></p><div class="card" id="listing"></div></section>
 <section id="progress" hidden><h2 id="phase">等待手机响应…</h2><div id="rows"></div><div class="card"><progress id="total" max="1" value="0"></progress><p id="result"></p><button id="cancel">取消</button><button id="done" hidden>完成</button></div></section>

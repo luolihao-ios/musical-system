@@ -11,9 +11,10 @@ import CoreTransferable
     private var server: BrowserTransferServer?
     func start() {
         address = ""; code = ""; error = ""; upload = nil
+        TransferStorage.normalize()
         do {
             if server == nil {
-                let root = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("爱乐互传")
+                let root = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
                 let server = try BrowserTransferServer(root: root, alias: UIDevice.current.name)
                 server.onReady = { [weak self] address, code in Task { @MainActor in self?.address = address; self?.code = code } }
                 server.onError = { [weak self] error in Task { @MainActor in self?.error = error } }
@@ -102,7 +103,7 @@ struct BrowserTransferView: View {
         .onAppear { model.start() }.onDisappear { model.stop() }
         .onChange(of: scenePhase) { _, phase in if phase == .active { model.start() } else if phase == .background { model.stop() } }
     }
-    private var sharedRoot: URL { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("爱乐互传") }
+    private var sharedRoot: URL { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0] }
     private func stateLabel(_ value: String) -> String {
         ["accepted": "正在接收", "rejected": "已拒绝", "cancelled": "已取消", "expired": "等待超时"][value] ?? value
     }

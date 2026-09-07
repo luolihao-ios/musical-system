@@ -29,12 +29,13 @@ import PhotosUI
     private let receiver: LocalSendReceiver
     private let local: DeviceInfo
     init() {
+        TransferStorage.normalize()
         let key = "aiyue.transfer.deviceFingerprint"
         let fingerprint = UserDefaults.standard.string(forKey: key) ?? UUID().uuidString
         UserDefaults.standard.set(fingerprint, forKey: key)
         local = DeviceInfo(alias: UIDevice.current.name, deviceModel: "iPhone", deviceType: "mobile", fingerprint: fingerprint)
         browser = BonjourDeviceBrowser(localFingerprint: local.fingerprint)
-        let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("爱乐互传", isDirectory: true)
+        let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         receiver = LocalSendReceiver(local: local, destination: folder)
         receiver.onIncomingTransfer = { [weak self] request in Task { @MainActor in self?.incomingTransfer = request } }
         receiver.onFileReceived = { [weak self] file in Task { @MainActor in self?.recordReceived(file) } }
@@ -48,7 +49,7 @@ import PhotosUI
     func refresh() { DiagnosticLog.write("User requested discovery refresh."); refreshToken += 1; browser.stop(); browser.start() }
     func select(_ result: Result<[URL], Error>) {
         guard case let .success(urls) = result else { return }
-        let outgoing = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("爱乐互传/待发送", isDirectory: true)
+        let outgoing = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("待发送", isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: outgoing, withIntermediateDirectories: true)
             selectedFiles = try urls.map { source in
@@ -157,7 +158,7 @@ import PhotosUI
     }
 
     private func outgoingBatch() throws -> URL {
-        let root = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("爱乐互传/待发送", isDirectory: true)
+        let root = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("待发送", isDirectory: true)
         let batch = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: batch, withIntermediateDirectories: true)
         return batch

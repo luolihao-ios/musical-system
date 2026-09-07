@@ -3,7 +3,7 @@ import Foundation
 public enum DiagnosticLog {
     private static let queue = DispatchQueue(label: "com.luolihao.aiyuetransfer.diagnostics")
     public static let fileURL: URL = {
-        let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("爱乐互传", isDirectory: true)
+        let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         return folder.appendingPathComponent("aiyue-transfer-diagnostics.log")
     }()
 
