@@ -173,7 +173,7 @@ private struct IncomingTransferSheet: View {
         VStack(spacing: 26) {
             Image(systemName: request.sender.deviceType == "mobile" ? "iphone" : "desktopcomputer").font(.system(size: 58)).foregroundStyle(.indigo)
             Text(request.sender.alias).font(.largeTitle.bold())
-            Text("想要发送给你 \(request.files.count) 个文件").font(.title3).foregroundStyle(.secondary)
+            Text(String(format: String(localized: "想要发送给你 %lld 个文件"), request.files.count)).font(.title3).foregroundStyle(.secondary)
             Text(request.files.values.map(\.fileName).prefix(3).joined(separator: "\n"))
                 .multilineTextAlignment(.center).foregroundStyle(.secondary).lineLimit(3)
             HStack(spacing: 18) {

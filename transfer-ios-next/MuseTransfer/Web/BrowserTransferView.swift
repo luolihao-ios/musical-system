@@ -39,6 +39,7 @@ struct BrowserTransferView: View {
         case receive = "接收"
         case send = "发送"
         var id: String { rawValue }
+        var localizedTitle: String { String(localized: rawValue) }
     }
     @StateObject private var model = BrowserTransferModel()
     @Environment(\.scenePhase) private var scenePhase
@@ -51,15 +52,15 @@ struct BrowserTransferView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 Text("电脑和手机连接同一个 Wi-Fi，在电脑浏览器打开下面的地址。").font(.title3)
-                if model.address.isEmpty { Text(model.error.isEmpty ? "正在启动网页服务…" : model.error) }
+                if model.address.isEmpty { Text(model.error.isEmpty ? String(localized: "正在启动网页服务…") : model.error) }
                 else {
                     Text(model.address).font(.title2.monospaced()).textSelection(.enabled)
-                    Text("访问码：\(model.code)").font(.title.bold())
+                    Text(String(format: String(localized: "访问码：%@"), model.code)).font(.title.bold())
                 }
                 Text("不要关闭此应用。请保持此页面打开，切换到后台后服务会关闭。").foregroundStyle(.secondary)
                 Text("文件保存到：文件 › 我的 iPhone › 爱乐互传 › 按日期分类").font(.footnote)
                 Picker("传输方向", selection: $tab) {
-                    ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
+                    ForEach(Tab.allCases) { Text($0.localizedTitle).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 if tab == .send {
@@ -87,13 +88,13 @@ struct BrowserTransferView: View {
                         Divider()
                         Text("接收文件").font(.title2.bold())
                         VStack(alignment: .leading, spacing: 16) {
-                        Text(batch.state == "waiting" ? "电脑请求发送 \(batch.files.count) 个文件" : batch.state == "completed" ? "接收完成" : "传输状态：\(stateLabel(batch.state))").font(.headline)
+                        Text(batch.state == "waiting" ? String(format: String(localized: "电脑请求发送 %lld 个文件"), batch.files.count) : batch.state == "completed" ? String(localized: "接收完成") : String(localized: "传输状态：") + stateLabel(batch.state)).font(.headline)
                         ForEach(batch.files) { file in
                             VStack(alignment: .leading) {
                                 Text(file.name).lineLimit(2)
                                 Text(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file)).font(.caption)
                                 if let path = batch.saved[file.id] {
-                                    Text("已保存到文件 › 爱乐互传 / \(path)").font(.caption).foregroundStyle(.green)
+                                    Text(String(format: String(localized: "已保存到文件 › 爱乐互传 / %@"), path)).font(.caption).foregroundStyle(.green)
                                     if path.lowercased().hasSuffix(".aiyuepack") { ShareLink("导入爱乐之城", item: sharedRoot.appendingPathComponent(path)) }
                                 }
                                 else { Text((batch.progress[file.id] ?? 0) > 0 ? "正在接收…" : "等待接收").font(.caption).foregroundStyle(.secondary) }
@@ -121,7 +122,7 @@ struct BrowserTransferView: View {
                     let savedURL = model.outboundRoot.appendingPathComponent(saved)
                     model.outboundFiles.append(BrowserOutboundTask(name: url.lastPathComponent, bytes: Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0), url: savedURL.path))
                 }
-                importMessage = "已加入发送队列，电脑浏览器会自动下载"
+                importMessage = String(localized: "已加入发送队列，电脑浏览器会自动下载")
             } catch { importMessage = error.localizedDescription }
         }
         .onChange(of: photos) { _, items in Task {
@@ -135,7 +136,7 @@ struct BrowserTransferView: View {
                     let savedURL = model.outboundRoot.appendingPathComponent(saved)
                     model.outboundFiles.append(BrowserOutboundTask(name: name, bytes: Int64((try? file.url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0), url: savedURL.path))
                 }
-                importMessage = "媒体已加入发送队列，电脑浏览器会自动下载"
+                importMessage = String(localized: "媒体已加入发送队列，电脑浏览器会自动下载")
             } catch { importMessage = error.localizedDescription }
             photos = []
         } }
@@ -144,7 +145,7 @@ struct BrowserTransferView: View {
     }
     private var sharedRoot: URL { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0] }
     private func stateLabel(_ value: String) -> String {
-        ["accepted": "正在接收", "rejected": "已拒绝", "cancelled": "已取消", "expired": "等待超时"][value] ?? value
+        ["accepted": String(localized: "正在接收"), "rejected": String(localized: "已拒绝"), "cancelled": String(localized: "已取消"), "expired": String(localized: "等待超时")][value] ?? value
     }
 }
 
