@@ -42,6 +42,7 @@ struct TransferView: View {
 
     @ViewBuilder
     private var clientTransferContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
                 Text("选择").font(.title.bold())
                 if model.selectedFiles.isEmpty {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
