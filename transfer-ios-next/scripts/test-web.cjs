@@ -4,6 +4,9 @@ function element(){return{hidden:false,value:'',textContent:'',classList:{add(){
 const context={document:{getElementById:id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id)},body:element(),createElement:element},Blob,File,TextEncoder,Uint8Array,DataView,URL,Math,Error,setTimeout,fetch:async()=>{throw Error('offline')}};
 vm.createContext(context);
 vm.runInContext(fs.readFileSync('transfer-ios-next/MuseTransfer/WebAssets/app.js','utf8'),context);
+const browserJS=fs.readFileSync('transfer-ios-next/MuseTransfer/WebAssets/app.js','utf8');
+assert.match(browserJS,/\/web\/outbound/);
+assert.match(browserJS,/link\.click\(\)/);
 (async()=>{
   context.inputs=[new File(['mp3 bytes'],'你好.MP3'),new File(['[00:01]歌词'],'你好.lrc'),new File(['cover'],'你好.png'),new File(['ignore'],'notes.txt')];
   vm.runInContext("select(inputs,'files')",context);

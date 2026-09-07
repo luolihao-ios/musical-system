@@ -15,6 +15,7 @@ struct WebUpload: Codable, Identifiable {
 final class BrowserTransferServer: @unchecked Sendable {
     private let queue = DispatchQueue(label: "aiyue.web")
     private let store: WebFileStore
+    private let outboundStore: WebFileStore
     private var listener: NWListener?
     private var connections: [UUID: WebHTTPConnection] = [:]
     private var uploads: [String: WebUpload] = [:]
@@ -27,7 +28,11 @@ final class BrowserTransferServer: @unchecked Sendable {
     var onReady: ((String, String) -> Void)?
     var onError: ((String) -> Void)?
     var onUpload: ((WebUpload) -> Void)?
-    init(root: URL, alias: String = "iPhone") throws { store = try WebFileStore(root: root); self.alias = alias }
+    init(root: URL, alias: String = "iPhone", outboundRoot: URL? = nil) throws {
+        store = try WebFileStore(root: root)
+        outboundStore = try WebFileStore(root: outboundRoot ?? FileManager.default.temporaryDirectory.appendingPathComponent("AiYueBrowserOutbound"))
+        self.alias = alias
+    }
     func start() { queue.async { self.stopNow(); self.code = String(Int.random(in: 100000...999999)); self.token = UUID().uuidString; self.attempts = 0; self.listen(port: 8080) } }
     func stop() { queue.async { self.stopNow() } }
     private func stopNow() {
@@ -117,6 +122,20 @@ final class BrowserTransferServer: @unchecked Sendable {
                 client.reply(200, data: Data("{}".utf8), type: "application/json", extra: "Set-Cookie: aiyue=\(token); HttpOnly; SameSite=Strict; Path=/\r\n"); return
             }
             if request.path == "/web/files", request.method == "GET" { client.reply(200, try store.list(request.query("path"))); return }
+            if request.path == "/web/outbound", request.method == "GET" {
+                let entries = try outboundStore.list("").filter { !$0.directory }.map {
+                    BrowserOutboundTask(id: $0.name, name: $0.name, bytes: $0.size, url: $0.path)
+                }
+                client.reply(200, entries); return
+            }
+            if request.path == "/web/outbound/download", request.method == "GET" {
+                let name = request.query("name")
+                client.download(try outboundStore.resolve(name)); return
+            }
+            if request.path.hasPrefix("/web/outbound/"), request.method == "POST", request.path.hasSuffix("/complete") {
+                let raw = String(request.path.dropFirst("/web/outbound/".count).dropLast("/complete".count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                try? FileManager.default.removeItem(at: outboundStore.resolve(raw)); client.reply(200, ["ok": true]); return
+            }
             if request.path == "/web/info", request.method == "GET" {
                 let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
                 client.reply(200, ["alias": alias, "version": version ?? "1.0"]); return
