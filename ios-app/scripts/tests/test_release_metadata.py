@@ -12,6 +12,7 @@ class ReleaseMetadataTests(unittest.TestCase):
         project = (IOS_ROOT / "project.yml").read_text(encoding="utf-8")
 
         self.assertEqual(info["CFBundleDisplayName"], "爱乐之城")
+        self.assertFalse(info["ITSAppUsesNonExemptEncryption"])
         self.assertIn('MARKETING_VERSION: "0.2"', project)
         self.assertIn('CURRENT_PROJECT_VERSION: "2"', project)
 
