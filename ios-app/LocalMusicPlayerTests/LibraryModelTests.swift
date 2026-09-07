@@ -91,11 +91,11 @@ final class LibraryModelTests: XCTestCase {
 
         XCTAssertEqual(
             Set(model.groups(for: .albums).map(\.title)),
-            Set(["测试专辑", "未知专辑"])
+            Set(["测试专辑", String(localized: "未知专辑")])
         )
         XCTAssertEqual(
             Set(model.groups(for: .artists).map(\.title)),
-            Set(["测试歌手", "未知歌手"])
+            Set(["测试歌手", String(localized: "未知歌手")])
         )
     }
 
