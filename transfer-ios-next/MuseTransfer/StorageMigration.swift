@@ -15,7 +15,9 @@ enum TransferStorage {
             var target = documents.appendingPathComponent(entry.lastPathComponent)
             var index = 1
             while FileManager.default.fileExists(atPath: target.path) {
-                target = documents.appendingPathComponent("\(entry.deletingPathExtension().lastPathComponent) (\(index))\(entry.pathExtension.isEmpty ? "" : ".\(entry.pathExtension))")
+                let base = entry.deletingPathExtension().lastPathComponent
+                let suffix = entry.pathExtension.isEmpty ? "" : "." + entry.pathExtension
+                target = documents.appendingPathComponent("\(base) (\(index))\(suffix)")
                 index += 1
             }
             try? FileManager.default.moveItem(at: entry, to: target)
