@@ -116,6 +116,20 @@ final class MusicStoreTests: XCTestCase {
         )
     }
 
+    func testDeleteTrackRemovesLibraryRecordAndPlaylistEntries() throws {
+        let container = try ModelContainerFactory.make(inMemory: true)
+        let store = try MusicStore(context: container.mainContext)
+        let track = makeTrack(id: "delete-me", title: "待删除")
+        try store.upsert(track)
+        let playlist = try store.createPlaylist(name: "清理测试")
+        try store.add(trackID: track.id, to: playlist.id)
+
+        XCTAssertTrue(try store.deleteTrack(id: track.id))
+        XCTAssertNil(try store.track(id: track.id))
+        XCTAssertTrue(try store.playlistTracks(playlistID: playlist.id).isEmpty)
+        XCTAssertFalse(try store.deleteTrack(id: track.id))
+    }
+
     private func makeTrack(id: String, title: String) -> TrackRecord {
         TrackRecord(
             id: id,

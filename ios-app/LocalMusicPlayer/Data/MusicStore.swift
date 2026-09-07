@@ -85,6 +85,21 @@ final class MusicStore {
         try context.save()
     }
 
+    @discardableResult
+    func deleteTrack(id: String) throws -> Bool {
+        guard let track = try track(id: id) else { return false }
+        let requestedID = id
+        let entries = try context.fetch(
+            FetchDescriptor<PlaylistEntryRecord>(
+                predicate: #Predicate { $0.trackID == requestedID }
+            )
+        )
+        entries.forEach { context.delete($0) }
+        context.delete(track)
+        try context.save()
+        return true
+    }
+
     func playlists() throws -> [PlaylistRecord] {
         let records = try context.fetch(FetchDescriptor<PlaylistRecord>())
         return records.sorted {

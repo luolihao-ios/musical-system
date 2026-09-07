@@ -206,6 +206,11 @@ final class LibraryModel {
     func clearError() {
         errorMessage = nil
     }
+
+    func delete(_ track: TrackSnapshot) throws {
+        try store.deleteTrack(id: track.id)
+        try reload()
+    }
     func showImportError(_ message: String) { errorMessage = message }
     func completeMissingResources() async {
         guard !isImporting, !isCompletingResources, let online else { return }

@@ -3,6 +3,7 @@ import SwiftUI
 struct MiniPlayerView: View {
     @Bindable var model: NowPlayingModel
     let openNowPlaying: () -> Void
+    var dismiss: () -> Void = {}
 
     var body: some View {
         ZStack {
@@ -52,6 +53,11 @@ struct MiniPlayerView: View {
                         .frame(width: 44, height: 44)
                 }
                 .accessibilityLabel("下一首")
+                Button(action: dismiss) {
+                    Image(systemName: "xmark")
+                        .frame(width: 36, height: 36)
+                }
+                .accessibilityLabel("关闭播放器")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
@@ -69,5 +75,14 @@ struct MiniPlayerView: View {
                 .scaleEffect(x: model.progress, anchor: .leading)
                 .allowsHitTesting(false)
         }
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 18)
+                .onEnded { value in
+                    if value.translation.height > 35 {
+                        dismiss()
+                    }
+                }
+        )
     }
 }

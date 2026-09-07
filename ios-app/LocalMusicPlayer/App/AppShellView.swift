@@ -7,6 +7,7 @@ struct AppShellView: View {
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var showNowPlaying = false
+    @State private var miniPlayerVisibility = MiniPlayerVisibility()
     @State private var storeUpdate: AppStoreUpdate?
     @State private var didCheckStore = false
 
@@ -82,10 +83,12 @@ struct AppShellView: View {
         }
         .tint(PlayerTheme.accent)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if container.nowPlayingModel.state.currentTrack != nil {
+            if container.nowPlayingModel.state.currentTrack != nil,
+               miniPlayerVisibility.isVisible {
                 MiniPlayerView(
                     model: container.nowPlayingModel,
-                    openNowPlaying: { showNowPlaying = true }
+                    openNowPlaying: { showNowPlaying = true },
+                    dismiss: { miniPlayerVisibility.dismiss() }
                 )
             }
         }
@@ -96,6 +99,9 @@ struct AppShellView: View {
             if phase != .active {
                 try? container.playback.persistCurrentState()
             }
+        }
+        .onChange(of: container.nowPlayingModel.state.currentTrack?.id) { _, _ in
+            miniPlayerVisibility.show()
         }
     }
 }
