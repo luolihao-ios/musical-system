@@ -8,7 +8,6 @@ import PhotosUI
     var devices: [NearbyDevice] = []
     var selectedFiles: [URL] = []
     var showImporter = false
-    var showMusicImporter = false
     var showFolderImporter = false
     var showEditor = false
     var showTextEntry = false
@@ -67,25 +66,6 @@ import PhotosUI
             sendStatus = "无法读取所选文件：\(error.localizedDescription)"
             DiagnosticLog.write("File import failed: \(error.localizedDescription)")
         }
-    }
-    func selectMusic(_ result: Result<[URL], Error>) {
-        guard case let .success(urls) = result else { return }
-        let audio = urls.filter { $0.pathExtension.caseInsensitiveCompare("mp3") == .orderedSame }
-        guard !audio.isEmpty else { sendStatus = "音乐包至少需要一个 MP3 文件"; return }
-        let companions = urls.filter { ["lrc", "jpg", "jpeg", "png", "webp"].contains($0.pathExtension.lowercased()) }
-        do {
-            let folder = try outgoingBatch()
-            var copied: [URL] = []
-            for source in audio + companions {
-                let access = source.startAccessingSecurityScopedResource()
-                defer { if access { source.stopAccessingSecurityScopedResource() } }
-                let target = folder.appendingPathComponent(source.lastPathComponent)
-                try FileManager.default.copyItem(at: source, to: target)
-                copied.append(target)
-            }
-            selectedFiles = try MusicPackage.create(files: copied, destination: try outgoingBatch())
-            sendStatus = companions.isEmpty ? "已添加 MP3（未找到歌词或封面，可直接发送）" : "已添加音乐及可用歌词/封面"
-        } catch { sendStatus = "无法读取音乐文件：\(error.localizedDescription)" }
     }
     func remove(_ url: URL) { selectedFiles.removeAll { $0 == url } }
     func removeAll() { selectedFiles.removeAll(); showEditor = false }
