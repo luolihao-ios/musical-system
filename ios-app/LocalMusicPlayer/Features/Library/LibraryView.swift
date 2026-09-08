@@ -6,6 +6,7 @@ struct LibraryView: View {
     @Bindable var playlists: PlaylistsModel
 
     @State private var showDocumentPicker = false
+    @State private var showMusicFolderPicker = false
     @State private var showOnlineSearch = false
 
     var body: some View {
@@ -56,7 +57,11 @@ struct LibraryView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack {
                     Button { showOnlineSearch = true } label: { Image(systemName: "globe") }.accessibilityLabel("在线搜索")
-                    ImportMenu(importFiles: { showDocumentPicker = true }, scanLocalAudio: { Task { await model.scanLocalAudio() } })
+                    ImportMenu(
+                        importFiles: { showDocumentPicker = true },
+                        scanLocalAudio: { Task { await model.scanLocalAudio() } },
+                        authorizeMusicFolder: { showMusicFolderPicker = true }
+                    )
                 }
             }
         }
@@ -76,6 +81,18 @@ struct LibraryView: View {
         }
         .overlay(alignment: .bottom) {
             if model.isCompletingResources { Text("正在联网补全缺失歌词与封面，可继续播放").font(.caption).padding(10).background(.regularMaterial, in: Capsule()).allowsHitTesting(false) }
+        }
+        .sheet(isPresented: $showMusicFolderPicker) {
+            MusicFolderPickerView { urls in
+                showMusicFolderPicker = false
+                guard let url = urls.first else { return }
+                do {
+                    try AuthorizedMusicFolderAccess.save(url)
+                    Task { await model.scanLocalAudio() }
+                } catch {
+                    model.showImportError("无法获得文件夹访问权限：\(error.localizedDescription)")
+                }
+            }
         }
         .alert(
             "无法导入",

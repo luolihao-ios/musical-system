@@ -7,12 +7,20 @@ enum TransferStorage {
     }
 
     static func mirrorForMusicPlayer(_ source: URL, relativePath: String) {
-        guard let group = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) else { return }
+        guard let group = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) else {
+            DiagnosticLog.write("Music mirror skipped: App Group unavailable; source=\(source.path).")
+            return
+        }
         let targetRoot = group.appendingPathComponent("MusicHandoff", isDirectory: true)
         let target = targetRoot.appendingPathComponent(relativePath)
-        try? FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? FileManager.default.removeItem(at: target)
-        try? FileManager.default.copyItem(at: source, to: target)
+        do {
+            try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if FileManager.default.fileExists(atPath: target.path) { try FileManager.default.removeItem(at: target) }
+            try FileManager.default.copyItem(at: source, to: target)
+            DiagnosticLog.write("Music mirror succeeded: source=\(source.path); target=\(target.path).")
+        } catch {
+            DiagnosticLog.write("Music mirror failed: source=\(source.path); target=\(target.path); error=\(error.localizedDescription).")
+        }
     }
 
     /// Earlier builds created Documents/爱乐互传 inside the app Documents container.

@@ -9,6 +9,12 @@ import Foundation
         // older builds and files placed directly in the shared folder remain
         // discoverable as well.
         var roots = [documents]
+        if let authorized = AuthorizedMusicFolderAccess.resolve() {
+            roots.insert(authorized, at: 0)
+            log("已加载授权音乐文件夹：\(authorized.path)")
+        } else {
+            log("未找到授权音乐文件夹；请先通过文件夹选择器授权。")
+        }
         if let group = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.com.luolihao.aiyuetransfer") {
             roots.insert(group, at: 0)
             log("App Group 容器：\(group.path)")
