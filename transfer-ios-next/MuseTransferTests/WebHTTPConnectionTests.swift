@@ -5,7 +5,10 @@ import Network
 final class WebHTTPConnectionTests: XCTestCase {
     func testStreamsBodyAndDownloadWithoutLoadingWholeFile() async throws {
         let queue = DispatchQueue(label: "web-test")
-        let listener = try NWListener(using: .tcp, on: .any)
+        // The simulator occasionally reports port 0 for an `.any` listener,
+        // which makes the loopback request target 127.0.0.1:0. Keep this test
+        // isolated from the app's production port 8080 with a fixed test port.
+        let listener = try NWListener(using: .tcp, on: NWEndpoint.Port(rawValue: 39_543)!)
         let ready = expectation(description: "listener")
         listener.stateUpdateHandler = { state in if case .ready = state { ready.fulfill() } }
         var clients: [WebHTTPConnection] = []
