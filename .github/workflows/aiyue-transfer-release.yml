@@ -1,11 +1,6 @@
 name: AiYue Transfer Release
 
 on:
-  push:
-    paths:
-      - "transfer-ios/**"
-      - "docs/transfer-protocol/**"
-      - ".github/workflows/aiyue-transfer-release.yml"
   workflow_dispatch:
 
 permissions:

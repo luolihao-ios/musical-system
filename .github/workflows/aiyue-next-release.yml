@@ -1,6 +1,11 @@
 name: AiYue Transfer Next Release
 
 on:
+  push:
+    paths:
+      - "transfer-ios-next/**"
+      - "shared-swift/**"
+      - ".github/workflows/aiyue-next-release.yml"
   workflow_dispatch:
 
 permissions:
