@@ -32,6 +32,7 @@ class ReleaseMetadataTests(unittest.TestCase):
         self.assertIn("CODE_SIGN_ENTITLEMENTS", project)
         self.assertNotIn('PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME"', workflow)
         self.assertIn('AIYUE_PROFILE_NAME="$PROFILE_NAME"', workflow)
+        self.assertIn('DEVELOPMENT_TEAM="$TEAM_ID"', workflow)
         self.assertIn("CODE_SIGNING_ALLOWED=YES", workflow)
         self.assertIn("CODE_SIGNING_REQUIRED=YES", workflow)
         self.assertIn("Verify exported App Group entitlement", workflow)
