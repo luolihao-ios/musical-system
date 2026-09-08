@@ -25,6 +25,7 @@ import Foundation
             log("扫描目录：\(root.path)，文件数：\(urls.count)")
             var folders: [URL: [ImportedFile]] = [:]
             for url in urls {
+                log("扫描条目：\(url.path)，扩展名：\(url.pathExtension.isEmpty ? \"（无）\" : url.pathExtension)")
                 guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey]) else {
                     log("跳过条目（无法读取属性）：\(url.path)")
                     continue
