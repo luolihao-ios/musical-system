@@ -97,8 +97,7 @@ jobs:
             CODE_SIGN_IDENTITY='Apple Distribution' \
             AIYUE_TEAM_ID="$TEAM_ID" \
             AIYUE_APP_PROFILE_NAME="$APP_PROFILE_NAME" \
-            AIYUE_SHARE_PROFILE_NAME="$SHARE_PROFILE_NAME" \
-            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"
+            AIYUE_SHARE_PROFILE_NAME="$SHARE_PROFILE_NAME"
 
           cat > "$TEMP_SIGNING_DIR/ExportOptions.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
