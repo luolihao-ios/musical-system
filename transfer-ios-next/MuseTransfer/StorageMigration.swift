@@ -22,21 +22,25 @@ enum TransferStorage {
         for entry in (try? FileManager.default.contentsOfDirectory(at: documents, includingPropertiesForKeys: nil)) ?? [] {
             if entry.lastPathComponent.hasPrefix("aiyue-transfer-diagnostics") { try? FileManager.default.removeItem(at: entry) }
         }
-        guard FileManager.default.fileExists(atPath: legacy.path) else { return }
-        guard let entries = try? FileManager.default.contentsOfDirectory(at: legacy, includingPropertiesForKeys: nil) else { return }
-        for entry in entries {
-            if entry.lastPathComponent.hasPrefix("aiyue-transfer-diagnostics") { try? FileManager.default.removeItem(at: entry); continue }
-            var target = documents.appendingPathComponent(entry.lastPathComponent)
-            var index = 1
-            while FileManager.default.fileExists(atPath: target.path) {
-                let base = entry.deletingPathExtension().lastPathComponent
-                let suffix = entry.pathExtension.isEmpty ? "" : "." + entry.pathExtension
-                target = documents.appendingPathComponent("\(base) (\(index))\(suffix)")
-                index += 1
+        if FileManager.default.fileExists(atPath: legacy.path),
+           let entries = try? FileManager.default.contentsOfDirectory(at: legacy, includingPropertiesForKeys: nil) {
+            for entry in entries {
+                if entry.lastPathComponent.hasPrefix("aiyue-transfer-diagnostics") { try? FileManager.default.removeItem(at: entry); continue }
+                var target = documents.appendingPathComponent(entry.lastPathComponent)
+                var index = 1
+                while FileManager.default.fileExists(atPath: target.path) {
+                    let base = entry.deletingPathExtension().lastPathComponent
+                    let suffix = entry.pathExtension.isEmpty ? "" : "." + entry.pathExtension
+                    target = documents.appendingPathComponent("\(base) (\(index))\(suffix)")
+                    index += 1
+                }
+                try? FileManager.default.moveItem(at: entry, to: target)
             }
-            try? FileManager.default.moveItem(at: entry, to: target)
+            try? FileManager.default.removeItem(at: legacy)
         }
-        try? FileManager.default.removeItem(at: legacy)
+        // Always synchronize, even when the legacy folder does not exist.
+        // Newer builds store received files directly in Documents, and an
+        // early return here left those files invisible to the music player.
         syncDocumentsToMusicPlayer()
     }
 

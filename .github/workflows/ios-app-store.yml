@@ -46,6 +46,9 @@ jobs:
           PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" "$TEMP_SIGNING_DIR/profile.plist")
           PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" "$TEMP_SIGNING_DIR/profile.plist")
           TEAM_ID=$(/usr/libexec/PlistBuddy -c "Print TeamIdentifier:0" "$TEMP_SIGNING_DIR/profile.plist")
+          /usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.security.application-groups:0' "$TEMP_SIGNING_DIR/profile.plist" \
+            | grep -Fx 'group.com.luolihao.aiyuetransfer' \
+            || { echo 'App Store Profile 未绑定 group.com.luolihao.aiyuetransfer，请重新生成 AiYuezhicheng 的 Profile 后更新 IOS_APP_STORE_PROFILE_BASE64。' >&2; exit 1; }
           cp "$TEMP_SIGNING_DIR/appstore.mobileprovision" \
             "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
 
