@@ -11,6 +11,9 @@ assert.match(browserJS,/const direct=Array\.from\(e\.dataTransfer\.files/);
 assert.match(browserJS,/receiveTab/);
 assert.match(browserJS,/outbound\/decision/);
 assert.match(browserJS,/outboundDownloads\.has/);
+assert.match(browserJS,/actions\.replaceChildren\(\);try\{await api\('\/web\/outbound\/decision'/);
+assert.match(browserJS,/polling can race with the phone closing a completed session/);
+assert.match(fs.readFileSync('transfer-ios-next/MuseTransfer/WebAssets/style.css','utf8'),/\.row progress\{flex:1 1 240px;width:auto/);
 (async()=>{
   context.inputs=[new File(['mp3 bytes'],'你好.MP3'),new File(['[00:01]歌词'],'你好.lrc'),new File(['cover'],'你好.png'),new File(['ignore'],'notes.txt')];
   vm.runInContext("select(inputs,'files')",context);

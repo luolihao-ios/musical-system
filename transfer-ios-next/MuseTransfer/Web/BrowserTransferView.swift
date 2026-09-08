@@ -127,7 +127,7 @@ struct BrowserTransferView: View {
                     try FileManager.default.copyItem(at: url, to: temporary)
                     let saved = try store.save(temporary, as: url.lastPathComponent)
                     let savedURL = model.outboundRoot.appendingPathComponent(saved)
-                    model.outboundFiles.append(BrowserOutboundTask(name: url.lastPathComponent, bytes: Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0), url: savedURL.path))
+                    model.outboundFiles.append(BrowserOutboundTask(id: url.lastPathComponent, name: url.lastPathComponent, bytes: Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0), url: savedURL.path))
                 }
                 importMessage = String(localized: "已加入发送队列，电脑浏览器会自动下载")
             } catch { importMessage = error.localizedDescription }
@@ -141,7 +141,7 @@ struct BrowserTransferView: View {
                     let name = "媒体-" + UUID().uuidString.prefix(8) + "." + file.url.pathExtension
                     let saved = try store.save(file.url, as: name)
                     let savedURL = model.outboundRoot.appendingPathComponent(saved)
-                    model.outboundFiles.append(BrowserOutboundTask(name: name, bytes: Int64((try? file.url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0), url: savedURL.path))
+                    model.outboundFiles.append(BrowserOutboundTask(id: name, name: name, bytes: Int64((try? file.url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0), url: savedURL.path))
                 }
                 importMessage = String(localized: "媒体已加入发送队列，电脑浏览器会自动下载")
             } catch { importMessage = error.localizedDescription }
