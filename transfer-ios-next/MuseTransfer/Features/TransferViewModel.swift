@@ -40,9 +40,14 @@ import PhotosUI
         receiver = LocalSendReceiver(local: local, destination: folder)
         receiver.onIncomingTransfer = { [weak self] request in Task { @MainActor in self?.incomingTransfer = request } }
         receiver.onFileReceived = { [weak self] file in Task { @MainActor in self?.recordReceived(file) } }
-        do { try receiver.start() } catch { DiagnosticLog.write("iOS receiver start failed: \(error.localizedDescription)") }
+        // Unit tests exercise transport components with their own listeners.
+        // Do not start the production 8080/Bonjour services from the test host.
+        let isTestHost = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        if !isTestHost {
+            do { try receiver.start() } catch { DiagnosticLog.write("iOS receiver start failed: \(error.localizedDescription)") }
+        }
         browser.onDevicesChanged = { [weak self] devices in Task { @MainActor in self?.devices = devices } }
-        browser.start()
+        if !isTestHost { browser.start() }
     }
     // Restarting NWListener to refresh Bonjour races with the old TCP socket being
     // released. It caused address-in-use failures and made a previously working
