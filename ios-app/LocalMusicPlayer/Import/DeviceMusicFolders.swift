@@ -4,9 +4,16 @@ import Foundation
     static func scan(using importer: any FileImporting) async -> [TrackRecord] {
         let fileManager = FileManager.default
         let documents = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        var roots = [documents, documents.appendingPathComponent("爱乐互传", isDirectory: true)]
+        // The transfer app writes the shared handoff files below its App Group
+        // container. Scan the container root instead of only MusicHandoff so
+        // older builds and files placed directly in the shared folder remain
+        // discoverable as well.
+        var roots = [documents]
         if let group = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.com.luolihao.aiyuetransfer") {
-            roots.insert(group.appendingPathComponent("MusicHandoff", isDirectory: true), at: 0)
+            roots.insert(group, at: 0)
+            log("App Group 容器：\(group.path)")
+        } else {
+            log("App Group 容器不可用：group.com.luolihao.aiyuetransfer")
         }
         log("开始扫描本地音频，目录数：\(roots.count)")
         var tracks: [TrackRecord] = []

@@ -80,8 +80,8 @@ jobs:
             AIYUE_TEAM_ID="$TEAM_ID" \
             AIYUE_PROFILE_NAME="$PROFILE_NAME" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGNING_REQUIRED=YES
 
           cat > "$TEMP_SIGNING_DIR/ExportOptions.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -102,6 +102,20 @@ jobs:
             -archivePath ios-app/build/AppStore/LocalMusicPlayer.xcarchive \
             -exportPath ios-app/build/AppStore/export \
             -exportOptionsPlist "$TEMP_SIGNING_DIR/ExportOptions.plist"
+      - name: Verify exported App Group entitlement
+        run: |
+          set -euo pipefail
+          IPA_PATH=$(find ios-app/build/AppStore/export -maxdepth 1 -name '*.ipa' -print -quit)
+          test -n "$IPA_PATH"
+          CHECK_DIR="$RUNNER_TEMP/local-music-entitlements"
+          rm -rf "$CHECK_DIR"
+          mkdir -p "$CHECK_DIR"
+          unzip -q "$IPA_PATH" -d "$CHECK_DIR"
+          APP_PATH=$(find "$CHECK_DIR/Payload" -maxdepth 1 -name '*.app' -print -quit)
+          test -n "$APP_PATH"
+          codesign -d --entitlements :- "$APP_PATH" > "$CHECK_DIR/entitlements.plist" 2> "$CHECK_DIR/codesign.log"
+          /usr/libexec/PlistBuddy -c 'Print :com.apple.security.application-groups:0' "$CHECK_DIR/entitlements.plist" \
+            | grep -Fx 'group.com.luolihao.aiyuetransfer'
       - name: Upload to App Store Connect
         env:
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
