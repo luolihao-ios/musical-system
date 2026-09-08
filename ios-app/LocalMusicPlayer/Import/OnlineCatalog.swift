@@ -76,7 +76,8 @@ actor OnlineCatalog {
     private func searchInternetArchive(query: String) async throws -> [CatalogTrack] {
         var components = URLComponents(string: "https://archive.org/advancedsearch.php")!
         components.queryItems = [
-            URLQueryItem(name: "q", value: "mediatype:audio AND (title:\(query) OR creator:\(query))"),
+            // Internet Archive 中的 Jamendo 开放音乐镜像带有完整许可证和 MP3 文件元数据。
+            URLQueryItem(name: "q", value: "collection:jamendo-albums AND (title:\(query) OR creator:\(query))"),
             URLQueryItem(name: "fl[]", value: "identifier,title,creator,licenseurl"),
             URLQueryItem(name: "rows", value: "20"), URLQueryItem(name: "output", value: "json")
         ]
