@@ -25,7 +25,13 @@ import Foundation
             log("扫描目录：\(root.path)，文件数：\(urls.count)")
             var folders: [URL: [ImportedFile]] = [:]
             for url in urls {
-                guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]), values.isRegularFile == true, values.isSymbolicLink != true else { continue }
+                guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey]) else {
+                    log("跳过条目（无法读取属性）：\(url.path)")
+                    continue
+                }
+                guard values.isDirectory != true, values.isSymbolicLink != true else {
+                    continue
+                }
                 let ext = url.pathExtension.lowercased()
                 let kind: ImportedFile.Kind
                 if FileImportService.supportedAudioExtensions.contains(ext) { kind = .audio }
@@ -33,8 +39,10 @@ import Foundation
                 else if ext == "aiyuepack" { kind = .package }
                 else if ["jpg", "jpeg", "png", "webp"].contains(ext) { kind = .cover }
                 else { continue }
+                log("发现可导入文件：\(url.lastPathComponent)，类型：\(kind)，扩展名：\(ext)")
                 folders[url.deletingLastPathComponent(), default: []].append(ImportedFile(sourceURL: url, kind: kind))
             }
+            log("本目录可导入文件数：\(folders.values.reduce(0) { $0 + $1.count })")
             for files in folders.values {
                 let companions = files.filter { $0.kind == .lyrics || $0.kind == .cover }
                 for file in files where file.kind == .audio || file.kind == .package {
