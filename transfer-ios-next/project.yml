@@ -13,7 +13,7 @@ settings:
     SWIFT_STRICT_CONCURRENCY: minimal
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
     MARKETING_VERSION: "1.0.1"
-    CURRENT_PROJECT_VERSION: "109"
+    CURRENT_PROJECT_VERSION: "110"
 targets:
   AiyueTransfer:
     type: application
@@ -39,6 +39,8 @@ targets:
         INFOPLIST_FILE: MuseTransfer/Info.plist
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         CODE_SIGN_ENTITLEMENTS: MuseTransfer/MuseTransfer.entitlements
+        DEVELOPMENT_TEAM: "$(AIYUE_TEAM_ID)"
+        PROVISIONING_PROFILE_SPECIFIER: "$(AIYUE_PROFILE_NAME)"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     scheme:
       testTargets:
