@@ -77,7 +77,7 @@ actor OnlineCatalog {
         var components = URLComponents(string: "https://archive.org/advancedsearch.php")!
         components.queryItems = [
             // Internet Archive 中的 Jamendo 开放音乐镜像带有完整许可证和 MP3 文件元数据。
-            URLQueryItem(name: "q", value: "collection:jamendo-albums AND (title:\(query) OR creator:\(query))"),
+            URLQueryItem(name: "q", value: "collection:jamendo-albums AND (title:\(query) OR creator:\(query) OR description:\(query) OR subject:\(query) OR text:\(query))"),
             URLQueryItem(name: "fl[]", value: "identifier,title,creator,licenseurl"),
             URLQueryItem(name: "rows", value: "20"), URLQueryItem(name: "output", value: "json")
         ]

@@ -18,7 +18,7 @@ struct OnlineCatalogSearchView: View {
                 }
             }
             .overlay { if loading { ProgressView() } else if results.isEmpty { ContentUnavailableView("搜索公开音乐", systemImage: "globe", description: Text("搜索 Jamendo 等开放许可音乐")) } }
-            .searchable(text: $query, prompt: "搜索歌曲或艺术家")
+            .searchable(text: $query, prompt: "搜索歌曲、艺术家或歌词关键词")
             .onSubmit(of: .search) { Task { await search() } }
             .navigationTitle("在线音乐")
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button("关闭") { dismiss() } } }
