@@ -1,25 +1,8 @@
 import Foundation
 
 @MainActor enum DeviceMusicFolders {
-    private static let key = "AuthorizedMusicFolders.v1"
-    static func authorize(_ urls: [URL]) throws {
-        var saved = UserDefaults.standard.array(forKey: key) as? [Data] ?? []
-        for url in urls {
-            let access = url.startAccessingSecurityScopedResource()
-            defer { if access { url.stopAccessingSecurityScopedResource() } }
-            let bookmark = try url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
-            if !saved.contains(bookmark) { saved.append(bookmark) }
-        }
-        UserDefaults.standard.set(saved, forKey: key)
-    }
     static func scan(using importer: any FileImporting) async -> [TrackRecord] {
-        var roots: [URL] = []
-        for data in UserDefaults.standard.array(forKey: key) as? [Data] ?? [] {
-            var stale = false
-            if let url = try? URL(resolvingBookmarkData: data, options: .withoutUI, relativeTo: nil, bookmarkDataIsStale: &stale) { roots.append(url) }
-        }
-        if let shared = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.luolihao.aiyuetransfer") { roots.append(shared.appendingPathComponent("MusicHandoff")) }
-        if let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first { roots.append(documents) }
+        let roots: [URL] = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.luolihao.aiyuetransfer").map { [$0.appendingPathComponent("MusicHandoff")] } ?? []
         var tracks: [TrackRecord] = []
         var seen: Set<URL> = []
         for root in roots where seen.insert(root.standardizedFileURL).inserted {
