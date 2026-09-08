@@ -1,4 +1,23 @@
 import SwiftUI
+import AVFoundation
+
+@MainActor
+private final class CatalogPreviewPlayer: ObservableObject {
+    private let player = AVPlayer()
+    @Published private(set) var playingID: String?
+
+    func toggle(_ track: CatalogTrack) {
+        if playingID == track.id {
+            player.pause()
+            playingID = nil
+            return
+        }
+        guard let url = track.previewURL else { return }
+        player.replaceCurrentItem(with: AVPlayerItem(url: url))
+        player.play()
+        playingID = track.id
+    }
+}
 
 struct OnlineCatalogSearchView: View {
     @Bindable var model: LibraryModel
@@ -7,6 +26,7 @@ struct OnlineCatalogSearchView: View {
     @State private var results: [CatalogTrack] = []
     @State private var loading = false
     @State private var message = ""
+    @StateObject private var previewPlayer = CatalogPreviewPlayer()
 
     var body: some View {
         NavigationStack {
@@ -14,7 +34,12 @@ struct OnlineCatalogSearchView: View {
                 HStack {
                     VStack(alignment: .leading) { Text(track.title); Text(track.artist).font(.caption).foregroundStyle(.secondary); Text([track.provider, track.license.displayName].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption2) }
                     Spacer()
-                    if let preview = track.previewURL { Link("试听", destination: preview).buttonStyle(.bordered) }
+                    if track.previewURL != nil {
+                        Button(previewPlayer.playingID == track.id ? "停止" : "试听") {
+                            previewPlayer.toggle(track)
+                        }
+                        .buttonStyle(.bordered)
+                    }
                     if track.license.allowsDownload { Button("下载") { Task { await download(track) } }.buttonStyle(.borderedProminent) }
                 }
             }
