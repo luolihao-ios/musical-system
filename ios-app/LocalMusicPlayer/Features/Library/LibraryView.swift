@@ -267,8 +267,6 @@ private struct TrackRow: View {
     let addToPlaylist: (String) -> Void
     let playlists: () -> [PlaylistSnapshot]
     let delete: () -> Void
-    @State private var showDeleteConfirmation = false
-
     var body: some View {
         HStack(spacing: 12) {
             Button(action: play) {
@@ -328,7 +326,7 @@ private struct TrackRow: View {
                     }
                 }
                 Button(role: .destructive) {
-                    showDeleteConfirmation = true
+                    delete()
                 } label: {
                     Label("从音乐库删除", systemImage: "trash")
                 }
@@ -344,20 +342,10 @@ private struct TrackRow: View {
         .opacity(track.isAvailable ? 1 : 0.45)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
-                showDeleteConfirmation = true
+                delete()
             } label: {
                 Label("删除", systemImage: "trash")
             }
-        }
-        .confirmationDialog(
-            "从音乐库删除这首歌？",
-            isPresented: $showDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("删除", role: .destructive, action: delete)
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("这只会移除播放器中的记录，不会删除原始文件。")
         }
     }
 }

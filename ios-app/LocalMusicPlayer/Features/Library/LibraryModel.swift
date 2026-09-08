@@ -20,6 +20,7 @@ extension SystemLibraryImporter: SystemLibraryImporting {
 @MainActor
 protocol LibraryPlaybackControlling: AnyObject {
     var state: PlaybackState { get }
+    func removeTrack(id: String) throws
     func playTrack(
         _ track: TrackSnapshot,
         in queue: [TrackSnapshot]
@@ -32,6 +33,10 @@ protocol LibraryPlaybackControlling: AnyObject {
 }
 
 extension PlaybackController: LibraryPlaybackControlling {
+}
+
+extension LibraryPlaybackControlling {
+    func removeTrack(id: String) throws {}
 }
 
 enum LibraryGroupKind: String, CaseIterable, Identifiable, Sendable {
@@ -209,6 +214,7 @@ final class LibraryModel {
     }
 
     func delete(_ track: TrackSnapshot) throws {
+        try playback.removeTrack(id: track.id)
         try store.deleteTrack(id: track.id)
         try reload()
     }

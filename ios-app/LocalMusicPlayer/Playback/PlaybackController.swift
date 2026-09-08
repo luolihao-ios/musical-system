@@ -170,6 +170,30 @@ final class PlaybackController: PlaybackControlling {
         try savePreferences()
     }
 
+    func removeTrack(id: String) throws {
+        guard state.queue.contains(where: { $0.id == id }) else { return }
+        let currentID = state.currentTrack?.id
+        let remaining = state.queue.filter { $0.id != id }
+        var next = state
+        next.queue = remaining
+        if currentID == id {
+            playbackGeneration = UUID()
+            acceptsPositionUpdates = false
+            engine.pause()
+            engine.unload()
+            loadedTrackID = nil
+            next.currentIndex = nil
+            next.isPlaying = false
+            next.position = 0
+        } else {
+            next.currentIndex = currentID.flatMap { current in
+                remaining.firstIndex(where: { $0.id == current })
+            }
+        }
+        state = next
+        try savePreferences()
+    }
+
     func pause() throws {
         engine.pause()
         var pausedState = state

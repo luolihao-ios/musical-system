@@ -57,6 +57,24 @@ final class LibraryModelTests: XCTestCase {
         XCTAssertTrue(model.tracks[0].isLiked)
     }
 
+    func testDeletingTwoTracksInSuccessionKeepsLibraryConsistent() throws {
+        let store = try makeStore()
+        try store.upsert(track(id: "one", title: "第一首", artist: "歌手"))
+        try store.upsert(track(id: "two", title: "第二首", artist: "歌手"))
+        let model = LibraryModel(
+            store: store,
+            fileImporter: FakeFileImporter(),
+            systemImporter: FakeSystemImporter(result: .imported([])),
+            playback: FakeLibraryPlayback()
+        )
+        try model.reload()
+
+        try model.delete(model.tracks[0])
+        try model.delete(model.tracks[0])
+
+        XCTAssertTrue(model.tracks.isEmpty)
+    }
+
     func testGroupsTracksByAlbumAndArtistWithUnknownFallbacks() throws {
         let store = try makeStore()
         try store.upsert(
