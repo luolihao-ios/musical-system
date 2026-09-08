@@ -12,8 +12,9 @@ struct OnlineCatalogSearchView: View {
         NavigationStack {
             List(results) { track in
                 HStack {
-                    VStack(alignment: .leading) { Text(track.title); Text(track.artist).font(.caption).foregroundStyle(.secondary); Text(track.license.displayName).font(.caption2) }
+                    VStack(alignment: .leading) { Text(track.title); Text(track.artist).font(.caption).foregroundStyle(.secondary); Text([track.provider, track.license.displayName].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption2) }
                     Spacer()
+                    if let preview = track.previewURL { Link("试听", destination: preview).buttonStyle(.bordered) }
                     if track.license.allowsDownload { Button("下载") { Task { await download(track) } }.buttonStyle(.borderedProminent) }
                 }
             }

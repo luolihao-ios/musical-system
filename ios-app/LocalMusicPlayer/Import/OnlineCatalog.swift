@@ -19,6 +19,11 @@ struct CatalogTrack: Identifiable, Sendable, Equatable {
     let artist: String
     let audioURL: URL
     let license: CatalogLicense
+    let provider: String
+    let previewURL: URL?
+    init(id: String, title: String, artist: String, audioURL: URL, license: CatalogLicense, provider: String = "", previewURL: URL? = nil) {
+        self.id = id; self.title = title; self.artist = artist; self.audioURL = audioURL; self.license = license; self.provider = provider; self.previewURL = previewURL
+    }
     var safeFilename: String {
         let clean = [title, artist].joined(separator: " - ").replacingOccurrences(of: "/", with: "-")
         return clean.trimmingCharacters(in: .whitespacesAndNewlines) + ".mp3"
@@ -33,10 +38,11 @@ actor OnlineCatalog {
     func search(query: String) async throws -> [CatalogTrack] {
         guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
         // Jamendo 的 client_id 是必需的。没有配置时使用无需密钥的开放许可目录。
-        var results = try await searchInternetArchive(query: query)
+        var results = (try? await searchInternetArchive(query: query)) ?? []
         // Jamendo 官方文档提供的只读测试 ID，用于测试构建；正式发布前替换为开发者应用 ID。
         let clientID = UserDefaults.standard.string(forKey: "jamendoClientID") ?? "709fa152"
         if !clientID.isEmpty { results.append(contentsOf: try await searchJamendo(query: query, clientID: clientID)) }
+        results.append(contentsOf: await searchThirdPartyMetadata(query: query))
         return results.removingDuplicates()
     }
 
@@ -120,7 +126,57 @@ actor OnlineCatalog {
         return response.results.compactMap { item in
             guard let raw = item.audio, let url = URL(string: raw) else { return nil }
             let license: CatalogLicense = item.license_ccurl == nil ? .unknown : .creativeCommons(attribution: item.license_ccurl!)
-            return CatalogTrack(id: String(item.id), title: item.name, artist: item.artist_name, audioURL: url, license: license)
+            return CatalogTrack(id: "jamendo-\(item.id)", title: item.name, artist: item.artist_name, audioURL: url, license: license, provider: "Jamendo", previewURL: url)
+        }
+    }
+
+    private func searchThirdPartyMetadata(query: String) async -> [CatalogTrack] {
+        var result: [CatalogTrack] = []
+        if let tracks = try? await searchNetEase(query: query) { result.append(contentsOf: tracks) }
+        if let tracks = try? await searchQQMusic(query: query) { result.append(contentsOf: tracks) }
+        if let tracks = try? await searchKugou(query: query) { result.append(contentsOf: tracks) }
+        return result
+    }
+
+    private func requestData(_ url: URL) async throws -> Data {
+        var request = URLRequest(url: url); request.timeoutInterval = 12
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw URLError(.badServerResponse) }
+        return data
+    }
+
+    private func searchNetEase(query: String) async throws -> [CatalogTrack] {
+        var c = URLComponents(string: "https://music.163.com/api/search/get/web")!
+        c.queryItems = [URLQueryItem(name: "s", value: query), URLQueryItem(name: "type", value: "1"), URLQueryItem(name: "limit", value: "20")]
+        let object = try JSONSerialization.jsonObject(with: try await requestData(c.url!)) as? [String: Any]
+        let songs = (object?["result"] as? [String: Any])?["songs"] as? [[String: Any]] ?? []
+        return songs.compactMap { song in
+            guard let id = song["id"] as? Int, let title = song["name"] as? String, let artists = song["artists"] as? [[String: Any]], let artist = artists.first?["name"] as? String else { return nil }
+            let preview = URL(string: "https://music.163.com/song/media/outer/url?id=\(id).mp3")
+            return CatalogTrack(id: "netease-\(id)", title: title, artist: artist, audioURL: preview ?? URL(string: "https://example.invalid")!, license: .unknown, provider: "网易云音乐", previewURL: preview)
+        }
+    }
+
+    private func searchQQMusic(query: String) async throws -> [CatalogTrack] {
+        var c = URLComponents(string: "https://c.y.qq.com/soso/fcgi-bin/client_search_cp")!
+        c.queryItems = [URLQueryItem(name: "w", value: query), URLQueryItem(name: "format", value: "json"), URLQueryItem(name: "p", value: "1"), URLQueryItem(name: "n", value: "20")]
+        let data = try await requestData(c.url!); let text = String(decoding: data, as: UTF8.self).replacingOccurrences(of: "MusicJsonCallback(", with: "").dropLast()
+        let object = try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any]
+        let songs = (object?["data"] as? [String: Any])?["song"] as? [String: Any]; let list = songs?["list"] as? [[String: Any]] ?? []
+        return list.compactMap { song in
+            guard let id = song["songmid"] as? String, let title = song["songname"] as? String, let singers = song["singer"] as? [[String: Any]], let artist = singers.first?["name"] as? String else { return nil }
+            return CatalogTrack(id: "qq-\(id)", title: title, artist: artist, audioURL: URL(string: "https://example.invalid")!, license: .unknown, provider: "QQ音乐")
+        }
+    }
+
+    private func searchKugou(query: String) async throws -> [CatalogTrack] {
+        var c = URLComponents(string: "https://mobilecdn.kugou.com/api/v3/search/song")!
+        c.queryItems = [URLQueryItem(name: "keyword", value: query), URLQueryItem(name: "pagesize", value: "20"), URLQueryItem(name: "page", value: "1")]
+        let object = try JSONSerialization.jsonObject(with: try await requestData(c.url!)) as? [String: Any]
+        let list = ((object?["data"] as? [String: Any])?["info"] as? [[String: Any]]) ?? []
+        return list.compactMap { song in
+            guard let hash = song["hash"] as? String, let title = song["songname"] as? String else { return nil }
+            return CatalogTrack(id: "kugou-\(hash)", title: title, artist: song["singername"] as? String ?? "酷狗音乐", audioURL: URL(string: "https://example.invalid")!, license: .unknown, provider: "酷狗音乐")
         }
     }
 
