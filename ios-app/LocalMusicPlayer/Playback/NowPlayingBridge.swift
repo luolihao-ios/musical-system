@@ -182,6 +182,7 @@ final class MPNowPlayingSession: SystemNowPlayingSession {
             MPNowPlayingInfoPropertyPlaybackRate: info.playbackRate
         ]
         if let path = info.artworkPath,
+           URL(fileURLWithPath: path).lastPathComponent != "artwork-generated.jpg",
            let image = ArtworkImageLoader.image(atPath: path, maxPixelSize: 512) {
             if image.size.width > 0,
                image.size.height > 0,
@@ -196,7 +197,11 @@ final class MPNowPlayingSession: SystemNowPlayingSession {
                 PlaybackDiagnostics.log("系统媒体信息跳过无效封面：路径=\(path)")
             }
         } else if let path = info.artworkPath {
-            PlaybackDiagnostics.log("系统媒体信息无法读取封面：路径=\(path)")
+            PlaybackDiagnostics.log(
+                URL(fileURLWithPath: path).lastPathComponent == "artwork-generated.jpg"
+                    ? "系统媒体信息跳过程序化封面：路径=\(path)"
+                    : "系统媒体信息无法读取封面：路径=\(path)"
+            )
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = values
     }

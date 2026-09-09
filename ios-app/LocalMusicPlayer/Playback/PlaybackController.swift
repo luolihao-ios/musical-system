@@ -157,6 +157,7 @@ final class PlaybackController: PlaybackControlling {
         loadingState.position = 0
         loadingState.duration = availableQueue[index].duration
         state = loadingState
+        PlaybackDiagnostics.log("当前歌曲状态已发布：id=\(track.id)")
 
         do {
             try await loadCurrent(generation: generation)
