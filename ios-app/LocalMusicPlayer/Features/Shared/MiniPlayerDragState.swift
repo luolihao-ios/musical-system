@@ -35,7 +35,10 @@ enum MiniPlayerDragState {
         translation: CGFloat,
         availableDistance: CGFloat = 600
     ) -> MiniPlayerDragDecision {
-        if translation > max(availableDistance / 3, 1) {
+        let dismissDistance = progress > 0.5
+            ? max(availableDistance / 3, 1)
+            : 20
+        if translation > dismissDistance {
             return .dismiss
         }
         if translation <= -80 || progress >= 0.28 {

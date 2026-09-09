@@ -24,6 +24,8 @@ struct MiniPlayerView: View {
 
     @State private var dragProgress: CGFloat = 0
     @State private var dragStartProgress: CGFloat = 0
+    @State private var dragOffset: CGFloat = 0
+    @State private var dragStartOffset: CGFloat = 0
     @State private var didStartDrag = false
 
     private let compactHeight: CGFloat = 60
@@ -44,6 +46,7 @@ struct MiniPlayerView: View {
             expandedContent
                 .opacity(min(max(dragProgress * 1.35, 0), 1))
                 .scaleEffect(0.92 + dragProgress * 0.08, anchor: .top)
+                .allowsHitTesting(dragProgress > 0.01)
         }
         .frame(maxWidth: .infinity)
         .frame(
@@ -51,10 +54,14 @@ struct MiniPlayerView: View {
                 + (expandedHeight - compactHeight) * dragProgress,
             alignment: .top
         )
+        .offset(y: dragOffset)
         .background(.ultraThinMaterial)
         .clipShape(
-            RoundedRectangle(
-                cornerRadius: 22 * dragProgress,
+            UnevenRoundedRectangle(
+                topLeadingRadius: 22 * dragProgress,
+                topTrailingRadius: 22 * dragProgress,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
                 style: .continuous
             )
         )
@@ -71,24 +78,14 @@ struct MiniPlayerView: View {
         }
         .clipped()
         .contentShape(Rectangle())
-        // 与内部按钮同时识别，避免外层拖拽手势把点击拦截到下方页面。
-        .simultaneousGesture(dragGesture)
+        // 只有明显位移才由外层手势接管，避免拖拽与打开详情同时触发。
+        .highPriorityGesture(dragGesture)
         .allowsHitTesting(true)
     }
 
     private var compactContent: some View {
-        ZStack {
+        HStack(spacing: 12) {
             Button(action: openNowPlaying) {
-                // Color.clear 不一定会参与命中测试；使用几乎透明的实体矩形，
-                // 让迷你播放器空白区域也能稳定接收点击和拖拽。
-                Rectangle()
-                    .fill(Color.black.opacity(0.001))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("打开正在播放")
-
-            HStack(spacing: 12) {
                 HStack(spacing: 12) {
                     ArtworkView(
                         path: model.state.currentTrack?.artworkReference,
@@ -105,37 +102,40 @@ struct MiniPlayerView: View {
                             .lineLimit(1)
                     }
                 }
-                .allowsHitTesting(false)
-                Spacer(minLength: 8)
-                Button {
-                    Task { await model.togglePlayback() }
-                } label: {
-                    Image(
-                        systemName: model.state.isPlaying
-                            ? "pause.fill"
-                            : "play.fill"
-                    )
-                    .frame(width: 44, height: 44)
-                }
-                .accessibilityLabel(
-                    model.state.isPlaying ? "暂停" : "播放"
-                )
-                Button {
-                    Task { await model.next() }
-                } label: {
-                    Image(systemName: "forward.end.fill")
-                        .frame(width: 44, height: 44)
-                }
-                .accessibilityLabel("下一首")
-                Button(action: dismiss) {
-                    Image(systemName: "xmark")
-                        .frame(width: 36, height: 36)
-                }
-                .accessibilityLabel("关闭播放器")
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
+            .buttonStyle(.plain)
+            .accessibilityLabel("打开正在播放")
+            .layoutPriority(1)
+
+            Spacer(minLength: 8)
+            Button {
+                Task { await model.togglePlayback() }
+            } label: {
+                Image(
+                    systemName: model.state.isPlaying
+                        ? "pause.fill"
+                        : "play.fill"
+                )
+                .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel(model.state.isPlaying ? "暂停" : "播放")
+            Button {
+                Task { await model.next() }
+            } label: {
+                Image(systemName: "forward.end.fill")
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("下一首")
+            Button(action: dismiss) {
+                Image(systemName: "xmark")
+                    .frame(width: 36, height: 36)
+            }
+            .accessibilityLabel("关闭播放器")
         }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
         .frame(height: compactHeight)
     }
 
@@ -204,17 +204,25 @@ struct MiniPlayerView: View {
     }
 
     private var dragGesture: some Gesture {
-        DragGesture(minimumDistance: 0)
+        DragGesture(minimumDistance: 8)
             .onChanged { value in
                 if !didStartDrag {
                     dragStartProgress = dragProgress
+                    dragStartOffset = dragOffset
                     didStartDrag = true
                 }
-                dragProgress = MiniPlayerDragState.progress(
-                    from: dragStartProgress,
-                    translation: value.translation.height,
-                    availableDistance: availableDistance
-                )
+                let translation = value.translation.height
+                if translation < 0 {
+                    dragProgress = MiniPlayerDragState.progress(
+                        from: dragStartProgress,
+                        translation: translation,
+                        availableDistance: availableDistance
+                    )
+                    dragOffset = 0
+                } else {
+                    dragProgress = dragStartProgress
+                    dragOffset = max(dragStartOffset + translation, 0)
+                }
             }
             .onEnded { value in
                 didStartDrag = false
@@ -225,6 +233,7 @@ struct MiniPlayerView: View {
                 )
                 switch decision {
                 case .expand:
+                    dragOffset = 0
                     withAnimation(.interactiveSpring(response: 0.34, dampingFraction: 0.86)) {
                         dragProgress = 1
                     }
@@ -233,13 +242,18 @@ struct MiniPlayerView: View {
                         dragProgress = 0
                     }
                 case .dismiss:
+                    let closeDistance = compactHeight + 24
                     withAnimation(.easeOut(duration: 0.2)) {
-                        dragProgress = 0
+                        dragOffset = closeDistance
                     }
-                    dismiss()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        dragOffset = 0
+                        dismiss()
+                    }
                 case .compact:
                     withAnimation(.interactiveSpring(response: 0.34, dampingFraction: 0.86)) {
                         dragProgress = 0
+                        dragOffset = 0
                     }
                 }
             }

@@ -54,4 +54,18 @@ final class MiniPlayerDragStateTests: XCTestCase {
             .compact
         )
     }
+
+    func testShortDownwardDragDoesNotDismissCompactPlayer() {
+        XCTAssertEqual(
+            MiniPlayerDragState.settle(progress: 0, translation: 20),
+            .compact
+        )
+    }
+
+    func testDownwardDragDismissesCompactPlayerAfterOneThirdOfItsHeight() {
+        XCTAssertEqual(
+            MiniPlayerDragState.settle(progress: 0, translation: 24),
+            .dismiss
+        )
+    }
 }

@@ -44,8 +44,10 @@ class IOSAPICompatibilityTests(unittest.TestCase):
             / "NowPlayingView.swift"
         ).read_text(encoding="utf-8")
 
-        self.assertIn(".simultaneousGesture(dragGesture)", mini_player)
-        self.assertIn("Color.black.opacity(0.001)", mini_player)
+        self.assertIn(".highPriorityGesture(dragGesture)", mini_player)
+        self.assertIn("dragOffset = max(dragStartOffset + translation, 0)", mini_player)
+        self.assertIn("bottomLeadingRadius: 0", mini_player)
+        self.assertIn("bottomTrailingRadius: 0", mini_player)
         self.assertEqual(now_playing.count("PlaybackWaveformView("), 1)
         self.assertIn("ZStack(alignment: .bottom)", now_playing)
 
