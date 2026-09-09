@@ -44,8 +44,9 @@ class IOSAPICompatibilityTests(unittest.TestCase):
             / "NowPlayingView.swift"
         ).read_text(encoding="utf-8")
 
-        self.assertIn(".highPriorityGesture(dragGesture)", mini_player)
-        self.assertIn("dragOffset = max(dragStartOffset + translation, 0)", mini_player)
+        self.assertIn("coordinateSpace: .global", mini_player)
+        self.assertNotIn("DispatchQueue.main.asyncAfter", mini_player)
+        self.assertNotIn(".offset(y:", mini_player)
         self.assertIn("bottomLeadingRadius: 0", mini_player)
         self.assertIn("bottomTrailingRadius: 0", mini_player)
         self.assertEqual(now_playing.count("PlaybackWaveformView("), 1)
@@ -59,8 +60,10 @@ class IOSAPICompatibilityTests(unittest.TestCase):
             / "AppShellView.swift"
         ).read_text(encoding="utf-8")
 
-        self.assertIn(".overlay(alignment: .bottom)", app_shell)
-        self.assertIn(".ignoresSafeArea(edges: .bottom)", app_shell)
+        dock = (IOS_ROOT / "LocalMusicPlayer" / "Features" / "Shared" / "PlayerDockContainer.swift").read_text(encoding="utf-8")
+        self.assertIn("PlayerDockContainer(", app_shell)
+        self.assertNotIn(".sheet(isPresented: $showNowPlaying)", app_shell)
+        self.assertIn(".ignoresSafeArea(.container, edges: .bottom)", dock)
         self.assertNotIn(".safeAreaInset(edge: .bottom", app_shell)
 
 

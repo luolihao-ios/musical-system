@@ -14,6 +14,9 @@ enum NowPlayingContentMode: Equatable {
 
 struct NowPlayingView: View {
     @Bindable var model: NowPlayingModel
+    var closePanel: (() -> Void)? = nil
+    var panelDragChanged: ((DragGesture.Value) -> Void)? = nil
+    var panelDragEnded: ((DragGesture.Value) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -34,6 +37,24 @@ struct NowPlayingView: View {
                 )
                 .ignoresSafeArea()
 
+                VStack(spacing: 0) {
+                    HStack {
+                        Button("关闭") {
+                            if let closePanel { closePanel() } else { dismiss() }
+                        }
+                        Spacer()
+                        Text("正在播放").font(.headline)
+                        Spacer()
+                        Button { showQueue = true } label: {
+                            Image(systemName: "list.bullet")
+                        }
+                        .accessibilityLabel("播放队列")
+                    }
+                    .padding(.horizontal, 20)
+                    .frame(height: 52)
+                    .contentShape(Rectangle())
+                    .accessibilityIdentifier("player.detail.header")
+                    .highPriorityGesture(panelDrag)
                 GeometryReader { geometry in
                     ScrollView {
                         VStack(spacing: 22) {
@@ -49,22 +70,9 @@ struct NowPlayingView: View {
                     }
                     .scrollIndicators(.hidden)
                 }
-            }
-            .navigationTitle("正在播放")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("关闭") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showQueue = true
-                    } label: {
-                        Image(systemName: "list.bullet")
-                    }
-                    .accessibilityLabel("播放队列")
                 }
             }
+            .toolbar(.hidden, for: .navigationBar)
         }
         .onAppear { model.reduceMotion = reduceMotion }
         .onChange(of: reduceMotion) { _, value in
@@ -172,6 +180,13 @@ struct NowPlayingView: View {
                 : dimension + (model.hasLyrics ? 56 : 24)
         )
         .padding(.top, 12)
+        .highPriorityGesture(panelDrag, including: contentMode == .lyrics ? .subviews : .all)
+    }
+
+    private var panelDrag: some Gesture {
+        DragGesture(minimumDistance: 8, coordinateSpace: .global)
+            .onChanged { panelDragChanged?($0) }
+            .onEnded { panelDragEnded?($0) }
     }
 
     private func switchContent(to mode: NowPlayingContentMode) {

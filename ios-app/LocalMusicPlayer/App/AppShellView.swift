@@ -6,7 +6,6 @@ struct AppShellView: View {
     let container: AppContainer
 
     @Environment(\.scenePhase) private var scenePhase
-    @State private var showNowPlaying = false
     @State private var miniPlayerVisibility = MiniPlayerVisibility()
     @State private var storeUpdate: AppStoreUpdate?
     @State private var didCheckStore = false
@@ -16,6 +15,28 @@ struct AppShellView: View {
     }
 
     var body: some View {
+        PlayerDockContainer(
+            model: container.nowPlayingModel,
+            isVisible: container.nowPlayingModel.state.currentTrack != nil && miniPlayerVisibility.isVisible,
+            dismiss: {
+                PlayerInteractionDiagnostics.log("shell hide player")
+                miniPlayerVisibility.dismiss()
+            }
+        ) { tabs }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { try? container.playback.persistCurrentState() }
+        }
+        .onChange(of: container.nowPlayingModel.state.currentTrack?.id) { _, _ in
+            PlayerInteractionDiagnostics.log("shell show reason=track-change")
+            miniPlayerVisibility.show()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showMiniPlayer)) { _ in
+            PlayerInteractionDiagnostics.log("shell show reason=notification")
+            miniPlayerVisibility.show()
+        }
+    }
+
+    private var tabs: some View {
         TabView {
             NavigationStack {
                 LibraryView(
@@ -48,6 +69,9 @@ struct AppShellView: View {
                         Text("联网仅用于补全缺失歌词与封面，不上传音乐文件。")
                     }
                     Section("关于") {
+                        ShareLink(item: PlayerInteractionDiagnostics.fileURL) {
+                            Label("导出播放器诊断日志", systemImage: "square.and.arrow.up")
+                        }
                         Button {
                             if let url = storeUpdate?.storeURL {
                                 UIApplication.shared.open(url)
@@ -56,7 +80,7 @@ struct AppShellView: View {
                             HStack {
                                 Text("版本")
                                 Spacer()
-                                Text(currentVersion)
+                                Text("\(currentVersion) (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"))")
                                 if let storeUpdate, AppStoreUpdate.isNewer(storeVersion: storeUpdate.storeVersion, than: currentVersion) {
                                     Image(systemName: "arrow.down.app")
                                         .foregroundStyle(PlayerTheme.accent)
@@ -81,33 +105,5 @@ struct AppShellView: View {
             }
         }
         .tint(PlayerTheme.accent)
-        // 小播放器是底部停靠层，底边始终贴住应用底部；拖拽只改变它的上边缘。
-        .overlay(alignment: .bottom) {
-            if container.nowPlayingModel.state.currentTrack != nil,
-               miniPlayerVisibility.isVisible {
-                MiniPlayerView(
-                    model: container.nowPlayingModel,
-                    openNowPlaying: { showNowPlaying = true },
-                    dismiss: { miniPlayerVisibility.dismiss() }
-                )
-                .zIndex(50)
-                .allowsHitTesting(true)
-                .ignoresSafeArea(edges: .bottom)
-            }
-        }
-        .sheet(isPresented: $showNowPlaying) {
-            NowPlayingView(model: container.nowPlayingModel)
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase != .active {
-                try? container.playback.persistCurrentState()
-            }
-        }
-        .onChange(of: container.nowPlayingModel.state.currentTrack?.id) { _, _ in
-            miniPlayerVisibility.show()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .showMiniPlayer)) { _ in
-            miniPlayerVisibility.show()
-        }
     }
 }

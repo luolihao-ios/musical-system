@@ -7,6 +7,19 @@ struct LocalMusicPlayerApp: App {
 
     var body: some Scene {
         WindowGroup {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--player-interaction-tests") {
+                PlayerInteractionTestHarness().preferredColorScheme(.dark)
+            } else {
+                applicationContent
+            }
+            #else
+            applicationContent
+            #endif
+        }
+    }
+
+    private var applicationContent: some View {
             BootstrapView(bootstrap: bootstrap)
                 .preferredColorScheme(.dark)
                 .onOpenURL { url in Task {
@@ -17,7 +30,6 @@ struct LocalMusicPlayerApp: App {
                         await bootstrap.container?.libraryModel.completeMissingResources()
                     } catch { bootstrap.container?.libraryModel.showImportError(error.localizedDescription) }
                 } }
-        }
     }
 }
 

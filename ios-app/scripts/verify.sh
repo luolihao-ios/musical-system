@@ -26,11 +26,22 @@ raise SystemExit("No available iPhone simulator was found.")
 '
 )"
 
+collect_player_diagnostics() {
+  local data_dir
+  data_dir="$(xcrun simctl get_app_container "$simulator_id" com.luolihao.musicalsystem data 2>/dev/null || true)"
+  if [ -n "$data_dir" ] && [ -f "$data_dir/Documents/music-player-interaction.log" ]; then
+    cp "$data_dir/Documents/music-player-interaction.log" "$ios_root/build/music-player-interaction.log"
+  fi
+}
+trap collect_player_diagnostics EXIT
+
 xcodebuild test \
   -project "$ios_root/LocalMusicPlayer.xcodeproj" \
   -scheme LocalMusicPlayer \
   -configuration Debug \
   -destination "platform=iOS Simulator,id=$simulator_id" \
   -derivedDataPath "$ios_root/build/DerivedData" \
+  -resultBundlePath "$ios_root/build/PlayerTests.xcresult" \
+  -parallel-testing-enabled NO \
   CODE_SIGNING_ALLOWED=NO \
   COMPILER_INDEX_STORE_ENABLE=NO

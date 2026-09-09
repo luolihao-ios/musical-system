@@ -27,6 +27,15 @@ jobs:
         run: ./ios-app/scripts/verify.sh
       - name: Build unsigned device IPA
         run: ./ios-app/scripts/package-unsigned-ipa.sh
+      - name: Preserve simulator test evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: player-interaction-test-evidence
+          path: |
+            ios-app/build/PlayerTests.xcresult
+            ios-app/build/music-player-interaction.log
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v7
         with:
           name: LocalMusicPlayer-iOS-unsigned

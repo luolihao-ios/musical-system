@@ -19,6 +19,15 @@ jobs:
         run: brew install xcodegen
       - name: Run iOS simulator tests
         run: ./ios-app/scripts/verify.sh
+      - name: Preserve simulator test evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: player-interaction-test-evidence
+          path: |
+            ios-app/build/PlayerTests.xcresult
+            ios-app/build/music-player-interaction.log
+          if-no-files-found: warn
       - name: Validate required secrets
         env:
           P12: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
