@@ -101,10 +101,17 @@ struct NowPlayingView: View {
             } else if contentMode == .artwork,
                       model.state.currentTrack?.artworkReference != nil {
                 VStack(spacing: 12) {
-                    ArtworkView(
-                        path: model.state.currentTrack?.artworkReference,
-                        cornerRadius: 24
-                    )
+                    ZStack(alignment: .bottom) {
+                        ArtworkView(
+                            path: model.state.currentTrack?.artworkReference,
+                            cornerRadius: 24
+                        )
+                        // 程序化封面本身已包含静态声波；播放时只在原位置
+                        // 叠加动态波形，不在歌曲标题下方额外增加一组。
+                        PlaybackWaveformView(isPlaying: model.state.isPlaying)
+                            .frame(width: dimension * 0.56)
+                            .padding(.bottom, dimension * 0.265)
+                    }
                     .frame(width: dimension, height: dimension)
                     .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .shadow(
@@ -185,7 +192,6 @@ struct NowPlayingView: View {
             Text(model.state.currentTrack?.artist ?? "爱乐之城")
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            PlaybackWaveformView(isPlaying: model.state.isPlaying)
         }
         .frame(maxWidth: .infinity)
     }

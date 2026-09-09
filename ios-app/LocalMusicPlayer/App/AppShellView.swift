@@ -89,6 +89,8 @@ struct AppShellView: View {
                     openNowPlaying: { showNowPlaying = true },
                     dismiss: { miniPlayerVisibility.dismiss() }
                 )
+                .zIndex(50)
+                .allowsHitTesting(true)
             }
         }
         .sheet(isPresented: $showNowPlaying) {

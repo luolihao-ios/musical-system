@@ -71,13 +71,18 @@ struct MiniPlayerView: View {
         }
         .clipped()
         .contentShape(Rectangle())
-        .gesture(dragGesture)
+        // 与内部按钮同时识别，避免外层拖拽手势把点击拦截到下方页面。
+        .simultaneousGesture(dragGesture)
+        .allowsHitTesting(true)
     }
 
     private var compactContent: some View {
         ZStack {
             Button(action: openNowPlaying) {
-                Color.clear
+                // Color.clear 不一定会参与命中测试；使用几乎透明的实体矩形，
+                // 让迷你播放器空白区域也能稳定接收点击和拖拽。
+                Rectangle()
+                    .fill(Color.black.opacity(0.001))
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -161,8 +166,6 @@ struct MiniPlayerView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-
-            PlaybackWaveformView(isPlaying: model.state.isPlaying)
 
             HStack(spacing: 28) {
                 Button {

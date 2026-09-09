@@ -28,6 +28,27 @@ class IOSAPICompatibilityTests(unittest.TestCase):
             source,
         )
 
+    def test_mini_player_keeps_hit_target_and_does_not_add_extra_waveform(self) -> None:
+        mini_player = (
+            IOS_ROOT
+            / "LocalMusicPlayer"
+            / "Features"
+            / "Shared"
+            / "MiniPlayerView.swift"
+        ).read_text(encoding="utf-8")
+        now_playing = (
+            IOS_ROOT
+            / "LocalMusicPlayer"
+            / "Features"
+            / "NowPlaying"
+            / "NowPlayingView.swift"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(".simultaneousGesture(dragGesture)", mini_player)
+        self.assertIn("Color.black.opacity(0.001)", mini_player)
+        self.assertEqual(now_playing.count("PlaybackWaveformView("), 1)
+        self.assertIn("ZStack(alignment: .bottom)", now_playing)
+
 
 if __name__ == "__main__":
     unittest.main()
