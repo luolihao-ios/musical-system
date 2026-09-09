@@ -29,11 +29,23 @@ struct PlayerInteractionTestHarness: View {
 
 @MainActor
 private final class InteractionTestPlayback: PlaybackControlling {
-    var state = PlaybackState(queue: [TrackSnapshot(
-        id: "gesture-fixture", title: "播放器交互测试", artist: "测试音频",
-        album: "测试专辑", duration: 240, sourceKind: .importedFile,
-        sourceReference: "/test/audio.m4a"
-    )], currentIndex: 0, duration: 240)
+    var state: PlaybackState
+    init() {
+        let root = FileManager.default.temporaryDirectory
+        let artwork = root.appendingPathComponent("gesture-fixture.jpg")
+        let lyrics = root.appendingPathComponent("gesture-fixture.lrc")
+        let data = try? ProceduralArtworkGenerator().generateArtwork(
+            title: "播放器交互测试", artist: "测试音频", seed: "gesture-fixture"
+        )
+        try? data?.write(to: artwork)
+        try? "[00:00.00]第一句测试歌词\n[00:10.00]第二句测试歌词".write(to: lyrics, atomically: true, encoding: .utf8)
+        state = PlaybackState(queue: [TrackSnapshot(
+            id: "gesture-fixture", title: "播放器交互测试", artist: "测试音频",
+            album: "测试专辑", duration: 240, sourceKind: .importedFile,
+            sourceReference: "/test/audio.m4a", artworkReference: artwork.path,
+            lyricsReference: lyrics.path
+        )], currentIndex: 0, duration: 240)
+    }
     private var observer: ((PlaybackState) -> Void)?
     func play() async throws { state.isPlaying = true; observer?(state) }
     func pause() throws { state.isPlaying = false; observer?(state) }

@@ -73,6 +73,9 @@ struct MiniPlayerView: View {
         }
         .onPreferenceChange(PlayerPanelFrameKey.self) { frame in
             actualFrame = frame
+            if !panel.isDragging {
+                PlayerInteractionDiagnostics.log("layout phase=\(panel.phase.rawValue) actualFrame=\(frame) targetHeight=\(height)")
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("player.panel")

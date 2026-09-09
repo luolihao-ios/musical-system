@@ -70,6 +70,19 @@ final class PlayerInteractionUITests: XCTestCase {
         XCTAssertFalse(panel.exists)
     }
 
+    func testLyricsReturnToArtworkAndQueueControlsRemainUsable() {
+        XCTAssertTrue(panel.waitForExistence(timeout: 8))
+        app.buttons["打开正在播放"].tap()
+        waitForPhase("expanded")
+        XCTAssertTrue(app.buttons["查看歌词"].waitForExistence(timeout: 5))
+        app.buttons["查看歌词"].tap()
+        XCTAssertTrue(app.buttons["切换到封面"].waitForExistence(timeout: 3))
+        app.buttons["切换到封面"].tap()
+        XCTAssertTrue(app.buttons["查看歌词"].waitForExistence(timeout: 3))
+        app.buttons["播放队列"].tap()
+        XCTAssertTrue(app.navigationBars["播放队列"].waitForExistence(timeout: 3))
+    }
+
     private func attachScreenshot(_ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name
