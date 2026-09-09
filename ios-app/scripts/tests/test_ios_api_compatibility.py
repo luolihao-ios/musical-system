@@ -18,6 +18,16 @@ class IOSAPICompatibilityTests(unittest.TestCase):
         self.assertIn("bookmarkData(options: []", source)
         self.assertIn("options: [.withoutUI]", source)
 
+    def test_app_does_not_automatically_rescan_music_during_startup(self) -> None:
+        source = (
+            IOS_ROOT / "LocalMusicPlayer" / "App" / "LocalMusicPlayerApp.swift"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn(
+            ".task { await container.libraryModel.scanLocalAudio() }",
+            source,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

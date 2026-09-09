@@ -55,7 +55,11 @@ import Foundation
                 let companions = files.filter { $0.kind == .lyrics || $0.kind == .cover }
                 for file in files where file.kind == .audio || file.kind == .package {
                     do {
-                        tracks += try await importer.importFiles([file] + companions)
+                        log("准备导入：\(file.sourceURL.path)")
+                        let imported = try await importer.importFiles([file] + companions)
+                        tracks += imported
+                        log("导入成功：\(file.sourceURL.lastPathComponent)，记录数：\(imported.count)")
+                        await Task.yield()
                     } catch {
                         log("导入失败：\(file.sourceURL.lastPathComponent)，\(error.localizedDescription)")
                     }

@@ -41,6 +41,28 @@ final class LibraryModelTests: XCTestCase {
         XCTAssertTrue(model.canImportFiles)
     }
 
+    func testSecondImportRequestIsIgnoredWhileImportIsRunning() async throws {
+        let importer = BlockingFileImporter()
+        let started = expectation(description: "第一次导入已开始")
+        importer.onStart = { started.fulfill() }
+        let model = LibraryModel(
+            store: try makeStore(),
+            fileImporter: importer,
+            systemImporter: FakeSystemImporter(result: .imported([])),
+            playback: FakeLibraryPlayback()
+        )
+
+        let first = Task { await model.importFiles([]) }
+        await fulfillment(of: [started], timeout: 1)
+        let second = Task { await model.importFiles([]) }
+        await Task.yield()
+
+        XCTAssertEqual(importer.callCount, 1)
+        importer.finishAll()
+        await first.value
+        await second.value
+    }
+
     func testToggleLikeUpdatesVisibleTrack() async throws {
         let store = try makeStore()
         try store.upsert(track(id: "one", title: "夜航星", artist: "歌手"))
@@ -144,6 +166,29 @@ final class LibraryModelTests: XCTestCase {
 private struct FakeFileImporter: FileImporting {
     func importFiles(_ files: [ImportedFile]) async throws -> [TrackRecord] {
         []
+    }
+}
+
+@MainActor
+private final class BlockingFileImporter: FileImporting {
+    var onStart: (() -> Void)?
+    private(set) var callCount = 0
+    private var continuations: [CheckedContinuation<[TrackRecord], Error>] = []
+
+    func importFiles(_ files: [ImportedFile]) async throws -> [TrackRecord] {
+        callCount += 1
+        onStart?()
+        return try await withCheckedThrowingContinuation { continuation in
+            continuations.append(continuation)
+        }
+    }
+
+    func finishAll() {
+        let pending = continuations
+        continuations.removeAll()
+        for continuation in pending {
+            continuation.resume(returning: [])
+        }
     }
 }
 

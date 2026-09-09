@@ -264,6 +264,7 @@ final class LibraryModel {
     private func performImport(
         _ operation: () async throws -> [TrackRecord]
     ) async {
+        guard !isImporting else { return }
         isImporting = true
         errorMessage = nil
         defer { isImporting = false }
