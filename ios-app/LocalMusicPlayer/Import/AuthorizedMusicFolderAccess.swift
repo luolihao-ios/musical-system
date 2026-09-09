@@ -11,7 +11,7 @@ enum AuthorizedMusicFolderAccess {
             throw CocoaError(.fileReadNoPermission)
         }
         defer { url.stopAccessingSecurityScopedResource() }
-        let bookmark = try url.bookmarkData(options: .withSecurityScope,
+        let bookmark = try url.bookmarkData(options: [],
                                             includingResourceValuesForKeys: nil,
                                             relativeTo: nil)
         defaults.set(bookmark, forKey: bookmarkKey)
@@ -21,10 +21,10 @@ enum AuthorizedMusicFolderAccess {
         guard let data = defaults.data(forKey: bookmarkKey) else { return nil }
         var stale = false
         guard let url = try? URL(resolvingBookmarkData: data,
-                                 options: [.withSecurityScope, .withoutUI],
+                                 options: [.withoutUI],
                                  relativeTo: nil,
                                  bookmarkDataIsStale: &stale) else { return nil }
-        if stale, let refreshed = try? url.bookmarkData(options: .withSecurityScope,
+        if stale, let refreshed = try? url.bookmarkData(options: [],
                                                          includingResourceValuesForKeys: nil,
                                                          relativeTo: nil) {
             defaults.set(refreshed, forKey: bookmarkKey)
