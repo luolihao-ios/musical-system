@@ -12,7 +12,8 @@ final class PlayerInteractionUITests: XCTestCase {
 
     private var panel: XCUIElement { app.otherElements["player.panel"].firstMatch }
 
-    override func tearDownWithError() throws {
+    // XCTest 的同步 tearDownWithError 不隔离到 MainActor；在界面测试作用域内收集证据。
+    private func attachEvidence() {
         let hierarchy = XCTAttachment(string: app.debugDescription)
         hierarchy.name = "播放器控件状态"
         hierarchy.lifetime = .keepAlways
@@ -27,6 +28,7 @@ final class PlayerInteractionUITests: XCTestCase {
     }
 
     func testBottomEdgeTouchesWindowAndPlaybackButtonDoesNotTapThrough() {
+        defer { attachEvidence() }
         XCTAssertTrue(panel.waitForExistence(timeout: 8))
         XCTAssertEqual(panel.frame.maxY, app.frame.maxY, accuracy: 1)
         app.buttons["player.compact.playback"].tap()
@@ -37,6 +39,7 @@ final class PlayerInteractionUITests: XCTestCase {
     }
 
     func testUpwardDragExpandsOnePanelWithoutSheetThenDownwardReleaseCloses() {
+        defer { attachEvidence() }
         XCTAssertTrue(panel.waitForExistence(timeout: 8))
         let start = panel.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0))
             .withOffset(CGVector(dx: 0, dy: 24))
@@ -55,6 +58,7 @@ final class PlayerInteractionUITests: XCTestCase {
     }
 
     func testCompactDownwardReleaseDismissesAndCanBeShownAgain() {
+        defer { attachEvidence() }
         XCTAssertTrue(panel.waitForExistence(timeout: 8))
         let start = panel.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0))
             .withOffset(CGVector(dx: 0, dy: 16))
@@ -67,6 +71,7 @@ final class PlayerInteractionUITests: XCTestCase {
     }
 
     func testTapExpandsAndShortDownwardDragReturnsToExpanded() {
+        defer { attachEvidence() }
         XCTAssertTrue(panel.waitForExistence(timeout: 8))
         app.buttons["player.compact.open"].tap()
         waitForPhase("expanded")
@@ -80,6 +85,7 @@ final class PlayerInteractionUITests: XCTestCase {
     }
 
     func testLyricsReturnToArtworkAndQueueControlsRemainUsable() {
+        defer { attachEvidence() }
         XCTAssertTrue(panel.waitForExistence(timeout: 8))
         app.buttons["player.compact.open"].tap()
         waitForPhase("expanded")
