@@ -82,6 +82,29 @@ final class PlaybackControllerTests: XCTestCase {
         controller.removeStateObserver(observerID)
     }
 
+    func testFailedAudioLoadDoesNotLeaveTrackMarkedAsPlaying() async throws {
+        let engine = FakeAudioEngine()
+        engine.loadError = PlaybackTestError.failedToLoad
+        let controller = PlaybackController(
+            engine: engine,
+            preferencesStore: FakePreferencesStore()
+        )
+        let queue = [track("broken")]
+
+        do {
+            try await controller.playTrack(queue[0], in: queue)
+            XCTFail("Expected the audio load error to be propagated")
+        } catch {
+            XCTAssertEqual(error as? PlaybackTestError, .failedToLoad)
+        }
+
+        XCTAssertNil(controller.state.currentTrack)
+        XCTAssertFalse(controller.state.isPlaying)
+        XCTAssertEqual(controller.state.position, 0)
+        XCTAssertEqual(controller.state.duration, 0)
+        XCTAssertGreaterThanOrEqual(engine.unloadCount, 1)
+    }
+
     func testNextWrapsAndRepeatOneReplaysCurrentTrack() async throws {
         let engine = FakeAudioEngine()
         let controller = PlaybackController(
@@ -331,6 +354,7 @@ private final class FakeAudioEngine: AudioEngine {
     private(set) var pauseCount = 0
     private(set) var unloadCount = 0
     var suspendsLoads = false
+    var loadError: Error?
     private var currentURL: URL?
     private var loadContinuations:
         [String: CheckedContinuation<Void, Never>] = [:]
@@ -339,6 +363,9 @@ private final class FakeAudioEngine: AudioEngine {
         loadedURLs.append(url)
         currentURL = url
         position = 0
+        if let loadError {
+            throw loadError
+        }
         if suspendsLoads {
             let trackID = url.deletingPathExtension().lastPathComponent
             await withCheckedContinuation { continuation in
@@ -379,6 +406,10 @@ private final class FakeAudioEngine: AudioEngine {
     func finish() async {
         await onEnded?()
     }
+}
+
+private enum PlaybackTestError: Error, Equatable {
+    case failedToLoad
 }
 
 @MainActor

@@ -146,6 +146,9 @@ final class PlaybackController: PlaybackControlling {
         acceptsPositionUpdates = false
         engine.pause()
         loadedTrackID = nil
+        PlaybackDiagnostics.log(
+            "开始播放：id=\(track.id)，标题=\(track.title)，来源=\(track.sourceReference)"
+        )
         restoredPositionApplied = true
         var loadingState = state
         loadingState.queue = availableQueue
@@ -155,7 +158,15 @@ final class PlaybackController: PlaybackControlling {
         loadingState.duration = availableQueue[index].duration
         state = loadingState
 
-        try await loadCurrent(generation: generation)
+        do {
+            try await loadCurrent(generation: generation)
+        } catch {
+            PlaybackDiagnostics.log(
+                "播放加载失败：id=\(track.id)，错误=\(error.localizedDescription)"
+            )
+            resetAfterLoadFailure()
+            throw error
+        }
         guard playbackGeneration == generation,
               state.currentTrack?.id == track.id else {
             return
@@ -167,6 +178,7 @@ final class PlaybackController: PlaybackControlling {
         playingState.position = 0
         playingState.isPlaying = true
         state = playingState
+        PlaybackDiagnostics.log("开始播放成功：id=\(track.id)，时长=\(state.duration)")
         try savePreferences()
     }
 
@@ -400,6 +412,7 @@ final class PlaybackController: PlaybackControlling {
               let url = sourceURL(for: track) else {
             throw PlaybackError.invalidSource
         }
+        PlaybackDiagnostics.log("加载音频资源：id=\(track.id)，路径=\(url.path)")
         try await engine.load(url: url)
         guard playbackGeneration == generation,
               state.currentTrack?.id == track.id else {
@@ -413,6 +426,25 @@ final class PlaybackController: PlaybackControlling {
             ? engine.duration
             : track.duration
         state = loadedState
+        PlaybackDiagnostics.log(
+            "音频资源加载完成：id=\(track.id)，引擎时长=\(engine.duration)，记录时长=\(track.duration)"
+        )
+    }
+
+    private func resetAfterLoadFailure() {
+        playbackGeneration = UUID()
+        acceptsPositionUpdates = false
+        engine.pause()
+        engine.unload()
+        loadedTrackID = nil
+        restoredPositionApplied = true
+        var clearedState = state
+        clearedState.queue = []
+        clearedState.currentIndex = nil
+        clearedState.isPlaying = false
+        clearedState.position = 0
+        clearedState.duration = 0
+        state = clearedState
     }
 
     private func availableTrackIndex() -> Int? {

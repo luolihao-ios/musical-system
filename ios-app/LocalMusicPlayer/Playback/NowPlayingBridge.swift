@@ -182,10 +182,21 @@ final class MPNowPlayingSession: SystemNowPlayingSession {
             MPNowPlayingInfoPropertyPlaybackRate: info.playbackRate
         ]
         if let path = info.artworkPath,
-           let image = UIImage(contentsOfFile: path) {
-            values[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(
-                boundsSize: image.size
-            ) { _ in image }
+           let image = ArtworkImageLoader.image(atPath: path, maxPixelSize: 512) {
+            if image.size.width > 0,
+               image.size.height > 0,
+               image.cgImage != nil {
+                values[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(
+                    boundsSize: image.size
+                ) { _ in image }
+                PlaybackDiagnostics.log(
+                    "系统媒体信息已加载封面：路径=\(path)，尺寸=\(image.size.width)x\(image.size.height)"
+                )
+            } else {
+                PlaybackDiagnostics.log("系统媒体信息跳过无效封面：路径=\(path)")
+            }
+        } else if let path = info.artworkPath {
+            PlaybackDiagnostics.log("系统媒体信息无法读取封面：路径=\(path)")
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = values
     }

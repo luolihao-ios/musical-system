@@ -256,9 +256,17 @@ final class LibraryModel {
         guard queue.contains(where: { $0.id == track.id }) else {
             return
         }
-        try await playback.playTrack(track, in: queue)
-        try store.recordPlay(trackID: track.id)
-        try reload()
+        do {
+            try await playback.playTrack(track, in: queue)
+            try store.recordPlay(trackID: track.id)
+            try reload()
+        } catch {
+            PlaybackDiagnostics.log(
+                "音乐库播放失败：id=\(track.id)，标题=\(track.title)，错误=\(error.localizedDescription)"
+            )
+            errorMessage = "无法播放《\(track.title)》：\(error.localizedDescription)"
+            throw error
+        }
     }
 
     private func performImport(

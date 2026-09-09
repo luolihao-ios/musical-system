@@ -7,7 +7,7 @@ struct ArtworkView: View {
 
     var body: some View {
         Group {
-            if let path, let image = UIImage(contentsOfFile: path) {
+            if let path, let image = ArtworkImageLoader.image(atPath: path) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
