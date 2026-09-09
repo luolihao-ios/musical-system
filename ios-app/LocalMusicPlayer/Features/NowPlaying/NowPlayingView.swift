@@ -1,9 +1,15 @@
 import SwiftUI
 
-private enum NowPlayingContentMode {
+enum NowPlayingContentMode: Equatable {
     case artwork
     case record
     case lyrics
+
+    static func modeAfterArtworkTap(hasLyrics: Bool) -> Self {
+        hasLyrics ? .lyrics : .record
+    }
+
+    static var modeAfterLyricsToggle: Self { .artwork }
 }
 
 struct NowPlayingView: View {
@@ -82,16 +88,16 @@ struct NowPlayingView: View {
                         .opacity.combined(with: .scale(scale: 0.98))
                     )
                 Button {
-                    switchContent(to: .record)
+                    switchContent(to: NowPlayingContentMode.modeAfterLyricsToggle)
                 } label: {
-                    Label("唱片", systemImage: "opticaldisc")
+                    Label("封面", systemImage: "photo")
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 12)
                         .frame(height: 36)
                         .background(.ultraThinMaterial, in: Capsule())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("切换到唱片")
+                .accessibilityLabel("切换到封面")
             } else if contentMode == .artwork,
                       model.state.currentTrack?.artworkReference != nil {
                 VStack(spacing: 12) {
@@ -108,11 +114,11 @@ struct NowPlayingView: View {
                     )
                     .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .onTapGesture {
-                        if model.hasLyrics {
-                            switchContent(to: .lyrics)
-                        } else {
-                            switchContent(to: .record)
-                        }
+                        switchContent(
+                            to: NowPlayingContentMode.modeAfterArtworkTap(
+                                hasLyrics: model.hasLyrics
+                            )
+                        )
                     }
                     .accessibilityAddTraits(.isButton)
                     .accessibilityLabel(
@@ -179,6 +185,7 @@ struct NowPlayingView: View {
             Text(model.state.currentTrack?.artist ?? "爱乐之城")
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+            PlaybackWaveformView(isPlaying: model.state.isPlaying)
         }
         .frame(maxWidth: .infinity)
     }
