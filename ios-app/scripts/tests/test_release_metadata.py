@@ -14,7 +14,7 @@ class ReleaseMetadataTests(unittest.TestCase):
         self.assertEqual(info["CFBundleDisplayName"], "爱乐之城")
         self.assertFalse(info["ITSAppUsesNonExemptEncryption"])
         self.assertIn('MARKETING_VERSION: "0.2"', project)
-        self.assertIn('CURRENT_PROJECT_VERSION: "35"', project)
+        self.assertIn('CURRENT_PROJECT_VERSION: "36"', project)
 
     def test_app_store_workflow_uses_macos_base64_decode_syntax(self) -> None:
         workflow = (IOS_ROOT.parent / ".github" / "workflows" / "ios-app-store.yml").read_text(
