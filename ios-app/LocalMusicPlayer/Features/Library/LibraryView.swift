@@ -3,7 +3,6 @@ import UniformTypeIdentifiers
 
 struct LibraryView: View {
     @Bindable var model: LibraryModel
-    @Bindable var playlists: PlaylistsModel
 
     @State private var showDocumentPicker = false
     @State private var showMusicFolderPicker = false
@@ -123,8 +122,7 @@ struct LibraryView: View {
                         LibraryGroupsView(
                             title: kind.title,
                             groups: model.groups(for: kind),
-                            model: model,
-                            playlists: playlists
+                            model: model
                         )
                     } label: {
                         LibraryEntranceCard(
@@ -139,8 +137,7 @@ struct LibraryView: View {
                     LibraryTracksView(
                         title: String(localized: "最近播放"),
                         tracks: model.recentlyPlayed,
-                        model: model,
-                        playlists: playlists
+                        model: model
                     )
                 } label: {
                     LibraryEntranceCard(
@@ -167,10 +164,6 @@ struct LibraryView: View {
             Task { try? await model.play(track) }
         } toggleLike: {
             try? model.toggleLike(track)
-        } addToPlaylist: { playlistID in
-            try? playlists.add(trackID: track.id, to: playlistID)
-        } playlists: {
-            playlists.playlists.filter { !$0.isBuiltIn }
         } delete: {
             try? model.delete(track)
         }
@@ -206,7 +199,6 @@ private struct LibraryGroupsView: View {
     let title: String
     let groups: [LibraryTrackGroup]
     @Bindable var model: LibraryModel
-    @Bindable var playlists: PlaylistsModel
 
     var body: some View {
         List(groups) { group in
@@ -214,8 +206,7 @@ private struct LibraryGroupsView: View {
                 LibraryTracksView(
                     title: group.title,
                     tracks: group.tracks,
-                    model: model,
-                    playlists: playlists
+                    model: model
                 )
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
@@ -242,7 +233,6 @@ private struct LibraryTracksView: View {
     let title: String
     let tracks: [TrackSnapshot]
     @Bindable var model: LibraryModel
-    @Bindable var playlists: PlaylistsModel
 
     var body: some View {
         List(tracks) { track in
@@ -255,10 +245,6 @@ private struct LibraryTracksView: View {
                 Task { try? await model.play(track, in: tracks) }
             } toggleLike: {
                 try? model.toggleLike(track)
-            } addToPlaylist: { playlistID in
-                try? playlists.add(trackID: track.id, to: playlistID)
-            } playlists: {
-                playlists.playlists.filter { !$0.isBuiltIn }
             } delete: {
                 try? model.delete(track)
             }
@@ -275,14 +261,12 @@ private struct LibraryTracksView: View {
     }
 }
 
-private struct TrackRow: View {
+struct TrackRow: View {
     let track: TrackSnapshot
     let isCurrent: Bool
     let isPlaying: Bool
     let play: () -> Void
     let toggleLike: () -> Void
-    let addToPlaylist: (String) -> Void
-    let playlists: () -> [PlaylistSnapshot]
     let delete: () -> Void
     var body: some View {
         HStack(spacing: 12) {
@@ -324,37 +308,25 @@ private struct TrackRow: View {
             }
             .buttonStyle(.plain)
             Spacer()
-            Menu {
+            HStack(spacing: 2) {
+                Button(role: .destructive, action: delete) {
+                    Image(systemName: "trash")
+                        .foregroundStyle(.red)
+                        .frame(width: 38, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("删除歌曲")
+
                 Button(action: toggleLike) {
-                    Label(
-                        track.isLiked ? "取消喜欢" : "我喜欢",
-                        systemImage: track.isLiked ? "heart.slash" : "heart"
-                    )
+                    Image(systemName: track.isLiked ? "heart.fill" : "heart")
+                        .foregroundStyle(
+                            track.isLiked ? PlayerTheme.accent : Color.secondary
+                        )
+                        .frame(width: 38, height: 44)
                 }
-                if playlists().isEmpty {
-                    Text("先创建一个自建歌单")
-                } else {
-                    Menu("添加到歌单") {
-                        ForEach(playlists()) { playlist in
-                            Button(playlist.name) {
-                                addToPlaylist(playlist.id)
-                            }
-                        }
-                    }
-                }
-                Button(role: .destructive) {
-                    delete()
-                } label: {
-                    Label("从音乐库删除", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: track.isLiked ? "heart.fill" : "ellipsis")
-                    .foregroundStyle(
-                        track.isLiked ? PlayerTheme.accent : Color.secondary
-                    )
-                    .frame(width: 44, height: 44)
+                .buttonStyle(.plain)
+                .accessibilityLabel(track.isLiked ? "取消收藏" : "收藏")
             }
-            .accessibilityLabel("歌曲操作")
         }
         .opacity(track.isAvailable ? 1 : 0.45)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {

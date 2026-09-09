@@ -19,8 +19,7 @@ struct AppShellView: View {
         TabView {
             NavigationStack {
                 LibraryView(
-                    model: container.libraryModel,
-                    playlists: container.playlistsModel
+                    model: container.libraryModel
                 )
             }
             .tabItem {
@@ -28,10 +27,10 @@ struct AppShellView: View {
             }
 
             NavigationStack {
-                PlaylistsView(model: container.playlistsModel)
+                FavoritesView(model: container.libraryModel)
             }
             .tabItem {
-                Label("歌单", systemImage: "rectangle.stack")
+                Label("收藏", systemImage: "heart.fill")
             }
 
             NavigationStack {

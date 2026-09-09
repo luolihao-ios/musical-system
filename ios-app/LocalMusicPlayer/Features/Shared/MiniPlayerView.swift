@@ -1,5 +1,21 @@
 import SwiftUI
 
+enum MiniPlayerGestureAction: Equatable {
+    case none
+    case dismiss
+    case openNowPlaying
+
+    static func resolve(translation: CGSize, threshold: CGFloat = 35) -> Self {
+        if translation.height >= threshold {
+            return .dismiss
+        }
+        if translation.height <= -threshold {
+            return .openNowPlaying
+        }
+        return .none
+    }
+}
+
 struct MiniPlayerView: View {
     @Bindable var model: NowPlayingModel
     let openNowPlaying: () -> Void
@@ -79,8 +95,15 @@ struct MiniPlayerView: View {
         .gesture(
             DragGesture(minimumDistance: 18)
                 .onEnded { value in
-                    if value.translation.height > 35 {
+                    switch MiniPlayerGestureAction.resolve(
+                        translation: value.translation
+                    ) {
+                    case .dismiss:
                         dismiss()
+                    case .openNowPlaying:
+                        openNowPlaying()
+                    case .none:
+                        break
                     }
                 }
         )

@@ -1,6 +1,7 @@
 import SwiftUI
 
 private enum NowPlayingContentMode {
+    case artwork
     case record
     case lyrics
 }
@@ -11,7 +12,7 @@ struct NowPlayingView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showQueue = false
-    @State private var contentMode: NowPlayingContentMode = .record
+    @State private var contentMode: NowPlayingContentMode = .artwork
 
     var body: some View {
         NavigationStack {
@@ -64,7 +65,7 @@ struct NowPlayingView: View {
             model.reduceMotion = value
         }
         .onChange(of: model.state.currentTrack?.id) { _, _ in
-            contentMode = .record
+            contentMode = .artwork
         }
         .sheet(isPresented: $showQueue) {
             queueSheet
@@ -74,9 +75,6 @@ struct NowPlayingView: View {
     @ViewBuilder
     private func mainContent(in size: CGSize) -> some View {
         let dimension = min(size.width - 48, 390)
-        let recordDimension = model.hasLyrics
-            ? dimension
-            : min(dimension, 280)
         ZStack(alignment: .topTrailing) {
             if contentMode == .lyrics, model.hasLyrics {
                 SyncedLyricsView(model: model)
@@ -94,12 +92,47 @@ struct NowPlayingView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("切换到唱片")
+            } else if contentMode == .artwork,
+                      model.state.currentTrack?.artworkReference != nil {
+                VStack(spacing: 12) {
+                    ArtworkView(
+                        path: model.state.currentTrack?.artworkReference,
+                        cornerRadius: 24
+                    )
+                    .frame(width: dimension, height: dimension)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .shadow(
+                        color: .black.opacity(0.35),
+                        radius: 24,
+                        y: 12
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .onTapGesture {
+                        if model.hasLyrics {
+                            switchContent(to: .lyrics)
+                        } else {
+                            switchContent(to: .record)
+                        }
+                    }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(
+                        model.hasLyrics ? "查看歌词" : "切换到唱片"
+                    )
+                    if model.hasLyrics {
+                        Text("点击封面查看歌词")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .transition(
+                    .opacity.combined(with: .scale(scale: 0.98))
+                )
             } else {
                 VStack(spacing: 12) {
                     RecordVisual(model: model)
                         .frame(
-                            width: recordDimension,
-                            height: recordDimension
+                            width: min(dimension, 280),
+                            height: min(dimension, 280)
                         )
                         .contentShape(Circle())
                         .onTapGesture {
@@ -121,9 +154,9 @@ struct NowPlayingView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(
-            height: model.hasLyrics
+            height: contentMode == .lyrics
                 ? max(dimension, 320)
-                : recordDimension + 150
+                : dimension + (model.hasLyrics ? 56 : 24)
         )
         .padding(.top, 12)
     }
