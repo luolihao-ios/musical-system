@@ -31,6 +31,8 @@ class ReleaseMetadataTests(unittest.TestCase):
             progress,
         )
         self.assertIn("同一个构建号一旦成功上传", progress)
+        self.assertIn("本地调试、模拟器测试以及不上传的普通构建", progress)
+        self.assertIn("未上传的本地构建可以继续使用当前构建号", progress)
         self.assertIn("不能替代 App 的构建号", progress)
 
     def test_app_store_signing_settings_are_target_scoped(self) -> None:
