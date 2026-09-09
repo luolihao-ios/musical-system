@@ -26,6 +26,7 @@ final class FileImportService {
 
     private let rootDirectory: URL
     private let metadataReader: any ImportedMetadataReading
+    private let artworkGenerator: any ImportedArtworkGenerating
     private let securityScope: any SecurityScopedAccessing
     private let fileManager: FileManager
     private let online: (any MusicResourceSearching)?
@@ -33,6 +34,8 @@ final class FileImportService {
     init(
         rootDirectory: URL? = nil,
         metadataReader: any ImportedMetadataReading = ImportedMetadataReader(),
+        artworkGenerator: any ImportedArtworkGenerating =
+            ProceduralArtworkGenerator(),
         securityScope: any SecurityScopedAccessing = URLSecurityScope(),
         fileManager: FileManager = .default,
         online: (any MusicResourceSearching)? = nil
@@ -40,6 +43,7 @@ final class FileImportService {
         self.rootDirectory = rootDirectory
             ?? Self.defaultImportRoot(fileManager: fileManager)
         self.metadataReader = metadataReader
+        self.artworkGenerator = artworkGenerator
         self.securityScope = securityScope
         self.fileManager = fileManager
         self.online = online
@@ -139,10 +143,33 @@ final class FileImportService {
         }
 
         let metadata = try await metadataReader.read(stagedAudio)
+        let fallback = fallbackMetadata(
+            filename: audio.sourceURL.deletingPathExtension()
+                .lastPathComponent
+        )
+        let embeddedTitle = metadata.title
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let embeddedArtist = metadata.artist
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let embeddedAlbum = metadata.album
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedTitle = embeddedTitle.isEmpty
+            ? fallback.title : embeddedTitle
+        let resolvedArtist = embeddedArtist.isEmpty
+            ? fallback.artist : embeddedArtist
+
         var stagedArtwork: URL?
         if let artwork = metadata.artworkData, !artwork.isEmpty {
             let target = staging.appending(path: "artwork")
             try artwork.write(to: target, options: .atomic)
+            stagedArtwork = target
+        } else if let generatedArtwork = try? artworkGenerator.generateArtwork(
+            title: resolvedTitle,
+            artist: resolvedArtist,
+            seed: identifier
+        ), !generatedArtwork.isEmpty {
+            let target = staging.appending(path: "artwork-generated.jpg")
+            try generatedArtwork.write(to: target, options: .atomic)
             stagedArtwork = target
         }
 
@@ -189,21 +216,10 @@ final class FileImportService {
         let finalArtwork = stagedArtwork.map {
             destination.appending(path: $0.lastPathComponent).path
         }
-        let fallback = fallbackMetadata(
-            filename: audio.sourceURL.deletingPathExtension()
-                .lastPathComponent
-        )
-        let embeddedTitle = metadata.title
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let embeddedArtist = metadata.artist
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let embeddedAlbum = metadata.album
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
         return TrackRecord(
             id: identifier,
-            title: embeddedTitle.isEmpty ? fallback.title : embeddedTitle,
-            artist: embeddedArtist.isEmpty ? fallback.artist : embeddedArtist,
+            title: resolvedTitle,
+            artist: resolvedArtist,
             album: embeddedAlbum,
             duration: metadata.duration,
             sourceKind: .importedFile,
