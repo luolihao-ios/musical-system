@@ -12,8 +12,8 @@ class ReleaseMetadataTests(unittest.TestCase):
         project = (IOS_ROOT / "project.yml").read_text(encoding="utf-8")
 
         self.assertEqual(info["CFBundleDisplayName"], "爱乐之城-musicPlayer")
-        self.assertIn('MARKETING_VERSION: "0.1"', project)
-        self.assertIn('CURRENT_PROJECT_VERSION: "2"', project)
+        self.assertIn('MARKETING_VERSION: "0.2"', project)
+        self.assertIn('CURRENT_PROJECT_VERSION: "32"', project)
 
     def test_app_store_workflow_uses_macos_base64_decode_syntax(self) -> None:
         workflow = (IOS_ROOT.parent / ".github" / "workflows" / "ios-app-store.yml").read_text(
