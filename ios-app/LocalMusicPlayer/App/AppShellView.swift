@@ -81,7 +81,8 @@ struct AppShellView: View {
             }
         }
         .tint(PlayerTheme.accent)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        // 小播放器是底部停靠层，底边始终贴住应用底部；拖拽只改变它的上边缘。
+        .overlay(alignment: .bottom) {
             if container.nowPlayingModel.state.currentTrack != nil,
                miniPlayerVisibility.isVisible {
                 MiniPlayerView(
@@ -91,6 +92,7 @@ struct AppShellView: View {
                 )
                 .zIndex(50)
                 .allowsHitTesting(true)
+                .ignoresSafeArea(edges: .bottom)
             }
         }
         .sheet(isPresented: $showNowPlaying) {

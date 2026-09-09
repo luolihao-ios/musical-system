@@ -49,6 +49,18 @@ class IOSAPICompatibilityTests(unittest.TestCase):
         self.assertEqual(now_playing.count("PlaybackWaveformView("), 1)
         self.assertIn("ZStack(alignment: .bottom)", now_playing)
 
+    def test_mini_player_is_bottom_anchored_instead_of_safe_area_inset(self) -> None:
+        app_shell = (
+            IOS_ROOT
+            / "LocalMusicPlayer"
+            / "App"
+            / "AppShellView.swift"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(".overlay(alignment: .bottom)", app_shell)
+        self.assertIn(".ignoresSafeArea(edges: .bottom)", app_shell)
+        self.assertNotIn(".safeAreaInset(edge: .bottom", app_shell)
+
 
 if __name__ == "__main__":
     unittest.main()
