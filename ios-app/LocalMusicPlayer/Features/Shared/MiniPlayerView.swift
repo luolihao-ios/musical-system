@@ -59,9 +59,9 @@ struct MiniPlayerView: View {
         .clipShape(
             UnevenRoundedRectangle(
                 topLeadingRadius: 22 * dragProgress,
-                topTrailingRadius: 22 * dragProgress,
                 bottomLeadingRadius: 0,
                 bottomTrailingRadius: 0,
+                topTrailingRadius: 22 * dragProgress,
                 style: .continuous
             )
         )
