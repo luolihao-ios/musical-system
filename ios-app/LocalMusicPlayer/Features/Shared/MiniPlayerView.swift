@@ -9,9 +9,13 @@ enum MiniPlayerGestureAction: Equatable {
     }
 }
 
-private struct PlayerPanelFrameKey: PreferenceKey {
+struct PlayerPanelFrameKey: PreferenceKey {
     static let defaultValue = CGRect.zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        // 未提供几何值的子树不能用默认零矩形覆盖已经测量的面板。
+        if !next.isEmpty { value = next }
+    }
 }
 
 struct MiniPlayerView: View {

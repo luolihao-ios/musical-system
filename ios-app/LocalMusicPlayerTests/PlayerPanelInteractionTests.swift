@@ -2,6 +2,13 @@ import XCTest
 @testable import LocalMusicPlayer
 
 final class PlayerPanelInteractionTests: XCTestCase {
+    func testEmptyPreferenceDoesNotEraseMeasuredPanelFrame() {
+        let measured = CGRect(x: 0, y: 780, width: 402, height: 94)
+        var value = CGRect.zero
+        PlayerPanelFrameKey.reduce(value: &value, nextValue: { measured })
+        PlayerPanelFrameKey.reduce(value: &value, nextValue: { .zero })
+        XCTAssertEqual(value, measured)
+    }
     func testEveryFingerPointChangesHeightByOnePointIncludingDirectionReversal() {
         var panel = PlayerPanelInteraction()
         for translation: CGFloat in [-10, -50, -180, -100, -20, 10, 25] {
