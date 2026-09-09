@@ -55,7 +55,6 @@ struct NowPlayingView: View {
                     .padding(.horizontal, 20)
                     .frame(height: 52)
                     .contentShape(Rectangle())
-                    .accessibilityIdentifier("player.detail.header")
                     .highPriorityGesture(panelDrag)
                 GeometryReader { geometry in
                     ScrollView {

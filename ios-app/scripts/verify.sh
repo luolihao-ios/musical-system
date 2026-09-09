@@ -32,6 +32,17 @@ collect_player_diagnostics() {
   if [ -n "$data_dir" ] && [ -f "$data_dir/Documents/music-player-interaction.log" ]; then
     cp "$data_dir/Documents/music-player-interaction.log" "$ios_root/build/music-player-interaction.log"
   fi
+  # 测试结束后 simctl 容器查询可能失效，保留每个测试容器的实际日志。
+  mkdir -p "$ios_root/build/player-evidence"
+  find "$HOME/Library/Developer/CoreSimulator/Devices" \
+    -path '*/data/Containers/Data/Application/*/Documents/music-player-interaction.log' \
+    -type f -print | while IFS= read -r logfile; do
+      container_id="$(basename "$(dirname "$(dirname "$logfile")")")"
+      cp "$logfile" "$ios_root/build/player-evidence/$container_id.log"
+    done
+  xcrun xcresulttool export attachments \
+    --path "$ios_root/build/PlayerTests.xcresult" \
+    --output-path "$ios_root/build/player-evidence/screenshots" || true
 }
 trap collect_player_diagnostics EXIT
 

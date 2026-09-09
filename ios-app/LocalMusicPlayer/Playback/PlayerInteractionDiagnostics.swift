@@ -13,6 +13,7 @@ enum PlayerInteractionDiagnostics {
         let url = fileURL
         queue.async {
             let fm = FileManager.default
+            try? fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             if let attributes = try? fm.attributesOfItem(atPath: url.path),
                let size = attributes[.size] as? NSNumber, size.intValue > 2_000_000 {
                 let previous = url.appendingPathExtension("previous")

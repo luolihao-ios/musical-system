@@ -104,7 +104,13 @@ struct MiniPlayerView: View {
             }
             .accessibilityLabel("打开正在播放")
             .accessibilityIdentifier("player.compact.open")
-            Button { Task { await model.togglePlayback() } } label: {
+            Button {
+                PlayerInteractionDiagnostics.log("compact playback tap before=\(model.state.isPlaying) frame=\(actualFrame)")
+                Task {
+                    await model.togglePlayback()
+                    PlayerInteractionDiagnostics.log("compact playback complete after=\(model.state.isPlaying)")
+                }
+            } label: {
                 Image(systemName: model.state.isPlaying ? "pause.fill" : "play.fill")
                     .frame(width: 44, height: 44)
             }

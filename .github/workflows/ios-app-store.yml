@@ -27,6 +27,7 @@ jobs:
           path: |
             ios-app/build/PlayerTests.xcresult
             ios-app/build/music-player-interaction.log
+            ios-app/build/player-evidence
           if-no-files-found: warn
       - name: Validate required secrets
         env:

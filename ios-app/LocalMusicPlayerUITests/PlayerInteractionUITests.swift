@@ -12,6 +12,14 @@ final class PlayerInteractionUITests: XCTestCase {
 
     private var panel: XCUIElement { app.otherElements["player.panel"].firstMatch }
 
+    override func tearDownWithError() throws {
+        let hierarchy = XCTAttachment(string: app.debugDescription)
+        hierarchy.name = "播放器控件状态"
+        hierarchy.lifetime = .keepAlways
+        add(hierarchy)
+        attachScreenshot("测试结束界面")
+    }
+
     private func waitForPhase(_ phase: String) {
         let predicate = NSPredicate(format: "value BEGINSWITH %@", phase)
         expectation(for: predicate, evaluatedWith: panel)
