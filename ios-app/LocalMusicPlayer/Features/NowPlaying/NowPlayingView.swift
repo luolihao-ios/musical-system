@@ -42,6 +42,7 @@ struct NowPlayingView: View {
                         Button("关闭") {
                             if let closePanel { closePanel() } else { dismiss() }
                         }
+                        .accessibilityIdentifier("player.detail.close")
                         Spacer()
                         Text("正在播放").font(.headline)
                         Spacer()
@@ -49,6 +50,7 @@ struct NowPlayingView: View {
                             Image(systemName: "list.bullet")
                         }
                         .accessibilityLabel("播放队列")
+                        .accessibilityIdentifier("player.detail.queue")
                     }
                     .padding(.horizontal, 20)
                     .frame(height: 52)
@@ -106,6 +108,7 @@ struct NowPlayingView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("切换到封面")
+                .accessibilityIdentifier("player.lyrics.artwork")
             } else if contentMode == .artwork,
                       model.state.currentTrack?.artworkReference != nil {
                 VStack(spacing: 12) {
@@ -139,6 +142,7 @@ struct NowPlayingView: View {
                     .accessibilityLabel(
                         model.hasLyrics ? "查看歌词" : "切换到唱片"
                     )
+                    .accessibilityIdentifier("player.artwork")
                     if model.hasLyrics {
                         Text("点击封面查看歌词")
                             .font(.caption)
@@ -356,6 +360,7 @@ struct NowPlayingView: View {
                         showQueue = false
                     }
                     .disabled(model.state.queue.isEmpty)
+                    .accessibilityIdentifier("player.queue.clear")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     EditButton()

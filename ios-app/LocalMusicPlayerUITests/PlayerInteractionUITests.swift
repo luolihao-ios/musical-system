@@ -21,8 +21,9 @@ final class PlayerInteractionUITests: XCTestCase {
     func testBottomEdgeTouchesWindowAndPlaybackButtonDoesNotTapThrough() {
         XCTAssertTrue(panel.waitForExistence(timeout: 8))
         XCTAssertEqual(panel.frame.maxY, app.frame.maxY, accuracy: 1)
-        app.buttons["播放"].tap()
-        XCTAssertTrue(app.buttons["暂停"].waitForExistence(timeout: 3))
+        app.buttons["player.compact.playback"].tap()
+        expectation(for: NSPredicate(format: "value == 'playing'"), evaluatedWith: app.buttons["player.compact.playback"])
+        waitForExpectations(timeout: 3)
         XCTAssertTrue(app.staticTexts["底层点击次数 0"].exists)
         attachScreenshot("紧凑播放器贴底")
     }
@@ -59,28 +60,28 @@ final class PlayerInteractionUITests: XCTestCase {
 
     func testTapExpandsAndShortDownwardDragReturnsToExpanded() {
         XCTAssertTrue(panel.waitForExistence(timeout: 8))
-        app.buttons["打开正在播放"].tap()
+        app.buttons["player.compact.open"].tap()
         waitForPhase("expanded")
         let start = panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0))
             .withOffset(CGVector(dx: 0, dy: 26))
         start.press(forDuration: 0.1, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 80)))
         waitForPhase("expanded")
         XCTAssertEqual(panel.value as? String, "expanded;expansions=1")
-        app.buttons["关闭"].tap()
+        app.buttons["player.detail.close"].tap()
         XCTAssertFalse(panel.exists)
     }
 
     func testLyricsReturnToArtworkAndQueueControlsRemainUsable() {
         XCTAssertTrue(panel.waitForExistence(timeout: 8))
-        app.buttons["打开正在播放"].tap()
+        app.buttons["player.compact.open"].tap()
         waitForPhase("expanded")
-        XCTAssertTrue(app.buttons["查看歌词"].waitForExistence(timeout: 5))
-        app.buttons["查看歌词"].tap()
-        XCTAssertTrue(app.buttons["切换到封面"].waitForExistence(timeout: 3))
-        app.buttons["切换到封面"].tap()
-        XCTAssertTrue(app.buttons["查看歌词"].waitForExistence(timeout: 3))
-        app.buttons["播放队列"].tap()
-        XCTAssertTrue(app.navigationBars["播放队列"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["player.artwork"].waitForExistence(timeout: 5))
+        app.buttons["player.artwork"].tap()
+        XCTAssertTrue(app.buttons["player.lyrics.artwork"].waitForExistence(timeout: 3))
+        app.buttons["player.lyrics.artwork"].tap()
+        XCTAssertTrue(app.buttons["player.artwork"].waitForExistence(timeout: 3))
+        app.buttons["player.detail.queue"].tap()
+        XCTAssertTrue(app.buttons["player.queue.clear"].waitForExistence(timeout: 3))
     }
 
     private func attachScreenshot(_ name: String) {

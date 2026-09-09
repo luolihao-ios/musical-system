@@ -103,11 +103,14 @@ struct MiniPlayerView: View {
                 .contentShape(Rectangle())
             }
             .accessibilityLabel("打开正在播放")
+            .accessibilityIdentifier("player.compact.open")
             Button { Task { await model.togglePlayback() } } label: {
                 Image(systemName: model.state.isPlaying ? "pause.fill" : "play.fill")
                     .frame(width: 44, height: 44)
             }
             .accessibilityLabel(model.state.isPlaying ? "暂停" : "播放")
+            .accessibilityIdentifier("player.compact.playback")
+            .accessibilityValue(model.state.isPlaying ? "playing" : "paused")
             Button { Task { await model.next() } } label: {
                 Image(systemName: "forward.end.fill").frame(width: 44, height: 44)
             }
