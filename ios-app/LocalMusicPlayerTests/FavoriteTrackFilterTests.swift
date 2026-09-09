@@ -11,8 +11,8 @@ final class FavoriteTrackFilterTests: XCTestCase {
             duration: 180,
             sourceKind: .importedFile,
             sourceReference: "/tmp/liked.mp3",
-            isAvailable: true,
-            isLiked: true
+            isLiked: true,
+            isAvailable: true
         )
         let unliked = TrackSnapshot(
             id: "unliked",
@@ -22,8 +22,8 @@ final class FavoriteTrackFilterTests: XCTestCase {
             duration: 180,
             sourceKind: .importedFile,
             sourceReference: "/tmp/unliked.mp3",
-            isAvailable: true,
-            isLiked: false
+            isLiked: false,
+            isAvailable: true
         )
 
         XCTAssertEqual(
