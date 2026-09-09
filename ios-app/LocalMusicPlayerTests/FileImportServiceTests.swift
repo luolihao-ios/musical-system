@@ -4,6 +4,102 @@ import XCTest
 
 @MainActor
 final class FileImportServiceTests: XCTestCase {
+    func testMissingEmbeddedArtworkGeneratesAndPersistsArtwork() async throws {
+        let fixture = try Fixture()
+        let audio = try fixture.file(
+            name: "无封面-测试歌手.mp3",
+            contents: Data("audio".utf8)
+        )
+        let generatedArtwork = Data("generated-artwork".utf8)
+        let service = FileImportService(
+            rootDirectory: fixture.importRoot,
+            metadataReader: FakeMetadataReader(
+                metadata: ImportedMetadata(
+                    title: "无封面",
+                    artist: "测试歌手",
+                    album: "",
+                    duration: 180,
+                    artworkData: nil
+                )
+            ),
+            artworkGenerator: FakeArtworkGenerator(data: generatedArtwork)
+        )
+
+        let tracks = try await service.importFiles([
+            ImportedFile(sourceURL: audio, kind: .audio)
+        ])
+
+        let artworkPath = try XCTUnwrap(tracks.first?.artworkReference)
+        XCTAssertEqual(
+            URL(fileURLWithPath: artworkPath).lastPathComponent,
+            "artwork-generated.jpg"
+        )
+        XCTAssertEqual(
+            try Data(contentsOf: URL(fileURLWithPath: artworkPath)),
+            generatedArtwork
+        )
+    }
+
+    func testEmbeddedArtworkTakesPriorityOverGeneratedArtwork() async throws {
+        let fixture = try Fixture()
+        let audio = try fixture.file(
+            name: "已有封面.mp3",
+            contents: Data("audio".utf8)
+        )
+        let embeddedArtwork = Data("embedded-artwork".utf8)
+        let service = FileImportService(
+            rootDirectory: fixture.importRoot,
+            metadataReader: FakeMetadataReader(
+                metadata: ImportedMetadata(
+                    title: "已有封面",
+                    artist: "",
+                    album: "",
+                    duration: 180,
+                    artworkData: embeddedArtwork
+                )
+            ),
+            artworkGenerator: FakeArtworkGenerator(data: Data("wrong".utf8))
+        )
+
+        let tracks = try await service.importFiles([
+            ImportedFile(sourceURL: audio, kind: .audio)
+        ])
+
+        let artworkPath = try XCTUnwrap(tracks.first?.artworkReference)
+        XCTAssertEqual(
+            try Data(contentsOf: URL(fileURLWithPath: artworkPath)),
+            embeddedArtwork
+        )
+    }
+
+    func testArtworkGenerationFailureDoesNotFailAudioImport() async throws {
+        let fixture = try Fixture()
+        let audio = try fixture.file(
+            name: "仍然导入.mp3",
+            contents: Data("audio".utf8)
+        )
+        let service = FileImportService(
+            rootDirectory: fixture.importRoot,
+            metadataReader: FakeMetadataReader(
+                metadata: ImportedMetadata(
+                    title: "仍然导入",
+                    artist: "",
+                    album: "",
+                    duration: 180,
+                    artworkData: nil
+                )
+            ),
+            artworkGenerator: FailingArtworkGenerator()
+        )
+
+        let tracks = try await service.importFiles([
+            ImportedFile(sourceURL: audio, kind: .audio)
+        ])
+
+        XCTAssertEqual(tracks.first?.title, "仍然导入")
+        XCTAssertNil(tracks.first?.artworkReference)
+    }
+
     func testImportsSupportedAudioWithMatchingLyricsAndFilenameFallback() async throws {
         let fixture = try Fixture()
         let audio = try fixture.file(name: "夜航星.MP3", contents: Data("audio".utf8))
@@ -181,6 +277,32 @@ private struct FailingMetadataReader: ImportedMetadataReading {
     struct Failure: Error {}
 
     func read(_ url: URL) async throws -> ImportedMetadata {
+        throw Failure()
+    }
+}
+
+@MainActor
+private struct FakeArtworkGenerator: ImportedArtworkGenerating {
+    let data: Data
+
+    func generateArtwork(
+        title: String,
+        artist: String,
+        seed: String
+    ) throws -> Data {
+        data
+    }
+}
+
+@MainActor
+private struct FailingArtworkGenerator: ImportedArtworkGenerating {
+    struct Failure: Error {}
+
+    func generateArtwork(
+        title: String,
+        artist: String,
+        seed: String
+    ) throws -> Data {
         throw Failure()
     }
 }
