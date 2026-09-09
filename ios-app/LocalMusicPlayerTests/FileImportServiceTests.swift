@@ -14,9 +14,48 @@ final class FileImportServiceTests: XCTestCase {
         let repeated = try await service.importFiles([ImportedFile(sourceURL: audio, kind: .audio)])
         XCTAssertEqual(first[0].id, repeated[0].id)
         XCTAssertNotNil(repeated[0].lyricsReference)
-        XCTAssertNil(repeated[0].artworkReference)
+        XCTAssertNotNil(repeated[0].artworkReference)
         XCTAssertEqual(try String(contentsOfFile: XCTUnwrap(repeated[0].lyricsReference), encoding: .utf8), "[00:01]歌词")
     }
+
+    func testCompanionArtworkTakesPriorityOverGeneratedArtwork() async throws {
+        let fixture = try Fixture()
+        let audio = try fixture.file(
+            name: "用户封面.mp3",
+            contents: Data("audio".utf8)
+        )
+        let cover = try fixture.file(
+            name: "用户封面.jpg",
+            contents: Data("companion-artwork".utf8)
+        )
+        let service = FileImportService(
+            rootDirectory: fixture.importRoot,
+            metadataReader: FakeMetadataReader(
+                metadata: ImportedMetadata(
+                    title: "用户封面",
+                    artist: "",
+                    album: "",
+                    duration: 180,
+                    artworkData: nil
+                )
+            ),
+            artworkGenerator: FakeArtworkGenerator(
+                data: Data("generated-artwork".utf8)
+            )
+        )
+
+        let tracks = try await service.importFiles([
+            ImportedFile(sourceURL: audio, kind: .audio),
+            ImportedFile(sourceURL: cover, kind: .cover)
+        ])
+
+        let artworkPath = try XCTUnwrap(tracks.first?.artworkReference)
+        XCTAssertEqual(
+            try Data(contentsOf: URL(fileURLWithPath: artworkPath)),
+            Data("companion-artwork".utf8)
+        )
+    }
+
     func testMissingEmbeddedArtworkGeneratesAndPersistsArtwork() async throws {
         let fixture = try Fixture()
         let audio = try fixture.file(

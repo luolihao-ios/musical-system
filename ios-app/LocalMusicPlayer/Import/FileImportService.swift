@@ -163,6 +163,16 @@ final class FileImportService {
             let target = staging.appending(path: "artwork")
             try artwork.write(to: target, options: .atomic)
             stagedArtwork = target
+        } else if let cover {
+            let access = securityScope.beginAccessing(cover.sourceURL)
+            defer {
+                if access {
+                    securityScope.endAccessing(cover.sourceURL)
+                }
+            }
+            let target = staging.appending(path: "artwork")
+            try fileManager.copyItem(at: cover.sourceURL, to: target)
+            stagedArtwork = target
         } else if let generatedArtwork = try? artworkGenerator.generateArtwork(
             title: resolvedTitle,
             artist: resolvedArtist,
@@ -171,13 +181,6 @@ final class FileImportService {
             let target = staging.appending(path: "artwork-generated.jpg")
             try generatedArtwork.write(to: target, options: .atomic)
             stagedArtwork = target
-        }
-
-        if stagedArtwork == nil, let cover {
-            let access = securityScope.beginAccessing(cover.sourceURL)
-            defer { if access { securityScope.endAccessing(cover.sourceURL) } }
-            let target = staging.appendingPathComponent("artwork")
-            try fileManager.copyItem(at: cover.sourceURL, to: target); stagedArtwork = target
         }
         // Reimporting the same MP3 must not discard already downloaded resources.
         for (name, missing) in [("lyrics.lrc", stagedLyrics == nil), ("artwork", stagedArtwork == nil)] where missing {
