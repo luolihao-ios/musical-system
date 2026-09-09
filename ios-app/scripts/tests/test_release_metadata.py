@@ -24,6 +24,15 @@ class ReleaseMetadataTests(unittest.TestCase):
         self.assertNotIn("base64 --decode", workflow)
         self.assertEqual(workflow.count("base64 -D"), 3)
 
+    def test_release_documentation_requires_unique_incrementing_build_number(self) -> None:
+        progress = (IOS_ROOT.parent / "docs" / "项目进度.md").read_text(encoding="utf-8")
+        self.assertIn(
+            "构建号必须大于 App Store Connect 中该 Bundle ID 最近一次成功上传的构建号",
+            progress,
+        )
+        self.assertIn("同一个构建号一旦成功上传", progress)
+        self.assertIn("不能替代 App 的构建号", progress)
+
     def test_app_store_signing_settings_are_target_scoped(self) -> None:
         project = (IOS_ROOT / "project.yml").read_text(encoding="utf-8")
         workflow = (IOS_ROOT.parent / ".github" / "workflows" / "ios-app-store.yml").read_text(
