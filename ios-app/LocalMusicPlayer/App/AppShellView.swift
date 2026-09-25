@@ -57,7 +57,7 @@ struct AppShellView: View {
             NavigationStack {
                 List {
                     Section("播放") {
-                        LabeledContent("来源", value: "仅本机文件")
+                        LabeledContent("来源", value: "本地文件与开放许可音乐")
                         LabeledContent("后台播放", value: "已启用")
                     }
                     Section("格式") {
@@ -66,7 +66,7 @@ struct AppShellView: View {
                             .foregroundStyle(.secondary)
                     }
                     Section("隐私") {
-                        Text("联网仅用于补全缺失歌词与封面，不上传音乐文件。")
+                        Text("联网用于开放许可音乐搜索和补全缺失歌词、封面，不上传音乐文件。")
                     }
                     Section("关于") {
                         ShareLink(item: PlayerInteractionDiagnostics.fileURL) {
