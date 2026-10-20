@@ -21,11 +21,16 @@ protocol PlaybackControlling: AnyObject {
     func moveQueue(fromOffsets: IndexSet, toOffset: Int) throws
     func removeQueueItems(atOffsets: IndexSet) async throws
     func clearQueue() throws
+    func refreshTrackMetadata(_ track: TrackSnapshot)
     @discardableResult
     func observeState(
         _ observer: @escaping (PlaybackState) -> Void
     ) -> UUID
     func removeStateObserver(_ id: UUID)
+}
+
+extension PlaybackControlling {
+    func refreshTrackMetadata(_ track: TrackSnapshot) {}
 }
 
 struct SystemNowPlayingInfo: Equatable, Sendable {

@@ -1,9 +1,41 @@
 import XCTest
 import SwiftUI
+import SwiftData
 @testable import LocalMusicPlayer
 
 @MainActor
 final class NowPlayingModelTests: XCTestCase {
+    func testNetworkLyricsAreRequestedOnlyAfterExplicitAction() async throws {
+        let container = try ModelContainerFactory.make(inMemory: true)
+        let store = try MusicStore(context: container.mainContext)
+        let record = TrackRecord(id: "on-demand", title: "测试歌", artist: "测试歌手", album: "", duration: 120,
+                                 sourceKind: .importedFile, sourceReference: "/music/fixture.mp3")
+        try store.upsert(record)
+        let playback = FakeNowPlayingController(state: PlaybackState(queue: [TrackSnapshot(record)], currentIndex: 0))
+        let resources = RequestedLyricsFixture()
+        let model = NowPlayingModel(playback: playback, online: resources, store: store)
+        await Task.yield()
+        let before = await resources.requests
+        XCTAssertEqual(before, 0, "打开播放页不能自动搜索歌词")
+        await model.findLyrics()
+        for _ in 0..<200 {
+            if model.hasLyrics { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertTrue(model.hasLyrics)
+        XCTAssertEqual(model.lyricLines.map(\.text), ["按需歌词"])
+        let after = await resources.requests
+        let askedForCover = await resources.askedForCover
+        XCTAssertEqual(after, 1)
+        XCTAssertFalse(askedForCover)
+        let path = try XCTUnwrap(store.track(id: "on-demand")?.lyricsReference)
+        defer { try? FileManager.default.removeItem(at: URL(fileURLWithPath: path).deletingLastPathComponent()) }
+        XCTAssertEqual(try String(contentsOfFile: path, encoding: .utf8), "[00:01.00]按需歌词")
+        await model.findLyrics()
+        let repeated = await resources.requests
+        XCTAssertEqual(repeated, 1, "已有歌词不应再次查询")
+    }
+
     func testMiniPlayerKeepsCompactHeightWhenGivenFullScreenProposal() {
         let playback = FakeNowPlayingController(
             state: state(position: 10, isPlaying: true)
@@ -167,6 +199,16 @@ final class NowPlayingModelTests: XCTestCase {
             volume: 1,
             mode: .repeatAll
         )
+    }
+}
+
+private actor RequestedLyricsFixture: MusicResourceSearching {
+    private(set) var requests = 0
+    private(set) var askedForCover = false
+    func search(_ query: MusicResourceQuery, lyrics: Bool, cover: Bool) async -> MusicResourceResult {
+        requests += 1
+        askedForCover = cover
+        return MusicResourceResult(lyrics: "[00:01.00]按需歌词", cover: nil)
     }
 }
 

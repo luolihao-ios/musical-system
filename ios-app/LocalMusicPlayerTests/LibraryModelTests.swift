@@ -6,6 +6,71 @@ import XCTest
 final class LibraryModelTests: XCTestCase {
     private var modelContainers: [ModelContainer] = []
 
+    func testGeneratedCoverIsReplacedAfterImportAndSavedWithSource() async throws {
+        let store = try makeStore()
+        let incoming = track(id: "new-cover", title: "你好", artist: "歌手")
+        incoming.artworkReference = "/music/artwork-generated.jpg"
+        let started = expectation(description: "查询开始")
+        let provider = ControlledCoverProvider(onStart: { started.fulfill() })
+        let model = LibraryModel(store: store, fileImporter: ImportedCoverFixture(record: incoming),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: FakeLibraryPlayback(), coverSearch: provider)
+        await model.importFiles([])
+        await fulfillment(of: [started], timeout: 2)
+        XCTAssertEqual(model.tracks.first?.artworkReference, "/music/artwork-generated.jpg")
+        await provider.finish()
+        for _ in 0..<200 {
+            if !model.isCompletingResources { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let path = try XCTUnwrap(store.track(id: "new-cover")?.artworkReference)
+        let directory = URL(fileURLWithPath: path).deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: path)), Data("test-image".utf8))
+        let source = try JSONSerialization.jsonObject(with: Data(contentsOf: directory.appendingPathComponent("source.json"))) as? [String: Any]
+        XCTAssertEqual(source?["provider"] as? String, "百度搜索")
+        XCTAssertEqual(source?["imageURL"] as? String, "https://example.org/art.jpg")
+        XCTAssertEqual(model.tracks.first?.artworkReference, path)
+        XCTAssertNil(model.tracks.first?.lyricsReference)
+    }
+
+    func testImportReturnsWhileCoverSearchWaitsAndDoesNotFetchLyrics() async throws {
+        let store = try makeStore()
+        let incoming = track(id: "cover-test", title: "明天你好 (Live)", artist: "歌手")
+        incoming.artworkReference = "/music/artwork-generated.jpg"
+        let started = expectation(description: "后台封面查询开始")
+        let provider = ControlledCoverProvider(onStart: { started.fulfill() })
+        let model = LibraryModel(store: store, fileImporter: ImportedCoverFixture(record: incoming),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: FakeLibraryPlayback(), coverSearch: provider)
+        await model.importFiles([])
+        XCTAssertFalse(model.isImporting)
+        XCTAssertEqual(model.tracks.count, 1, "封面查询尚未完成时音乐必须已经导入")
+        await fulfillment(of: [started], timeout: 2)
+        XCTAssertTrue(model.isCompletingResources)
+        try model.delete(model.tracks[0])
+        await provider.finish()
+        for _ in 0..<200 {
+            if !model.isCompletingResources { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertFalse(model.isCompletingResources)
+        XCTAssertTrue(model.tracks.isEmpty, "延迟封面结果不能复活已删除歌曲")
+        XCTAssertNil(try store.track(id: "cover-test"))
+    }
+
+    func testExistingRealCoverIsNotSearched() async throws {
+        let store = try makeStore()
+        let incoming = track(id: "real-cover", title: "你好", artist: "歌手")
+        incoming.artworkReference = "/music/custom-cover.jpg"
+        let provider = ControlledCoverProvider(onStart: { XCTFail("自选封面不应查询") })
+        let model = LibraryModel(store: store, fileImporter: ImportedCoverFixture(record: incoming),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: FakeLibraryPlayback(), coverSearch: provider)
+        await model.importFiles([])
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(model.tracks.first?.artworkReference, "/music/custom-cover.jpg")
+        let count = await provider.count
+        XCTAssertEqual(count, 0)
+    }
+
     func testSearchIsAccentInsensitiveAndPlayUsesFilteredQueue() async throws {
         let store = try makeStore()
         try store.upsert(track(id: "one", title: "Lumière", artist: "Beyoncé"))
@@ -159,6 +224,32 @@ final class LibraryModelTests: XCTestCase {
             sourceKind: .importedFile,
             sourceReference: "/music/\(id).m4a"
         )
+    }
+}
+
+@MainActor
+private struct ImportedCoverFixture: FileImporting {
+    let record: TrackRecord
+    func importFiles(_ files: [ImportedFile]) async throws -> [TrackRecord] { [record] }
+}
+
+private actor ControlledCoverProvider: CoverArtSearching {
+    let onStart: @Sendable () -> Void
+    private var continuation: CheckedContinuation<CoverArtMatch?, Never>?
+    private(set) var count = 0
+    init(onStart: @escaping @Sendable () -> Void) { self.onStart = onStart }
+    func isAvailable() -> Bool { true }
+    func findCover(_ query: MusicResourceQuery) async throws -> CoverArtMatch? {
+        count += 1
+        return await withCheckedContinuation { continuation in
+            self.continuation = continuation
+            onStart()
+        }
+    }
+    func finish() {
+        continuation?.resume(returning: CoverArtMatch(data: Data("test-image".utf8),
+            imageURL: URL(string: "https://example.org/art.jpg")!, pageURL: nil, title: "封面", artistFallback: false))
+        continuation = nil
     }
 }
 

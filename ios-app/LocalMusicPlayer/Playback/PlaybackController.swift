@@ -104,6 +104,14 @@ final class PlaybackController: PlaybackControlling {
         try loadQueue(availableTracks, startIndex: index)
     }
 
+    func refreshTrackMetadata(_ track: TrackSnapshot) {
+        var updated = state
+        for index in updated.queue.indices where updated.queue[index].id == track.id {
+            updated.queue[index] = track
+        }
+        state = updated
+    }
+
     func play() async throws {
         guard let index = availableTrackIndex() else { return }
         if state.currentIndex != index {

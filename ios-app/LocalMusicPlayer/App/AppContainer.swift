@@ -26,8 +26,8 @@ final class AppContainer {
             fileImporter: FileImportService(),
             systemImporter: SystemLibraryImporter(),
             playback: playback,
-            online: OnlineMusicResources.shared,
-            scansAuthorizedFolders: true
+            scansAuthorizedFolders: true,
+            coverSearch: BaiduCoverSearch.shared
         )
         let playlistsModel = PlaylistsModel(
             store: store,
@@ -37,7 +37,7 @@ final class AppContainer {
         try playlistsModel.reload()
         try playback.restoreQueueIfPossible(libraryModel.tracks)
         let bridge = NowPlayingBridge(controller: playback)
-        let nowPlayingModel = NowPlayingModel(playback: playback)
+        let nowPlayingModel = NowPlayingModel(playback: playback, online: OnlineMusicResources.shared, store: store)
 
         self.modelContainer = modelContainer
         self.store = store

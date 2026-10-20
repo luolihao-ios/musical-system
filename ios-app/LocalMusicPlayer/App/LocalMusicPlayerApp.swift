@@ -27,7 +27,7 @@ struct LocalMusicPlayerApp: App {
                     do {
                         try await bootstrap.container?.transferHandoffImporter.importURL(url)
                         try bootstrap.container?.libraryModel.reload()
-                        await bootstrap.container?.libraryModel.completeMissingResources()
+                        bootstrap.container?.libraryModel.scheduleMissingCoverSearch()
                     } catch { bootstrap.container?.libraryModel.showImportError(error.localizedDescription) }
                 } }
     }

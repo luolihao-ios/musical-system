@@ -22,10 +22,15 @@ final class NowPlayingModel {
     private(set) var lyricLines: [LyricLine] = []
     private(set) var currentLyricIndex: Int?
     private(set) var lyricTrackID: String?
+    private(set) var isSearchingLyrics = false
+    private(set) var lyricsSearchMessage = ""
     var reduceMotion: Bool
 
     private let playback: any PlaybackControlling
     private let lyricsReader: any LyricsReading
+    private let online: (any MusicResourceSearching)?
+    private let store: MusicStore?
+    private var requestedLyricsPath: String?
     private var requestedLyricTrackID: String?
     private var lyricsTask: Task<Void, Never>?
     private var observerID: UUID?
@@ -33,10 +38,14 @@ final class NowPlayingModel {
     init(
         playback: any PlaybackControlling,
         lyricsReader: any LyricsReading = FileLyricsReader(),
-        reduceMotion: Bool = false
+        reduceMotion: Bool = false,
+        online: (any MusicResourceSearching)? = nil,
+        store: MusicStore? = nil
     ) {
         self.playback = playback
         self.lyricsReader = lyricsReader
+        self.online = online
+        self.store = store
         self.reduceMotion = reduceMotion
         state = playback.state
         observerID = playback.observeState { [weak self] state in
@@ -117,9 +126,42 @@ final class NowPlayingModel {
         try? playback.clearQueue()
     }
 
+    func findLyrics() async {
+        guard !isSearchingLyrics, !hasLyrics, let track = state.currentTrack else { return }
+        guard let online, let store else { lyricsSearchMessage = "歌词查询未配置"; return }
+        isSearchingLyrics = true
+        lyricsSearchMessage = "正在查找歌词…"
+        defer { isSearchingLyrics = false }
+        let result = await online.search(MusicResourceQuery(title: track.title, artist: track.artist,
+            album: track.album, duration: track.duration), lyrics: true, cover: false)
+        guard !Task.isCancelled else { return }
+        do {
+            guard let text = result.lyrics, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                if state.currentTrack?.id == track.id { lyricsSearchMessage = "没有找到匹配的歌词，可导入同名 LRC 文件" }
+                return
+            }
+            guard let current = try store.track(id: track.id), current.lyricsReference == nil else { return }
+            let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            let directory = base.appendingPathComponent("ImportedMusic").appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let url = directory.appendingPathComponent("lyrics.lrc")
+            try text.write(to: url, atomically: true, encoding: .utf8)
+            current.lyricsReference = url.path
+            try store.upsert(current)
+            playback.refreshTrackMetadata(TrackSnapshot(current))
+            if state.currentTrack?.id == track.id {
+                loadLyrics(for: TrackSnapshot(current))
+                lyricsSearchMessage = "已找到歌词，点击封面查看"
+            }
+        } catch {
+            if state.currentTrack?.id == track.id { lyricsSearchMessage = "歌词保存失败，请重试" }
+        }
+    }
+
     private func apply(_ state: PlaybackState) {
         self.state = state
-        if requestedLyricTrackID != state.currentTrack?.id {
+        if requestedLyricTrackID != state.currentTrack?.id || requestedLyricsPath != state.currentTrack?.lyricsReference {
+            if requestedLyricTrackID != state.currentTrack?.id { lyricsSearchMessage = "" }
             loadLyrics(for: state.currentTrack)
         }
         updateCurrentLyricIndex()
@@ -135,6 +177,7 @@ final class NowPlayingModel {
     private func loadLyrics(for track: TrackSnapshot?) {
         lyricsTask?.cancel()
         requestedLyricTrackID = track?.id
+        requestedLyricsPath = track?.lyricsReference
         lyricTrackID = nil
         lyricLines = []
         currentLyricIndex = nil

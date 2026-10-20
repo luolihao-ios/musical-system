@@ -66,7 +66,10 @@ struct AppShellView: View {
                             .foregroundStyle(.secondary)
                     }
                     Section("隐私") {
-                        Text("联网用于开放许可音乐搜索和补全缺失歌词、封面，不上传音乐文件。")
+                        Text("联网用于开放许可音乐搜索、百度封面搜索，以及主动查找歌词，不上传音乐文件。")
+                        NavigationLink("封面搜索设置") {
+                            BaiduCoverSettingsView(library: container.libraryModel)
+                        }
                     }
                     Section("关于") {
                         ShareLink(item: PlayerInteractionDiagnostics.fileURL) {

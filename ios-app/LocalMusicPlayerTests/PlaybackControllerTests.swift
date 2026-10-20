@@ -4,6 +4,23 @@ import XCTest
 
 @MainActor
 final class PlaybackControllerTests: XCTestCase {
+    func testCoverRefreshPreservesAudioAndPlaybackProgress() async throws {
+        let engine = FakeAudioEngine()
+        let controller = PlaybackController(engine: engine, preferencesStore: FakePreferencesStore())
+        let original = track("one")
+        try await controller.playTrack(original, in: [original])
+        try controller.seek(to: 40)
+        let before = controller.state
+        let loadCount = engine.loadedURLs.count
+        let updated = TrackSnapshot(id: original.id, title: original.title, artist: original.artist,
+            album: original.album, duration: original.duration, sourceKind: original.sourceKind,
+            sourceReference: original.sourceReference, artworkReference: "/music/artwork-baidu.jpg")
+        controller.refreshTrackMetadata(updated)
+        XCTAssertEqual(controller.state.currentTrack?.artworkReference, "/music/artwork-baidu.jpg")
+        XCTAssertEqual(controller.state.position, before.position)
+        XCTAssertEqual(controller.state.isPlaying, before.isPlaying)
+        XCTAssertEqual(engine.loadedURLs.count, loadCount)
+    }
     func testPlayTrackOverridesRestoredTrackAndStartsAtZero() async throws {
         let engine = FakeAudioEngine()
         engine.position = 37

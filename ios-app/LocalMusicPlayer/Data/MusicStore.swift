@@ -33,7 +33,11 @@ final class MusicStore {
                 existing.sourceReference = incoming.sourceReference
                 existing.isAvailable = incoming.isAvailable
             }
-            existing.artworkReference = incoming.artworkReference ?? existing.artworkReference
+            // 再次导入不能用新生成的占位封面覆盖已经补齐或自选的真实封面。
+            let keepArtwork = CoverArtworkPolicy.needsSearch(path: incoming.artworkReference)
+                && !CoverArtworkPolicy.needsSearch(path: existing.artworkReference)
+                && existing.artworkReference.map { FileManager.default.fileExists(atPath: $0) } == true
+            if !keepArtwork { existing.artworkReference = incoming.artworkReference ?? existing.artworkReference }
             existing.lyricsReference = incoming.lyricsReference ?? existing.lyricsReference
             existing.isLiked = liked
             existing.lastPlayedAt = lastPlayedAt

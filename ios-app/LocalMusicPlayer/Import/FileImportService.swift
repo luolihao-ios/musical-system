@@ -29,7 +29,6 @@ final class FileImportService {
     private let artworkGenerator: any ImportedArtworkGenerating
     private let securityScope: any SecurityScopedAccessing
     private let fileManager: FileManager
-    private let online: (any MusicResourceSearching)?
 
     init(
         rootDirectory: URL? = nil,
@@ -37,8 +36,7 @@ final class FileImportService {
         artworkGenerator: any ImportedArtworkGenerating =
             ProceduralArtworkGenerator(),
         securityScope: any SecurityScopedAccessing = URLSecurityScope(),
-        fileManager: FileManager = .default,
-        online: (any MusicResourceSearching)? = nil
+        fileManager: FileManager = .default
     ) {
         self.rootDirectory = rootDirectory
             ?? Self.defaultImportRoot(fileManager: fileManager)
@@ -46,7 +44,6 @@ final class FileImportService {
         self.artworkGenerator = artworkGenerator
         self.securityScope = securityScope
         self.fileManager = fileManager
-        self.online = online
     }
 
     func importFiles(_ files: [ImportedFile]) async throws -> [TrackRecord] {
@@ -191,20 +188,7 @@ final class FileImportService {
                 if name == "lyrics.lrc" { stagedLyrics = target } else { stagedArtwork = target }
             }
         }
-        // Fill only missing resources; a failed lookup never rejects the audio.
-        if let online, stagedLyrics == nil || stagedArtwork == nil {
-            let fallback = fallbackMetadata(filename: audio.sourceURL.deletingPathExtension().lastPathComponent)
-            let query = MusicResourceQuery(title: metadata.title.isEmpty ? fallback.title : metadata.title, artist: metadata.artist.isEmpty ? fallback.artist : metadata.artist, album: metadata.album, duration: metadata.duration)
-            let found = await online.search(query, lyrics: stagedLyrics == nil, cover: stagedArtwork == nil)
-            if stagedLyrics == nil, let text = found.lyrics, !text.isEmpty {
-                let target = staging.appendingPathComponent("lyrics.lrc")
-                if (try? text.write(to: target, atomically: true, encoding: .utf8)) != nil { stagedLyrics = target }
-            }
-            if stagedArtwork == nil, let data = found.cover {
-                let target = staging.appendingPathComponent("artwork")
-                if (try? data.write(to: target, options: .atomic)) != nil { stagedArtwork = target }
-            }
-        }
+        // 导入只整理本地文件；封面由资料库的后台队列补齐，歌词仅按按钮查询。
 
         if fileManager.fileExists(atPath: destination.path) {
             try fileManager.removeItem(at: destination)

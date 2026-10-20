@@ -79,7 +79,7 @@ struct LibraryView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if model.isCompletingResources { Text("正在联网补全缺失歌词与封面，可继续播放").font(.caption).padding(10).background(.regularMaterial, in: Capsule()).allowsHitTesting(false) }
+            if model.isCompletingResources { Text(model.coverSearchMessage).font(.caption).padding(10).background(.regularMaterial, in: Capsule()).allowsHitTesting(false) }
         }
         .sheet(isPresented: $showMusicFolderPicker) {
             MusicFolderPickerView { urls in

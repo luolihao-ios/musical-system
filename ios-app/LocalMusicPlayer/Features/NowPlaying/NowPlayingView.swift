@@ -61,6 +61,20 @@ struct NowPlayingView: View {
                         VStack(spacing: 22) {
                             mainContent(in: geometry.size)
                             trackIdentity
+                            if !model.hasLyrics {
+                                VStack(spacing: 6) {
+                                    Button {
+                                        Task { await model.findLyrics() }
+                                    } label: {
+                                        Label(model.isSearchingLyrics ? "正在查找歌词…" : "查找歌词", systemImage: "text.magnifyingglass")
+                                    }
+                                    .disabled(model.isSearchingLyrics)
+                                    .accessibilityIdentifier("player.lyrics.search")
+                                    if !model.lyricsSearchMessage.isEmpty {
+                                        Text(model.lyricsSearchMessage).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
                             progressControls
                             transportControls
                             playbackOptions

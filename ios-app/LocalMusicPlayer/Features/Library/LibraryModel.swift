@@ -21,6 +21,7 @@ extension SystemLibraryImporter: SystemLibraryImporting {
 protocol LibraryPlaybackControlling: AnyObject {
     var state: PlaybackState { get }
     func removeTrack(id: String) throws
+    func refreshTrackMetadata(_ track: TrackSnapshot)
     func playTrack(
         _ track: TrackSnapshot,
         in queue: [TrackSnapshot]
@@ -37,6 +38,7 @@ extension PlaybackController: LibraryPlaybackControlling {
 
 extension LibraryPlaybackControlling {
     func removeTrack(id: String) throws {}
+    func refreshTrackMetadata(_ track: TrackSnapshot) {}
 }
 
 enum LibraryGroupKind: String, CaseIterable, Identifiable, Sendable {
@@ -76,6 +78,7 @@ final class LibraryModel {
     var searchText = ""
     private(set) var isImporting = false
     private(set) var isCompletingResources = false
+    private(set) var coverSearchMessage = ""
     var systemPermissionDenied = false
     private(set) var errorMessage: String?
     private(set) var currentTrackID: String?
@@ -88,23 +91,26 @@ final class LibraryModel {
     private let systemImporter: any SystemLibraryImporting
     private let playback: any LibraryPlaybackControlling
     private var playbackObserverID: UUID?
-    private let online: (any MusicResourceSearching)?
     private let scansAuthorizedFolders: Bool
+    private let coverSearch: (any CoverArtSearching)?
+    private var coverTask: Task<Void, Never>?
+    private var coverAttempts: [String: Date] = [:]
+    private var coverCache: [String: CoverArtMatch] = [:]
 
     init(
         store: MusicStore,
         fileImporter: any FileImporting,
         systemImporter: any SystemLibraryImporting,
         playback: any LibraryPlaybackControlling,
-        online: (any MusicResourceSearching)? = nil,
-        scansAuthorizedFolders: Bool = false
+        scansAuthorizedFolders: Bool = false,
+        coverSearch: (any CoverArtSearching)? = nil
     ) {
         self.store = store
         self.fileImporter = fileImporter
         self.systemImporter = systemImporter
         self.playback = playback
-        self.online = online
         self.scansAuthorizedFolders = scansAuthorizedFolders
+        self.coverSearch = coverSearch
         playbackObserverID = playback.observeState { [weak self] state in
             self?.currentTrackID = state.currentTrack?.id
             self?.isCurrentTrackPlaying = state.isPlaying
@@ -112,6 +118,7 @@ final class LibraryModel {
     }
 
     isolated deinit {
+        coverTask?.cancel()
         if let playbackObserverID {
             playback.removeStateObserver(playbackObserverID)
         }
@@ -196,6 +203,7 @@ final class LibraryModel {
             case let .imported(records):
                 for record in records { try store.upsert(record) }
                 try reload()
+                scheduleMissingCoverSearch()
             case .permissionDenied:
                 systemPermissionDenied = true
             }
@@ -219,29 +227,85 @@ final class LibraryModel {
         try reload()
     }
     func showImportError(_ message: String) { errorMessage = message }
-    func completeMissingResources() async {
-        guard !isImporting, !isCompletingResources, let online else { return }
-        isCompletingResources = true; defer { isCompletingResources = false }
-        do {
-            let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("OnlineMusicResources")
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-            for snapshot in try store.tracks().map(TrackSnapshot.init) where snapshot.lyricsReference == nil || snapshot.artworkReference == nil {
-                let result = await online.search(MusicResourceQuery(title: snapshot.title, artist: snapshot.artist, album: snapshot.album, duration: snapshot.duration), lyrics: snapshot.lyricsReference == nil, cover: snapshot.artworkReference == nil)
-                guard let track = try store.track(id: snapshot.id) else { continue }
-                let directory = root.appendingPathComponent(track.id)
-                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-                if track.lyricsReference == nil, let lyrics = result.lyrics, !lyrics.isEmpty {
-                    let url = directory.appendingPathComponent("lyrics.lrc")
-                    try lyrics.write(to: url, atomically: true, encoding: .utf8); track.lyricsReference = url.path
-                }
-                if track.artworkReference == nil, let cover = result.cover {
-                    let url = directory.appendingPathComponent("artwork")
-                    try cover.write(to: url, options: .atomic); track.artworkReference = url.path
-                }
-                try store.upsert(track)
+    func scheduleMissingCoverSearch() {
+        guard coverTask == nil, let coverSearch else { return }
+        coverTask = Task { [weak self] in
+            guard let self else { return }
+            defer { self.isCompletingResources = false; self.coverTask = nil }
+            guard await coverSearch.isAvailable() else {
+                self.coverSearchMessage = "封面搜索待配置：请在设置中填写百度搜索 API Key"
+                return
             }
-            try reload()
-        } catch { errorMessage = error.localizedDescription }
+            self.isCompletingResources = true
+            var completed = 0
+            var found = 0
+            do {
+                // 每轮重新读取，包含搜索期间新导入的歌曲；相同歌曲失败后一小时内不自动重试。
+                while !Task.isCancelled {
+                    guard let track = try self.store.tracks().first(where: {
+                        CoverArtworkPolicy.needsSearch(path: $0.artworkReference) &&
+                        (self.coverAttempts[$0.id].map { Date().timeIntervalSince($0) > 3600 } ?? true)
+                    }) else { break }
+                    let snapshot = TrackSnapshot(track)
+                    self.coverAttempts[snapshot.id] = Date()
+                    self.coverSearchMessage = "正在用百度查找封面，已处理 \(completed) 首，可继续播放"
+                    let query = MusicResourceQuery(title: snapshot.title, artist: snapshot.artist,
+                                                   album: snapshot.album, duration: snapshot.duration)
+                    let cacheKey = OnlineMusicResources.normalized(BaiduCoverSearch.cleanedTitle(query.title)) + "|" + OnlineMusicResources.normalized(query.artist)
+                    let match: CoverArtMatch?
+                    if let cached = self.coverCache[cacheKey] { match = cached }
+                    else {
+                        do { match = try await coverSearch.findCover(query) }
+                        catch let error as CoverSearchError { throw error }
+                        catch { match = nil }
+                    }
+                    try Task.checkCancellation()
+                    completed += 1
+                    guard let match else {
+                        PlayerInteractionDiagnostics.log("cover completion result=not-found processed=\(completed)")
+                        continue
+                    }
+                    if self.coverCache.count >= 16, let oldest = self.coverCache.keys.first { self.coverCache[oldest] = nil }
+                    self.coverCache[cacheKey] = match
+                    // 查询期间可能删除、重新导入或手动换封面；不恢复被删除的歌，也不覆盖新封面。
+                    guard let current = try self.store.track(id: snapshot.id),
+                          current.sourceReference == snapshot.sourceReference,
+                          current.artworkReference == snapshot.artworkReference,
+                          CoverArtworkPolicy.needsSearch(path: current.artworkReference) else { continue }
+                    let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                    let directory = base.appendingPathComponent("ImportedMusic").appendingPathComponent(UUID().uuidString)
+                    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                    let url = directory.appendingPathComponent("artwork-baidu.jpg")
+                    try match.data.write(to: url, options: .atomic)
+                    let metadata: [String: Any] = ["provider": "百度搜索", "title": match.title,
+                        "imageURL": match.imageURL.absoluteString, "pageURL": match.pageURL?.absoluteString ?? "",
+                        "matchKind": match.artistFallback ? "artist-album" : "song", "savedAt": Date().timeIntervalSince1970]
+                    try JSONSerialization.data(withJSONObject: metadata).write(to: directory.appendingPathComponent("source.json"), options: .atomic)
+                    current.artworkReference = url.path
+                    try self.store.upsert(current)
+                    self.playback.refreshTrackMetadata(TrackSnapshot(current))
+                    try self.reload()
+                    found += 1
+                    PlayerInteractionDiagnostics.log("cover completion result=saved fallback=\(match.artistFallback) processed=\(completed)")
+                }
+                self.coverSearchMessage = "封面搜索完成：处理 \(completed) 首，补齐 \(found) 首"
+            } catch is CancellationError {
+                self.coverSearchMessage = "封面搜索已暂停"
+            } catch {
+                self.coverSearchMessage = error.localizedDescription
+                PlayerInteractionDiagnostics.log("cover completion stopped reason=\(String(describing: type(of: error)))")
+            }
+        }
+    }
+
+    func retryMissingCovers() {
+        guard coverTask == nil else { return }
+        coverAttempts.removeAll()
+        scheduleMissingCoverSearch()
+    }
+
+    func cancelCoverSearch() {
+        coverTask?.cancel()
     }
 
     func play(_ track: TrackSnapshot) async throws {
@@ -281,6 +345,7 @@ final class LibraryModel {
                 try store.upsert(record)
             }
             try reload()
+            scheduleMissingCoverSearch()
         } catch {
             errorMessage = error.localizedDescription
         }
