@@ -8,7 +8,7 @@ struct BaiduCoverSettingsView: View {
 
     var body: some View {
         Form {
-            Section("百度封面搜索") {
+            Section {
                 LabeledContent("密钥状态", value: configured ? "已配置" : "未配置")
                 SecureField("百度 AppBuilder API Key", text: $key)
                     .textInputAutocapitalization(.never)
@@ -31,10 +31,12 @@ struct BaiduCoverSettingsView: View {
                     }
                 }
                 Link("开通百度官方搜索 API", destination: URL(string: "https://ai.baidu.com/ai-doc/AppBuilder/pmaxd1hvy")!)
+            } header: {
+                Text("百度封面搜索")
             } footer: {
                 Text("此测试版使用你自己的百度搜索额度。密钥仅存于本机钥匙串，不会写入诊断日志。图片搜索结果仍受原站点使用条款约束。")
             }
-            Section("补全已有歌曲") {
+            Section {
                 Button("重新查找缺失封面") { library.retryMissingCovers() }
                     .disabled(!configured || library.isCompletingResources)
                 if library.isCompletingResources {
@@ -42,6 +44,8 @@ struct BaiduCoverSettingsView: View {
                 }
                 if !library.coverSearchMessage.isEmpty { Text(library.coverSearchMessage).font(.footnote) }
                 if !message.isEmpty { Text(message).font(.footnote) }
+            } header: {
+                Text("补全已有歌曲")
             } footer: {
                 Text("导入后优先查找歌名相关封面，再查歌手的专辑封面。已有内嵌或自选封面会保留；歌词仅在播放页点击“查找歌词”后查询。")
             }
