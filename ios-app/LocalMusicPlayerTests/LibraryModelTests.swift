@@ -27,7 +27,7 @@ final class LibraryModelTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: path)), Data("test-image".utf8))
         let source = try JSONSerialization.jsonObject(with: Data(contentsOf: directory.appendingPathComponent("source.json"))) as? [String: Any]
-        XCTAssertEqual(source?["provider"] as? String, "百度搜索")
+        XCTAssertEqual(source?["provider"] as? String, "测试来源")
         XCTAssertEqual(source?["imageURL"] as? String, "https://example.org/art.jpg")
         XCTAssertEqual(model.tracks.first?.artworkReference, path)
         XCTAssertNil(model.tracks.first?.lyricsReference)
@@ -69,6 +69,54 @@ final class LibraryModelTests: XCTestCase {
         XCTAssertEqual(model.tracks.first?.artworkReference, "/music/custom-cover.jpg")
         let count = await provider.count
         XCTAssertEqual(count, 0)
+    }
+
+    func testDifferentAlbumsDoNotReuseAnotherAlbumsCover() async throws {
+        let store = try makeStore()
+        let first = track(id: "album-one", title: "同名歌曲", artist: "同一歌手")
+        first.album = "第一张专辑"; first.artworkReference = "/music/artwork-generated.jpg"
+        let second = track(id: "album-two", title: "同名歌曲", artist: "同一歌手")
+        second.album = "第二张专辑"; second.artworkReference = "/music/artwork-generated.jpg"
+        try store.upsert(first); try store.upsert(second)
+        let model = LibraryModel(store: store, fileImporter: FakeFileImporter(),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: FakeLibraryPlayback(), coverSearch: AlbumCoverFixture())
+        model.retryMissingCovers()
+        for _ in 0..<200 {
+            if let path = try store.track(id: "album-two")?.artworkReference, path.hasSuffix("artwork-online.jpg"), !model.isCompletingResources { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let firstPath = try XCTUnwrap(store.track(id: "album-one")?.artworkReference)
+        let secondPath = try XCTUnwrap(store.track(id: "album-two")?.artworkReference)
+        defer {
+            for path in [firstPath, secondPath] where path.hasSuffix("artwork-online.jpg") {
+                try? FileManager.default.removeItem(at: URL(fileURLWithPath: path).deletingLastPathComponent())
+            }
+        }
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: firstPath)), Data("第一张专辑".utf8))
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: secondPath)), Data("第二张专辑".utf8))
+    }
+
+    func testDelayedSearchDoesNotReplaceManuallyChangedCover() async throws {
+        let store = try makeStore()
+        let incoming = track(id: "manual-race", title: "你好", artist: "歌手")
+        incoming.artworkReference = "/music/artwork-generated.jpg"
+        let started = expectation(description: "封面查询已开始")
+        let provider = ControlledCoverProvider(onStart: { started.fulfill() })
+        let model = LibraryModel(store: store, fileImporter: ImportedCoverFixture(record: incoming),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: FakeLibraryPlayback(), coverSearch: provider)
+        await model.importFiles([])
+        await fulfillment(of: [started], timeout: 2)
+        let current = try XCTUnwrap(store.track(id: "manual-race"))
+        current.artworkReference = "/music/my-cover.jpg"
+        try store.upsert(current)
+        try model.reload()
+        await provider.finish()
+        for _ in 0..<200 {
+            if !model.isCompletingResources { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertEqual(try store.track(id: "manual-race")?.artworkReference, "/music/my-cover.jpg")
+        XCTAssertEqual(model.tracks.first?.artworkReference, "/music/my-cover.jpg")
     }
 
     func testSearchIsAccentInsensitiveAndPlayUsesFilteredQueue() async throws {
@@ -227,6 +275,14 @@ final class LibraryModelTests: XCTestCase {
     }
 }
 
+private actor AlbumCoverFixture: CoverArtSearching {
+    func isAvailable() -> Bool { true }
+    func findCover(_ query: MusicResourceQuery) async throws -> CoverArtMatch? {
+        CoverArtMatch(data: Data(query.album.utf8), imageURL: URL(string: "https://example.org/cover.jpg")!,
+            pageURL: nil, title: query.title, artistFallback: false, provider: "测试来源")
+    }
+}
+
 @MainActor
 private struct ImportedCoverFixture: FileImporting {
     let record: TrackRecord
@@ -248,7 +304,7 @@ private actor ControlledCoverProvider: CoverArtSearching {
     }
     func finish() {
         continuation?.resume(returning: CoverArtMatch(data: Data("test-image".utf8),
-            imageURL: URL(string: "https://example.org/art.jpg")!, pageURL: nil, title: "封面", artistFallback: false))
+            imageURL: URL(string: "https://example.org/art.jpg")!, pageURL: nil, title: "封面", artistFallback: false, provider: "测试来源"))
         continuation = nil
     }
 }

@@ -233,7 +233,7 @@ final class LibraryModel {
             guard let self else { return }
             defer { self.isCompletingResources = false; self.coverTask = nil }
             guard await coverSearch.isAvailable() else {
-                self.coverSearchMessage = "封面搜索待配置：请在设置中填写百度搜索 API Key"
+                self.coverSearchMessage = "封面搜索暂时不可用，可稍后重试"
                 return
             }
             self.isCompletingResources = true
@@ -248,10 +248,12 @@ final class LibraryModel {
                     }) else { break }
                     let snapshot = TrackSnapshot(track)
                     self.coverAttempts[snapshot.id] = Date()
-                    self.coverSearchMessage = "正在用百度查找封面，已处理 \(completed) 首，可继续播放"
+                    self.coverSearchMessage = "正在后台查找封面，已处理 \(completed) 首，可继续播放"
                     let query = MusicResourceQuery(title: snapshot.title, artist: snapshot.artist,
                                                    album: snapshot.album, duration: snapshot.duration)
-                    let cacheKey = OnlineMusicResources.normalized(BaiduCoverSearch.cleanedTitle(query.title)) + "|" + OnlineMusicResources.normalized(query.artist)
+                    let cacheKey = [CoverQueryPolicy.cleanedTitle(query.title), query.artist, query.album]
+                        .map(OnlineMusicResources.normalized).joined(separator: "|")
+                    CoverSearchDiagnostics.log("队列 track=\(snapshot.id) title=\(snapshot.title) 缓存命中=\(self.coverCache[cacheKey] != nil)")
                     let match: CoverArtMatch?
                     if let cached = self.coverCache[cacheKey] { match = cached }
                     else {
@@ -275,9 +277,9 @@ final class LibraryModel {
                     let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
                     let directory = base.appendingPathComponent("ImportedMusic").appendingPathComponent(UUID().uuidString)
                     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-                    let url = directory.appendingPathComponent("artwork-baidu.jpg")
+                    let url = directory.appendingPathComponent("artwork-online.jpg")
                     try match.data.write(to: url, options: .atomic)
-                    let metadata: [String: Any] = ["provider": "百度搜索", "title": match.title,
+                    let metadata: [String: Any] = ["provider": match.provider, "title": match.title,
                         "imageURL": match.imageURL.absoluteString, "pageURL": match.pageURL?.absoluteString ?? "",
                         "matchKind": match.artistFallback ? "artist-album" : "song", "savedAt": Date().timeIntervalSince1970]
                     try JSONSerialization.data(withJSONObject: metadata).write(to: directory.appendingPathComponent("source.json"), options: .atomic)
@@ -286,11 +288,13 @@ final class LibraryModel {
                     self.playback.refreshTrackMetadata(TrackSnapshot(current))
                     try self.reload()
                     found += 1
+                    CoverSearchDiagnostics.log("已保存 track=\(snapshot.id) provider=\(match.provider) file=\(url.lastPathComponent)")
                     PlayerInteractionDiagnostics.log("cover completion result=saved fallback=\(match.artistFallback) processed=\(completed)")
                 }
                 self.coverSearchMessage = "封面搜索完成：处理 \(completed) 首，补齐 \(found) 首"
             } catch is CancellationError {
                 self.coverSearchMessage = "封面搜索已暂停"
+                CoverSearchDiagnostics.log("队列已暂停")
             } catch {
                 self.coverSearchMessage = error.localizedDescription
                 PlayerInteractionDiagnostics.log("cover completion stopped reason=\(String(describing: type(of: error)))")

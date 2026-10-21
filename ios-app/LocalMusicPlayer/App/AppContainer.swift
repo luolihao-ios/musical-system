@@ -27,8 +27,9 @@ final class AppContainer {
             systemImporter: SystemLibraryImporter(),
             playback: playback,
             scansAuthorizedFolders: true,
-            coverSearch: BaiduCoverSearch.shared
+            coverSearch: CatalogCoverSearch.shared
         )
+        CoverSearchDiagnostics.log("session version=\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") ?? "?") build=\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") ?? "?") provider=existing-catalogs baidu=disabled")
         let playlistsModel = PlaylistsModel(
             store: store,
             playback: playback

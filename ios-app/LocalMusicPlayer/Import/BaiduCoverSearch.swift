@@ -8,9 +8,9 @@ enum CoverSearchError: Error, Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notConfigured: "请先在设置中配置百度搜索 API Key"
-        case .authentication: "百度搜索密钥无效或尚未开通服务"
-        case .quota: "百度搜索额度不足，请稍后再试"
-        case .invalidResponse: "百度搜索暂时不可用"
+        case .authentication: "搜索来源鉴权失败或服务尚未开通"
+        case .quota: "搜索来源额度不足，请稍后再试"
+        case .invalidResponse: "搜索来源返回无效数据或暂时不可用"
         }
     }
 }
@@ -21,6 +21,12 @@ struct CoverArtMatch: Sendable {
     let pageURL: URL?
     let title: String
     let artistFallback: Bool
+    let provider: String
+
+    init(data: Data, imageURL: URL, pageURL: URL?, title: String, artistFallback: Bool, provider: String = "百度搜索") {
+        self.data = data; self.imageURL = imageURL; self.pageURL = pageURL
+        self.title = title; self.artistFallback = artistFallback; self.provider = provider
+    }
 }
 
 protocol CoverArtSearching: Sendable {
@@ -31,7 +37,10 @@ protocol CoverArtSearching: Sendable {
 enum CoverArtworkPolicy {
     static func needsSearch(path: String?) -> Bool {
         guard let path else { return true }
-        return URL(fileURLWithPath: path).lastPathComponent == "artwork-generated.jpg"
+        let url = URL(fileURLWithPath: path)
+        return url.lastPathComponent == "artwork-generated.jpg"
+            || (url.deletingLastPathComponent().lastPathComponent == "SystemArtwork"
+                && url.lastPathComponent.hasSuffix("-generated.jpg"))
     }
 }
 
@@ -74,6 +83,7 @@ struct LimitedCoverHTTPTransport: CoverHTTPTransport {
     func data(for request: URLRequest, limit: Int) async throws -> Data {
         let (bytes, response) = try await session.bytes(for: request)
         guard let http = response as? HTTPURLResponse else { throw CoverSearchError.invalidResponse }
+        CoverSearchDiagnostics.log("HTTP host=\(request.url?.host ?? "?") path=\(request.url?.path ?? "?") status=\(http.statusCode)")
         if http.statusCode == 401 || http.statusCode == 403 { throw CoverSearchError.authentication }
         if http.statusCode == 429 { throw CoverSearchError.quota }
         guard (200..<300).contains(http.statusCode), response.expectedContentLength <= limit else {

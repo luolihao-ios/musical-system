@@ -66,9 +66,9 @@ struct AppShellView: View {
                             .foregroundStyle(.secondary)
                     }
                     Section("隐私") {
-                        Text("联网用于开放许可音乐搜索、百度封面搜索，以及主动查找歌词，不上传音乐文件。")
+                        Text("联网用于在线音乐搜索、后台补全封面、主动查找歌词和版本检查，不上传音乐文件。")
                         NavigationLink("封面搜索设置") {
-                            BaiduCoverSettingsView(library: container.libraryModel)
+                            CoverSearchSettingsView(library: container.libraryModel)
                         }
                     }
                     Section("关于") {
