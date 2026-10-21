@@ -1,8 +1,35 @@
 import XCTest
+import MediaPlayer
+import UIKit
 @testable import LocalMusicPlayer
 
 @MainActor
 final class NowPlayingBridgeTests: XCTestCase {
+    func testDownloadedCoverCanBeRequestedFromSystemBackgroundThread() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer {
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let path = directory.appendingPathComponent("artwork-online.jpg")
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 240, height: 240)).image { context in
+            UIColor.red.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 240, height: 240))
+        }
+        try XCTUnwrap(image.jpegData(compressionQuality: 0.9)).write(to: path)
+        let session = MPNowPlayingSession()
+        session.update(SystemNowPlayingInfo(title: "测试歌曲", artist: "测试歌手", album: "",
+            artworkPath: path.path, duration: 120, elapsed: 0, playbackRate: 1))
+        let artwork = try XCTUnwrap(MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyArtwork] as? MPMediaItemArtwork)
+        let probe = BackgroundArtworkProbe(artwork: artwork)
+        let result = await Task.detached { probe.request() }.value
+        XCTAssertFalse(result.wasMainThread)
+        XCTAssertGreaterThan(result.width, 0)
+        XCTAssertGreaterThan(result.height, 0)
+        withExtendedLifetime(session) {}
+    }
+
     func testStateMapsMetadataTimelineAndPlaybackRate() {
         let controller = FakePlaybackController(
             state: state(isPlaying: true)
@@ -74,6 +101,15 @@ final class NowPlayingBridgeTests: XCTestCase {
             volume: 0.8,
             mode: .repeatAll
         )
+    }
+}
+
+// 仅用于模拟系统的跨线程只读图片请求；不把媒体对象声明成生产代码的 Sendable。
+private struct BackgroundArtworkProbe: @unchecked Sendable {
+    let artwork: MPMediaItemArtwork
+    nonisolated func request() -> (wasMainThread: Bool, width: CGFloat, height: CGFloat) {
+        let image = artwork.image(at: CGSize(width: 128, height: 128))
+        return (Thread.isMainThread, image.size.width, image.size.height)
     }
 }
 
