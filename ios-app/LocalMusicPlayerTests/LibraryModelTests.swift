@@ -6,6 +6,56 @@ import XCTest
 final class LibraryModelTests: XCTestCase {
     private var modelContainers: [ModelContainer] = []
 
+    func testNoMatchHistorySurvivesModelRecreationUntilManualRetry() async throws {
+        let store = try makeStore()
+        let song = track(id: "history", title: "历史歌曲", artist: "歌手")
+        song.artworkReference = "/music/artwork-generated.jpg"
+        try store.upsert(song)
+        let provider = EmptyHistoryCoverProvider()
+        func makeModel() -> LibraryModel {
+            LibraryModel(store: store, fileImporter: FakeFileImporter(),
+                systemImporter: FakeSystemImporter(result: .imported([])),
+                playback: FakeLibraryPlayback(), coverSearch: provider)
+        }
+        let first = makeModel()
+        first.scheduleMissingCoverSearch()
+        try await waitForCovers(first)
+        let second = makeModel()
+        second.scheduleMissingCoverSearch()
+        try await waitForCovers(second)
+        let beforeRetry = await provider.count
+        XCTAssertEqual(beforeRetry, 1, "搜过无结果的歌曲不能因为重新打开页面或 App 而再次查询")
+        second.retryMissingCovers()
+        try await waitForCovers(second)
+        let afterRetry = await provider.count
+        XCTAssertEqual(afterRetry, 2)
+    }
+
+    func testUnavailableTrackIsNotSearched() async throws {
+        let store = try makeStore()
+        let song = track(id: "missing-audio", title: "文件失效", artist: "歌手")
+        song.isAvailable = false
+        try store.upsert(song)
+        let provider = EmptyHistoryCoverProvider()
+        let model = LibraryModel(store: store, fileImporter: FakeFileImporter(),
+            systemImporter: FakeSystemImporter(result: .imported([])),
+            playback: FakeLibraryPlayback(), coverSearch: provider)
+        model.scheduleMissingCoverSearch()
+        try await waitForCovers(model)
+        let count = await provider.count
+        XCTAssertEqual(count, 0)
+    }
+
+    private func waitForCovers(_ model: LibraryModel) async throws {
+        // 先让新建 Task 开始，再等待队列完成，避免只检查尚未置位的 isCompletingResources。
+        for _ in 0..<10 { await Task.yield() }
+        for _ in 0..<400 {
+            if !model.isCompletingResources { return }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTFail("封面队列未结束")
+    }
+
     func testGeneratedCoverIsReplacedAfterImportAndSavedWithSource() async throws {
         let store = try makeStore()
         let incoming = track(id: "new-cover", title: "你好", artist: "歌手")
@@ -272,6 +322,15 @@ final class LibraryModelTests: XCTestCase {
             sourceKind: .importedFile,
             sourceReference: "/music/\(id).m4a"
         )
+    }
+}
+
+private actor EmptyHistoryCoverProvider: CoverArtSearching {
+    private(set) var count = 0
+    func isAvailable() -> Bool { true }
+    func findCover(_ query: MusicResourceQuery) async throws -> CoverArtMatch? {
+        count += 1
+        return nil
     }
 }
 
