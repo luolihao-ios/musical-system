@@ -109,7 +109,7 @@ private struct BackgroundArtworkProbe: @unchecked Sendable {
     let artwork: MPMediaItemArtwork
     nonisolated func request() -> (wasMainThread: Bool, width: CGFloat, height: CGFloat) {
         let image = artwork.image(at: CGSize(width: 128, height: 128))
-        return (Thread.isMainThread, image.size.width, image.size.height)
+        return (Thread.isMainThread, image?.size.width ?? 0, image?.size.height ?? 0)
     }
 }
 
