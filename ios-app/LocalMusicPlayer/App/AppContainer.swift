@@ -21,6 +21,7 @@ final class AppContainer {
             preferencesStore: store
         )
         try store.refreshAvailability()
+        try store.recoverInterruptedCoverSearches()
         try playback.initialize()
         let libraryModel = LibraryModel(
             store: store,
@@ -49,6 +50,7 @@ final class AppContainer {
         self.playlistsModel = playlistsModel
         self.nowPlayingModel = nowPlayingModel
         self.transferHandoffImporter = TransferHandoffImporter(importer: FileImportService(), store: store)
+        libraryModel.scheduleMissingCoverSearch()
     }
 }
 

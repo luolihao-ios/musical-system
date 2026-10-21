@@ -47,7 +47,7 @@ final class SystemLibraryImporter {
                 title: item.title,
                 artist: item.artist
             )
-            return TrackRecord(
+            let record = TrackRecord(
                 id: id,
                 title: item.title,
                 artist: item.artist,
@@ -57,6 +57,9 @@ final class SystemLibraryImporter {
                 sourceReference: assetURL.absoluteString,
                 artworkReference: artworkReference
             )
+            record.artworkOriginRaw = (CoverArtworkPolicy.needsSearch(path: artworkReference)
+                ? CoverArtworkOrigin.generated : .embedded).rawValue
+            return record
         }
         return .imported(tracks)
     }

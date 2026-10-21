@@ -2,6 +2,11 @@ import Foundation
 import ImageIO
 import UIKit
 
+private actor CoverLookupFailure {
+    private(set) var occurred = false
+    func record() { occurred = true }
+}
+
 enum CoverProvider: String, CaseIterable, Sendable {
     case netease, qq, kugou, itunes, musicbrainz, jamendo, archive
 }
@@ -85,21 +90,22 @@ actor CatalogCoverSearch: CoverArtSearching {
         guard !CoverQueryPolicy.cleanedTitle(query.title).isEmpty else { return nil }
         let started = Date()
         let deadline = started.addingTimeInterval(searchWindow)
+        let failure = CoverLookupFailure()
         CoverSearchDiagnostics.log("开始 title=\(query.title) artist=\(query.artist) 顺序=\((selectedProviders ?? CoverQueryPolicy.providers(for: query)).map(\.rawValue).joined(separator: ","))")
         return try await withThrowingTaskGroup(of: CoverArtMatch?.self) { group in
-            group.addTask { await self.search(query, deadline: deadline) }
+            group.addTask { try await self.search(query, deadline: deadline, failure: failure) }
             group.addTask {
                 // 查找目标约五秒，允许已得到候选的图片最多再收尾三秒。
                 try await Task.sleep(for: .seconds(self.searchWindow + 3))
                 CoverSearchDiagnostics.log("结束 reason=总预算耗尽")
-                return nil
+                throw URLError(.timedOut)
             }
             defer { group.cancelAll() }
             return try await group.next() ?? nil
         }
     }
 
-    private func search(_ query: MusicResourceQuery, deadline: Date) async -> CoverArtMatch? {
+    private func search(_ query: MusicResourceQuery, deadline: Date, failure: CoverLookupFailure) async throws -> CoverArtMatch? {
         let tiers = selectedProviders.map { [$0] } ?? CoverQueryPolicy.providerTiers(for: query)
         for fallback in [false, true] {
             if fallback && CoverQueryPolicy.primaryArtist(query.artist).isEmpty { break }
@@ -111,7 +117,7 @@ actor CatalogCoverSearch: CoverArtSearching {
                 let batch = Array(tier[start..<min(start + 3, tier.count)])
                 let match = await withTaskGroup(of: CoverArtMatch?.self, returning: CoverArtMatch?.self) { group in
                     for provider in batch {
-                        group.addTask { await self.attempt(provider, query: query, fallback: fallback, deadline: deadline) }
+                        group.addTask { await self.attempt(provider, query: query, fallback: fallback, deadline: deadline, failure: failure) }
                     }
                     while let result = await group.next() {
                         if let result { group.cancelAll(); return result }
@@ -123,13 +129,18 @@ actor CatalogCoverSearch: CoverArtSearching {
             }
         }
         CoverSearchDiagnostics.log("结束 reason=未获得可用封面或查找窗口结束")
+        try Task.checkCancellation()
+        let hadFailure = await failure.occurred
+        if Date() >= deadline { throw URLError(.timedOut) }
+        if hadFailure { throw URLError(.cannotLoadFromNetwork) }
         return nil
     }
 
-    private func attempt(_ provider: CoverProvider, query: MusicResourceQuery, fallback: Bool, deadline: Date) async -> CoverArtMatch? {
+    private func attempt(_ provider: CoverProvider, query: MusicResourceQuery, fallback: Bool, deadline: Date, failure: CoverLookupFailure) async -> CoverArtMatch? {
         guard !Task.isCancelled else { return nil }
         if let until = cooldown[provider], until > Date() {
             CoverSearchDiagnostics.log("来源=\(provider.rawValue) 跳过=服务暂时不可用，冷却中")
+            await failure.record()
             return nil
         }
         do {
@@ -158,10 +169,12 @@ actor CatalogCoverSearch: CoverArtSearching {
                 } catch {
                     if Task.isCancelled { return nil }
                     CoverSearchDiagnostics.log("来源=\(provider.rawValue) 图片下载失败=\(error.localizedDescription)")
+                    await failure.record()
                 }
             }
         } catch {
             if !Task.isCancelled {
+                await failure.record()
                 CoverSearchDiagnostics.log("来源=\(provider.rawValue) 查询失败=\(error.localizedDescription)")
                 if let error = error as? CoverSearchError, error == .authentication || error == .quota {
                     cooldown[provider] = Date().addingTimeInterval(300)
@@ -200,6 +213,7 @@ actor CatalogCoverSearch: CoverArtSearching {
         let term = fallback ? CoverQueryPolicy.primaryArtist(query.artist) : CoverQueryPolicy.cleanedTitle(query.title)
         let rows: [[String: Any]]
         var candidates: [CatalogCoverCandidate] = []
+        var detailFailure: (any Error)?
         func add(_ title: String, _ artist: String, _ album: String, _ image: Any?, page: String? = nil) {
             guard let score = CoverQueryPolicy.score(title: title, artist: artist, album: album, query: query, fallback: fallback),
                   let imageURL = CoverQueryPolicy.imageURL(image) else { return }
@@ -239,6 +253,7 @@ actor CatalogCoverSearch: CoverArtSearching {
                     } catch {
                         try Task.checkCancellation()
                         CoverSearchDiagnostics.log("来源=netease 详情失败=\(error.localizedDescription) 保留已有候选=\(candidates.count)")
+                        detailFailure = error
                     }
                 }
             }
@@ -266,6 +281,7 @@ actor CatalogCoverSearch: CoverArtSearching {
                     } catch {
                         try Task.checkCancellation()
                         CoverSearchDiagnostics.log("来源=kugou 详情失败=\(error.localizedDescription) 保留已有候选=\(candidates.count)")
+                        detailFailure = error
                     }
                 }
                 if candidates.count >= 2 { break }
@@ -311,10 +327,12 @@ actor CatalogCoverSearch: CoverArtSearching {
                 } catch {
                     try Task.checkCancellation()
                     CoverSearchDiagnostics.log("来源=archive 详情失败=\(error.localizedDescription) 保留已有候选=\(candidates.count)")
+                    detailFailure = error
                 }
             }
         }
         CoverSearchDiagnostics.log("来源=\(provider.rawValue) 返回条目=\(rows.count) 匹配并有图=\(candidates.count)")
+        if candidates.isEmpty, let detailFailure { throw detailFailure }
         return candidates
     }
 

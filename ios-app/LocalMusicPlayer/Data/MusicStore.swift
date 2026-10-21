@@ -37,7 +37,10 @@ final class MusicStore {
             let keepArtwork = CoverArtworkPolicy.needsSearch(path: incoming.artworkReference)
                 && !CoverArtworkPolicy.needsSearch(path: existing.artworkReference)
                 && existing.artworkReference.map { FileManager.default.fileExists(atPath: $0) } == true
-            if !keepArtwork { existing.artworkReference = incoming.artworkReference ?? existing.artworkReference }
+            if !keepArtwork, let artwork = incoming.artworkReference {
+                existing.artworkReference = artwork
+                existing.artworkOriginRaw = incoming.artworkOriginRaw
+            }
             existing.lyricsReference = incoming.lyricsReference ?? existing.lyricsReference
             existing.isLiked = liked
             existing.lastPlayedAt = lastPlayedAt
@@ -52,6 +55,18 @@ final class MusicStore {
         return records.sorted {
             $0.title.localizedStandardCompare($1.title) == .orderedAscending
         }
+    }
+
+    func saveCoverHistory(_ status: CoverSearchHistory.Status, track: TrackRecord) throws {
+        try CoverSearchHistory.write(status, to: track)
+        try context.save()
+    }
+
+    func recoverInterruptedCoverSearches() throws {
+        for track in try tracks() where CoverSearchHistory.read(track)?.status == .searching {
+            try CoverSearchHistory.write(.pending, to: track)
+        }
+        try context.save()
     }
 
     func refreshAvailability(fileManager: FileManager = .default) throws {

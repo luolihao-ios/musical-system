@@ -94,8 +94,8 @@ final class LibraryModel {
     private let scansAuthorizedFolders: Bool
     private let coverSearch: (any CoverArtSearching)?
     private var coverTask: Task<Void, Never>?
-    private var coverAttempts: [String: Date] = [:]
     private var coverCache: [String: CoverArtMatch] = [:]
+    private var coverRetryTask: Task<Void, Never>?
 
     init(
         store: MusicStore,
@@ -119,6 +119,7 @@ final class LibraryModel {
 
     isolated deinit {
         coverTask?.cancel()
+        coverRetryTask?.cancel()
         if let playbackObserverID {
             playback.removeStateObserver(playbackObserverID)
         }
@@ -229,9 +230,15 @@ final class LibraryModel {
     func showImportError(_ message: String) { errorMessage = message }
     func scheduleMissingCoverSearch() {
         guard coverTask == nil, let coverSearch else { return }
+        coverRetryTask?.cancel()
+        coverRetryTask = nil
         coverTask = Task { [weak self] in
             guard let self else { return }
-            defer { self.isCompletingResources = false; self.coverTask = nil }
+            defer {
+                self.isCompletingResources = false
+                self.coverTask = nil
+                if !Task.isCancelled { self.scheduleCoverRetry() }
+            }
             guard await coverSearch.isAvailable() else {
                 self.coverSearchMessage = "封面搜索暂时不可用，可稍后重试"
                 return
@@ -239,15 +246,17 @@ final class LibraryModel {
             self.isCompletingResources = true
             var completed = 0
             var found = 0
+            var activeTrackID: String?
             do {
-                // 每轮重新读取，包含搜索期间新导入的歌曲；相同歌曲失败后一小时内不自动重试。
+                // 每首歌的结果保存在资料库；重启、更新不能丢失未找到/失败的区别。
                 while !Task.isCancelled {
                     guard let track = try self.store.tracks().first(where: {
-                        CoverArtworkPolicy.needsSearch(path: $0.artworkReference) &&
-                        (self.coverAttempts[$0.id].map { Date().timeIntervalSince($0) > 3600 } ?? true)
+                        CoverSearchHistory.isEligible($0)
                     }) else { break }
                     let snapshot = TrackSnapshot(track)
-                    self.coverAttempts[snapshot.id] = Date()
+                    activeTrackID = snapshot.id
+                    let queryKey = CoverSearchHistory.queryKey(for: track)
+                    try self.store.saveCoverHistory(.searching, track: track)
                     self.coverSearchMessage = "正在后台查找封面，已处理 \(completed) 首，可继续播放"
                     let query = MusicResourceQuery(title: snapshot.title, artist: snapshot.artist,
                                                    album: snapshot.album, duration: snapshot.duration)
@@ -258,22 +267,41 @@ final class LibraryModel {
                     if let cached = self.coverCache[cacheKey] { match = cached }
                     else {
                         do { match = try await coverSearch.findCover(query) }
-                        catch let error as CoverSearchError { throw error }
-                        catch { match = nil }
+                        catch {
+                            if let current = try self.store.track(id: snapshot.id),
+                               CoverSearchHistory.queryKey(for: current) == queryKey {
+                                try self.store.saveCoverHistory(Task.isCancelled || error is CancellationError ? .pending : .failed, track: current)
+                            }
+                            try Task.checkCancellation()
+                            if error is CancellationError { throw error }
+                            completed += 1
+                            CoverSearchDiagnostics.log("查询失败，延迟重试 track=\(snapshot.id) error=\(error.localizedDescription)")
+                            continue
+                        }
                     }
-                    try Task.checkCancellation()
+                    if Task.isCancelled {
+                        if let current = try self.store.track(id: snapshot.id) { try self.store.saveCoverHistory(.pending, track: current) }
+                        throw CancellationError()
+                    }
                     completed += 1
+                    guard let current = try self.store.track(id: snapshot.id) else { continue }
+                    guard current.sourceReference == snapshot.sourceReference,
+                          current.artworkReference == snapshot.artworkReference,
+                          CoverSearchHistory.queryKey(for: current) == queryKey else {
+                        if CoverSearchHistory.read(current)?.status == .searching {
+                            try self.store.saveCoverHistory(.pending, track: current)
+                        }
+                        continue
+                    }
                     guard let match else {
+                        try self.store.saveCoverHistory(.notFound, track: current)
                         PlayerInteractionDiagnostics.log("cover completion result=not-found processed=\(completed)")
                         continue
                     }
                     if self.coverCache.count >= 16, let oldest = self.coverCache.keys.first { self.coverCache[oldest] = nil }
                     self.coverCache[cacheKey] = match
                     // 查询期间可能删除、重新导入或手动换封面；不恢复被删除的歌，也不覆盖新封面。
-                    guard let current = try self.store.track(id: snapshot.id),
-                          current.sourceReference == snapshot.sourceReference,
-                          current.artworkReference == snapshot.artworkReference,
-                          CoverArtworkPolicy.needsSearch(path: current.artworkReference) else { continue }
+                    guard CoverSearchHistory.origin(of: current) == .generated else { continue }
                     let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
                     let directory = base.appendingPathComponent("ImportedMusic").appendingPathComponent(UUID().uuidString)
                     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -284,6 +312,8 @@ final class LibraryModel {
                         "matchKind": match.artistFallback ? "artist-album" : "song", "savedAt": Date().timeIntervalSince1970]
                     try JSONSerialization.data(withJSONObject: metadata).write(to: directory.appendingPathComponent("source.json"), options: .atomic)
                     current.artworkReference = url.path
+                    current.artworkOriginRaw = CoverArtworkOrigin.downloaded.rawValue
+                    try self.store.saveCoverHistory(.found, track: current)
                     try self.store.upsert(current)
                     self.playback.refreshTrackMetadata(TrackSnapshot(current))
                     try self.reload()
@@ -293,9 +323,17 @@ final class LibraryModel {
                 }
                 self.coverSearchMessage = "封面搜索完成：处理 \(completed) 首，补齐 \(found) 首"
             } catch is CancellationError {
+                if let id = activeTrackID, let track = try? self.store.track(id: id),
+                   CoverSearchHistory.read(track)?.status == .searching {
+                    try? self.store.saveCoverHistory(.pending, track: track)
+                }
                 self.coverSearchMessage = "封面搜索已暂停"
                 CoverSearchDiagnostics.log("队列已暂停")
             } catch {
+                if let id = activeTrackID, let track = try? self.store.track(id: id),
+                   CoverSearchHistory.read(track)?.status == .searching {
+                    try? self.store.saveCoverHistory(.failed, track: track)
+                }
                 self.coverSearchMessage = error.localizedDescription
                 PlayerInteractionDiagnostics.log("cover completion stopped reason=\(String(describing: type(of: error)))")
             }
@@ -304,12 +342,29 @@ final class LibraryModel {
 
     func retryMissingCovers() {
         guard coverTask == nil else { return }
-        coverAttempts.removeAll()
+        do {
+            for track in try store.tracks() where CoverSearchHistory.origin(of: track) == .generated {
+                try store.saveCoverHistory(.pending, track: track)
+            }
+        } catch { errorMessage = error.localizedDescription; return }
         scheduleMissingCoverSearch()
+    }
+
+    private func scheduleCoverRetry() {
+        let next = (try? store.tracks())?.filter { $0.isAvailable && CoverSearchHistory.origin(of: $0) == .generated }
+            .compactMap { CoverSearchHistory.read($0)?.retryAfter }.filter { $0 > Date() }.min()
+        guard let next else { return }
+        coverRetryTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(max(0.1, next.timeIntervalSinceNow))) }
+            catch { return }
+            self?.scheduleMissingCoverSearch()
+        }
     }
 
     func cancelCoverSearch() {
         coverTask?.cancel()
+        coverRetryTask?.cancel()
+        coverRetryTask = nil
     }
 
     func play(_ track: TrackSnapshot) async throws {

@@ -57,6 +57,17 @@ final class CatalogCoverSearchTests: XCTestCase {
         XCTAssertNotNil(result.flatMap { UIImage(data: $0.data) })
     }
 
+    func testServiceFailureWithoutCoverIsNotReportedAsNoMatch() async throws {
+        let fixture = CoverHTTPFixtures(mode: .failedNetEase, image: imageData())
+        let service = CatalogCoverSearch(transport: fixture, providers: [.netease])
+        do {
+            _ = try await service.findCover(MusicResourceQuery(title: "测试歌曲", artist: "", album: "", duration: 0))
+            XCTFail("服务失败必须允许延迟重试，而非永久保存无结果")
+        } catch let error as URLError {
+            XCTAssertEqual(error.code, .cannotLoadFromNetwork)
+        }
+    }
+
     func testLaterDetailFailureKeepsEarlierUsableCandidate() async throws {
         let fixture = CoverHTTPFixtures(mode: .laterDetailFailure, image: imageData())
         let service = CatalogCoverSearch(transport: fixture, providers: [.netease])
@@ -99,8 +110,12 @@ final class CatalogCoverSearchTests: XCTestCase {
         let fixture = CoverHTTPFixtures(mode: .slow, image: imageData())
         let service = CatalogCoverSearch(transport: fixture, providers: [.itunes], searchWindow: 0.01)
         let started = Date()
-        let result = try await service.findCover(MusicResourceQuery(title: "Example Song", artist: "", album: "", duration: 0))
-        XCTAssertNil(result)
+        do {
+            _ = try await service.findCover(MusicResourceQuery(title: "Example Song", artist: "", album: "", duration: 0))
+            XCTFail("超时必须作为可重试失败，不能伪装成已搜索无结果")
+        } catch let error as URLError {
+            XCTAssertEqual(error.code, .timedOut)
+        }
         XCTAssertLessThan(Date().timeIntervalSince(started), 8, "不能无限等待持续不返回的来源")
     }
 

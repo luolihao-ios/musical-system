@@ -156,11 +156,14 @@ final class FileImportService {
             ? fallback.artist : embeddedArtist
 
         var stagedArtwork: URL?
+        var artworkOrigin: CoverArtworkOrigin = .generated
         if let artwork = metadata.artworkData, !artwork.isEmpty {
+            artworkOrigin = .embedded
             let target = staging.appending(path: "artwork")
             try artwork.write(to: target, options: .atomic)
             stagedArtwork = target
         } else if let cover {
+            artworkOrigin = .companion
             let access = securityScope.beginAccessing(cover.sourceURL)
             defer {
                 if access {
@@ -185,7 +188,7 @@ final class FileImportService {
             if fileManager.fileExists(atPath: previous.path) {
                 let target = staging.appendingPathComponent(name)
                 try fileManager.copyItem(at: previous, to: target)
-                if name == "lyrics.lrc" { stagedLyrics = target } else { stagedArtwork = target }
+                if name == "lyrics.lrc" { stagedLyrics = target } else { stagedArtwork = target; artworkOrigin = .existing }
             }
         }
         // 导入只整理本地文件；封面由资料库的后台队列补齐，歌词仅按按钮查询。
@@ -203,7 +206,7 @@ final class FileImportService {
         let finalArtwork = stagedArtwork.map {
             destination.appending(path: $0.lastPathComponent).path
         }
-        return TrackRecord(
+        let record = TrackRecord(
             id: identifier,
             title: resolvedTitle,
             artist: resolvedArtist,
@@ -214,6 +217,8 @@ final class FileImportService {
             artworkReference: finalArtwork,
             lyricsReference: finalLyrics
         )
+        record.artworkOriginRaw = artworkOrigin.rawValue
+        return record
     }
 
     private func fallbackMetadata(

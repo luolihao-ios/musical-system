@@ -46,6 +46,27 @@ final class LibraryModelTests: XCTestCase {
         XCTAssertEqual(count, 0)
     }
 
+    func testNetworkFailureIsPersistedAndDoesNotImmediatelyRetryOnReopen() async throws {
+        let store = try makeStore()
+        let song = track(id: "offline", title: "断网歌曲", artist: "歌手")
+        try store.upsert(song)
+        let provider = FailedHistoryCoverProvider()
+        let first = LibraryModel(store: store, fileImporter: FakeFileImporter(),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: FakeLibraryPlayback(), coverSearch: provider)
+        first.scheduleMissingCoverSearch()
+        try await waitForCovers(first)
+        let history = try XCTUnwrap(CoverSearchHistory.read(song))
+        XCTAssertEqual(history.status, .failed)
+        XCTAssertNotNil(history.retryAfter)
+        let second = LibraryModel(store: store, fileImporter: FakeFileImporter(),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: FakeLibraryPlayback(), coverSearch: provider)
+        second.scheduleMissingCoverSearch()
+        try await waitForCovers(second)
+        let count = await provider.count
+        XCTAssertEqual(count, 1)
+        first.cancelCoverSearch(); second.cancelCoverSearch()
+    }
+
     private func waitForCovers(_ model: LibraryModel) async throws {
         // 先让新建 Task 开始，再等待队列完成，避免只检查尚未置位的 isCompletingResources。
         for _ in 0..<10 { await Task.yield() }
@@ -150,6 +171,7 @@ final class LibraryModelTests: XCTestCase {
         let store = try makeStore()
         let incoming = track(id: "manual-race", title: "你好", artist: "歌手")
         incoming.artworkReference = "/music/artwork-generated.jpg"
+        incoming.artworkOriginRaw = CoverArtworkOrigin.generated.rawValue
         let started = expectation(description: "封面查询已开始")
         let provider = ControlledCoverProvider(onStart: { started.fulfill() })
         let model = LibraryModel(store: store, fileImporter: ImportedCoverFixture(record: incoming),
@@ -158,6 +180,7 @@ final class LibraryModelTests: XCTestCase {
         await fulfillment(of: [started], timeout: 2)
         let current = try XCTUnwrap(store.track(id: "manual-race"))
         current.artworkReference = "/music/my-cover.jpg"
+        current.artworkOriginRaw = CoverArtworkOrigin.manual.rawValue
         try store.upsert(current)
         try model.reload()
         await provider.finish()
@@ -331,6 +354,15 @@ private actor EmptyHistoryCoverProvider: CoverArtSearching {
     func findCover(_ query: MusicResourceQuery) async throws -> CoverArtMatch? {
         count += 1
         return nil
+    }
+}
+
+private actor FailedHistoryCoverProvider: CoverArtSearching {
+    private(set) var count = 0
+    func isAvailable() -> Bool { true }
+    func findCover(_ query: MusicResourceQuery) async throws -> CoverArtMatch? {
+        count += 1
+        throw URLError(.notConnectedToInternet)
     }
 }
 
