@@ -43,7 +43,7 @@ final class CatalogCoverSearchTests: XCTestCase {
         XCTAssertEqual(result?.provider, "netease")
         XCTAssertNotNil(result.flatMap { UIImage(data: $0.data) })
         let requests = await fixture.requests
-        XCTAssertEqual(requests.map { $0.url?.path ?? "" }, ["/api/search/get", "/api/song/detail/", "/cover.png"])
+        XCTAssertEqual(requests.map { $0.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.path } ?? "" }, ["/api/search/get", "/api/song/detail/", "/cover.png"])
         let queryItems = URLComponents(url: try XCTUnwrap(requests.first?.url), resolvingAgainstBaseURL: false)?.queryItems
         XCTAssertEqual(queryItems?.first(where: { $0.name == "s" })?.value, "明天你好")
     }
@@ -128,6 +128,8 @@ private actor CoverHTTPFixtures: CoverHTTPTransport {
     func data(for request: URLRequest, limit: Int) async throws -> Data {
         requests.append(request)
         let url = request.url!
+        // URL.path 在 Apple Foundation 会去掉末尾斜杠；接口路由须读取实际请求路径。
+        let requestPath = URLComponents(url: url, resolvingAgainstBaseURL: false)!.path
         if url.host == "example.org" { return image }
         if mode == .slow { try await Task.sleep(for: .seconds(60)); return Data() }
         if mode == .musicBrainzAlbums {
@@ -152,11 +154,11 @@ private actor CoverHTTPFixtures: CoverHTTPTransport {
         }
         if mode == .neteaseDetail {
             if url.path == "/api/search/get" { return Data(#"{"code":200,"result":{"songs":[{"id":123,"name":"明天你好","artists":[{"name":"牛奶咖啡"}],"album":{"name":"早上好","picId":999}}]}}"#.utf8) }
-            if url.path == "/api/song/detail/" { return Data(#"{"code":200,"songs":[{"album":{"name":"早上好","picUrl":"https://example.org/cover.png"}}]}"#.utf8) }
+            if requestPath == "/api/song/detail/" { return Data(#"{"code":200,"songs":[{"album":{"name":"早上好","picUrl":"https://example.org/cover.png"}}]}"#.utf8) }
         }
         if mode == .laterDetailFailure {
             if url.path == "/api/search/get" { return Data(#"{"code":200,"result":{"songs":[{"id":123,"name":"明天你好","artists":[{"name":"牛奶咖啡"}],"album":{}},{"id":456,"name":"明天你好","artists":[{"name":"其他人"}],"album":{}}]}}"#.utf8) }
-            if url.path == "/api/song/detail/" {
+            if requestPath == "/api/song/detail/" {
                 let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "id" })?.value
                 if id == "456" { throw URLError(.timedOut) }
                 return Data(#"{"songs":[{"album":{"name":"早上好","picUrl":"https://example.org/cover.png"}}]}"#.utf8)
