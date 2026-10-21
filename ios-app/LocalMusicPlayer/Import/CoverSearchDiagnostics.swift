@@ -7,7 +7,7 @@ enum CoverSearchDiagnostics {
     }
     static func log(_ message: String) {
         let url = fileURL
-        let line = Data("\(Date()) \(message.replacingOccurrences(of: "\n", with: " "))\n".utf8)
+        let line = Data("\(DiagnosticTimestamp.string()) \(message.replacingOccurrences(of: "\n", with: " "))\n".utf8)
         queue.async {
             let fm = FileManager.default
             try? fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)

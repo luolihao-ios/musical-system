@@ -9,7 +9,7 @@ enum PlayerInteractionDiagnostics {
     }
 
     static func log(_ message: String) {
-        let line = "\(Date().timeIntervalSince1970) \(message)\n"
+        let line = "\(DiagnosticTimestamp.string()) \(message)\n"
         let url = fileURL
         queue.async {
             let fm = FileManager.default

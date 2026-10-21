@@ -64,6 +64,7 @@ final class AppBootstrap {
     func start() {
         guard !didStart else { return }
         didStart = true
+        CrashExceptionDiagnostics.install()
         do {
             container = try AppContainer()
         } catch {

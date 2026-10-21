@@ -117,6 +117,13 @@ jobs:
             -archivePath ios-app/build/AppStore/LocalMusicPlayer.xcarchive \
             -exportPath ios-app/build/AppStore/export \
             -exportOptionsPlist "$TEMP_SIGNING_DIR/ExportOptions.plist"
+      - name: Preserve release symbols
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: music-player-release-symbols
+          path: ios-app/build/AppStore/LocalMusicPlayer.xcarchive/dSYMs
+          if-no-files-found: warn
       - name: Verify exported App Group entitlement
         run: |
           set -euo pipefail

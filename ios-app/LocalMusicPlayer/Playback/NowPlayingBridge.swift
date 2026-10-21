@@ -135,6 +135,13 @@ final class MPNowPlayingSession: SystemNowPlayingSession {
     var onSeek: ((TimeInterval) async -> Void)?
 
     private var commandTargets: [(MPRemoteCommand, Any)] = []
+    private struct ArtworkCacheKey: Equatable {
+        let path: String
+        let modified: Date?
+        let size: UInt64?
+    }
+    private var cachedArtworkKey: ArtworkCacheKey?
+    private var cachedArtwork: MPMediaItemArtwork?
 
     init() {
         let commands = MPRemoteCommandCenter.shared()
@@ -144,31 +151,11 @@ final class MPNowPlayingSession: SystemNowPlayingSession {
         commands.previousTrackCommand.isEnabled = true
         commands.changePlaybackPositionCommand.isEnabled = true
 
-        add(commands.playCommand) { [weak self] _ in
-            Task { @MainActor in await self?.onPlay?() }
-            return .success
-        }
-        add(commands.pauseCommand) { [weak self] _ in
-            Task { @MainActor in await self?.onPause?() }
-            return .success
-        }
-        add(commands.nextTrackCommand) { [weak self] _ in
-            Task { @MainActor in await self?.onNext?() }
-            return .success
-        }
-        add(commands.previousTrackCommand) { [weak self] _ in
-            Task { @MainActor in await self?.onPrevious?() }
-            return .success
-        }
-        add(commands.changePlaybackPositionCommand) { [weak self] event in
-            guard let event = event as? MPChangePlaybackPositionCommandEvent else {
-                return .commandFailed
-            }
-            Task { @MainActor in
-                await self?.onSeek?(event.positionTime)
-            }
-            return .success
-        }
+        add(commands.playCommand, handler: SystemMediaCallbacks.command { [weak self] in await self?.onPlay?() })
+        add(commands.pauseCommand, handler: SystemMediaCallbacks.command { [weak self] in await self?.onPause?() })
+        add(commands.nextTrackCommand, handler: SystemMediaCallbacks.command { [weak self] in await self?.onNext?() })
+        add(commands.previousTrackCommand, handler: SystemMediaCallbacks.command { [weak self] in await self?.onPrevious?() })
+        add(commands.changePlaybackPositionCommand, handler: SystemMediaCallbacks.seek { [weak self] position in await self?.onSeek?(position) })
     }
 
     isolated deinit {
@@ -186,29 +173,27 @@ final class MPNowPlayingSession: SystemNowPlayingSession {
             MPNowPlayingInfoPropertyElapsedPlaybackTime: info.elapsed,
             MPNowPlayingInfoPropertyPlaybackRate: info.playbackRate
         ]
-        if let path = info.artworkPath,
-           URL(fileURLWithPath: path).lastPathComponent != "artwork-generated.jpg",
-           let image = ArtworkImageLoader.image(atPath: path, maxPixelSize: 512) {
-            if image.size.width > 0,
-               image.size.height > 0,
-               image.cgImage != nil {
-                values[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(
-                    boundsSize: image.size
-                ) { _ in image }
-                PlaybackDiagnostics.log(
-                    "系统媒体信息已加载封面：路径=\(path)，尺寸=\(image.size.width)x\(image.size.height)"
-                )
-            } else {
-                PlaybackDiagnostics.log("系统媒体信息跳过无效封面：路径=\(path)")
-            }
-        } else if let path = info.artworkPath {
-            PlaybackDiagnostics.log(
-                URL(fileURLWithPath: path).lastPathComponent == "artwork-generated.jpg"
-                    ? "系统媒体信息跳过程序化封面：路径=\(path)"
-                    : "系统媒体信息无法读取封面：路径=\(path)"
-            )
+        let key = info.artworkPath.map { path in
+            let attributes = try? FileManager.default.attributesOfItem(atPath: path)
+            return ArtworkCacheKey(path: path, modified: attributes?[.modificationDate] as? Date,
+                size: (attributes?[.size] as? NSNumber)?.uint64Value)
         }
+        let artworkChanged = key != cachedArtworkKey
+        if artworkChanged {
+            cachedArtworkKey = key
+            cachedArtwork = nil
+            if let path = info.artworkPath {
+                PlaybackDiagnostics.log("系统封面准备 decode path=\(path)")
+                if let image = ArtworkImageLoader.image(atPath: path, maxPixelSize: 512), let pixels = image.cgImage {
+                    cachedArtwork = SystemMediaCallbacks.artwork(image: pixels)
+                    PlaybackDiagnostics.log("系统封面准备完成 size=\(pixels.width)x\(pixels.height)")
+                } else { PlaybackDiagnostics.log("系统封面无效，继续无图播放") }
+            }
+        }
+        if let artwork = cachedArtwork { values[MPMediaItemPropertyArtwork] = artwork }
+        if artworkChanged { PlaybackDiagnostics.log("系统媒体信息提交 enter main=\(Thread.isMainThread)") }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = values
+        if artworkChanged { PlaybackDiagnostics.log("系统媒体信息提交 exit") }
     }
 
     private func add(

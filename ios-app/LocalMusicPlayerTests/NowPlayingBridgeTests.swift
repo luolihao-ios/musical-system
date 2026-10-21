@@ -6,18 +6,31 @@ import UIKit
 @MainActor
 final class NowPlayingBridgeTests: XCTestCase {
     func testDownloadedCoverCanBeRequestedFromSystemBackgroundThread() async throws {
+        try await verifyBackgroundArtwork(filename: "artwork-online.jpg", generated: false)
+    }
+
+    func testProceduralCoverCanBeRequestedFromSystemBackgroundThread() async throws {
+        try await verifyBackgroundArtwork(filename: "artwork-generated.jpg", generated: true)
+    }
+
+    private func verifyBackgroundArtwork(filename: String, generated: Bool) async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
             try? FileManager.default.removeItem(at: directory)
         }
-        let path = directory.appendingPathComponent("artwork-online.jpg")
+        let path = directory.appendingPathComponent(filename)
         let image = UIGraphicsImageRenderer(size: CGSize(width: 240, height: 240)).image { context in
             UIColor.red.setFill()
             context.fill(CGRect(x: 0, y: 0, width: 240, height: 240))
         }
-        try XCTUnwrap(image.jpegData(compressionQuality: 0.9)).write(to: path)
+        let data: Data
+        if generated {
+            data = try ProceduralArtworkGenerator().generateArtwork(title: "测试歌曲", artist: "测试歌手", seed: "system-cover")
+        } else { data = try XCTUnwrap(image.jpegData(compressionQuality: 0.9)) }
+        try data.write(to: path)
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1_000.1)], ofItemAtPath: path.path)
         let session = MPNowPlayingSession()
         session.update(SystemNowPlayingInfo(title: "测试歌曲", artist: "测试歌手", album: "",
             artworkPath: path.path, duration: 120, elapsed: 0, playbackRate: 1))
@@ -27,6 +40,15 @@ final class NowPlayingBridgeTests: XCTestCase {
         XCTAssertFalse(result.wasMainThread)
         XCTAssertGreaterThan(result.width, 0)
         XCTAssertGreaterThan(result.height, 0)
+        session.update(SystemNowPlayingInfo(title: "测试歌曲", artist: "测试歌手", album: "",
+            artworkPath: path.path, duration: 120, elapsed: 1, playbackRate: 1))
+        let updated = MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyArtwork] as? MPMediaItemArtwork
+        XCTAssertTrue(updated === artwork, "进度更新不能每次重新解码、创建封面回调")
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1_000.2)], ofItemAtPath: path.path)
+        session.update(SystemNowPlayingInfo(title: "测试歌曲", artist: "测试歌手", album: "",
+            artworkPath: path.path, duration: 120, elapsed: 2, playbackRate: 1))
+        let changed = try XCTUnwrap(MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyArtwork] as? MPMediaItemArtwork)
+        XCTAssertFalse(changed === artwork, "同秒同尺寸的图片更新也必须使缓存失效")
         withExtendedLifetime(session) {}
     }
 

@@ -75,6 +75,9 @@ struct AppShellView: View {
                         ShareLink(item: PlayerInteractionDiagnostics.fileURL) {
                             Label("导出播放器诊断日志", systemImage: "square.and.arrow.up")
                         }
+                        ShareLink(item: CrashExceptionDiagnostics.fileURL) {
+                            Label("导出异常堆栈（若已记录）", systemImage: "doc.text.magnifyingglass")
+                        }
                         Button {
                             if let url = storeUpdate?.storeURL {
                                 UIApplication.shared.open(url)
