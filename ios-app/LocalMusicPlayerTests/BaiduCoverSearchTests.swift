@@ -62,6 +62,12 @@ final class BaiduCoverSearchTests: XCTestCase {
         XCTAssertFalse(CoverArtworkPolicy.needsSearch(path: "/music/artwork"))
         XCTAssertFalse(CoverArtworkPolicy.needsSearch(path: "/music/artwork-baidu.jpg"))
     }
+
+    func testSystemLibraryGeneratedCoverIsEligibleWithoutReplacingCustomImages() {
+        XCTAssertTrue(CoverArtworkPolicy.needsSearch(path: "/support/SystemArtwork/media-123-generated.jpg"))
+        XCTAssertFalse(CoverArtworkPolicy.needsSearch(path: "/support/SystemArtwork/media-123.jpg"))
+        XCTAssertFalse(CoverArtworkPolicy.needsSearch(path: "/music/my-generated.jpg"))
+    }
 }
 
 private actor CoverFixtureTransport: CoverHTTPTransport {
