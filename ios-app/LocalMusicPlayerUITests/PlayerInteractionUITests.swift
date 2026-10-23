@@ -108,7 +108,10 @@ final class PlayerInteractionUITests: XCTestCase {
         let artwork = app.otherElements["player.artwork"].firstMatch
         XCTAssertTrue(artwork.waitForExistence(timeout: 5))
         artwork.swipeUp()
-        waitForPhase("expanded")
+        // 切歌会更新歌词和进度的 AX 子树；检查实际详情控件而非旧面板快照。
+        XCTAssertTrue(app.buttons["player.detail.close"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["player.detail.playPause"].isHittable)
+        XCTAssertFalse(app.buttons["player.compact.open"].exists)
         XCTAssertTrue(app.staticTexts["00:10"].waitForExistence(timeout: 3))
     }
 
