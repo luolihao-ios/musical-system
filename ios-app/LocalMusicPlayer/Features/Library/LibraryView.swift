@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct LibraryView: View {
     @Bindable var model: LibraryModel
+    var categoriesOnly = false
 
     @State private var showDocumentPicker = false
     @State private var showMusicFolderPicker = false
@@ -10,7 +11,12 @@ struct LibraryView: View {
 
     var body: some View {
         Group {
-            if model.tracks.isEmpty {
+            if categoriesOnly {
+                VStack {
+                    libraryEntrances.frame(height: 150)
+                    Spacer()
+                }
+            } else if model.tracks.isEmpty {
                 ContentUnavailableView {
                     Label("还没有本地音乐", systemImage: "music.note.list")
                 } description: {
@@ -25,18 +31,6 @@ struct LibraryView: View {
             } else {
                 List {
                     Section {
-                        libraryEntrances
-                            .listRowInsets(
-                                EdgeInsets(
-                                    top: 8,
-                                    leading: 0,
-                                    bottom: 8,
-                                    trailing: 0
-                                )
-                            )
-                            .listRowBackground(Color.clear)
-                    }
-                    Section {
                         ForEach(model.filteredTracks) { track in
                             trackRow(track)
                         }
@@ -47,7 +41,8 @@ struct LibraryView: View {
                 .listStyle(.plain)
             }
         }
-        .navigationTitle("音乐库")
+        .navigationTitle(categoriesOnly ? "音乐库" : "")
+        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .searchable(
             text: $model.searchText,
             prompt: "搜索歌曲、歌手或专辑"
@@ -55,7 +50,6 @@ struct LibraryView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack {
-                    Button { showOnlineSearch = true } label: { Image(systemName: "globe") }.accessibilityLabel("在线搜索")
                     ImportMenu(
                         importFiles: { showDocumentPicker = true },
                         scanLocalAudio: { Task { await model.scanLocalAudio() } },
@@ -218,6 +212,7 @@ private struct LibraryGroupsView: View {
             }
         }
         .navigationTitle(title)
+        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .overlay {
             if groups.isEmpty {
                 ContentUnavailableView(
@@ -250,6 +245,7 @@ private struct LibraryTracksView: View {
             }
         }
         .navigationTitle(title)
+        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .overlay {
             if tracks.isEmpty {
                 ContentUnavailableView(
@@ -304,10 +300,12 @@ struct TrackRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                     }
+                    Spacer(minLength: 0)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            Spacer()
             HStack(spacing: 2) {
                 Button(role: .destructive, action: delete) {
                     Image(systemName: "trash")

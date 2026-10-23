@@ -140,18 +140,32 @@ final class NowPlayingModel {
                 if state.currentTrack?.id == track.id { lyricsSearchMessage = "没有找到匹配的歌词，可导入同名 LRC 文件" }
                 return
             }
-            guard let current = try store.track(id: track.id), current.lyricsReference == nil else { return }
+            guard state.currentTrack?.id == track.id else { return }
+            let current = try store.track(id: track.id)
+            guard current?.lyricsReference == nil, state.currentTrack?.lyricsReference == nil else { return }
             let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             let directory = base.appendingPathComponent("ImportedMusic").appendingPathComponent(UUID().uuidString)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let url = directory.appendingPathComponent("lyrics.lrc")
             try text.write(to: url, atomically: true, encoding: .utf8)
-            current.lyricsReference = url.path
-            try store.upsert(current)
-            playback.refreshTrackMetadata(TrackSnapshot(current))
+            let updated: TrackSnapshot
+            if let current {
+                current.lyricsReference = url.path
+                try store.upsert(current)
+                updated = TrackSnapshot(current)
+            } else if let active = state.currentTrack, active.sourceKind == .onlinePreview {
+                updated = TrackSnapshot(id: active.id, title: active.title, artist: active.artist,
+                    album: active.album, duration: active.duration, sourceKind: active.sourceKind,
+                    sourceReference: active.sourceReference, artworkReference: active.artworkReference,
+                    lyricsReference: url.path)
+            } else {
+                lyricsSearchMessage = "歌曲已移除，请重新选择"
+                return
+            }
+            playback.refreshTrackMetadata(updated)
             if state.currentTrack?.id == track.id {
-                loadLyrics(for: TrackSnapshot(current))
-                lyricsSearchMessage = "已找到歌词，点击封面查看"
+                loadLyrics(for: updated)
+                lyricsSearchMessage = "已找到歌词，点击歌词查看"
             }
         } catch {
             if state.currentTrack?.id == track.id { lyricsSearchMessage = "歌词保存失败，请重试" }

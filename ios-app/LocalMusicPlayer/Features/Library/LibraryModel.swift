@@ -20,6 +20,8 @@ extension SystemLibraryImporter: SystemLibraryImporting {
 @MainActor
 protocol LibraryPlaybackControlling: AnyObject {
     var state: PlaybackState { get }
+    func pause() throws
+    func play() async throws
     func removeTrack(id: String) throws
     func refreshTrackMetadata(_ track: TrackSnapshot)
     func playTrack(
@@ -65,6 +67,17 @@ enum LibraryGroupKind: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+enum CatalogDownloadState: Equatable {
+    case downloading(Double?)
+    case importing
+    case completed
+    case failed(String)
+
+    var isBusy: Bool {
+        switch self { case .downloading, .importing: true; default: false }
+    }
+}
+
 struct LibraryTrackGroup: Identifiable, Equatable, Sendable {
     let id: String
     let title: String
@@ -83,6 +96,8 @@ final class LibraryModel {
     private(set) var errorMessage: String?
     private(set) var currentTrackID: String?
     private(set) var isCurrentTrackPlaying = false
+    private(set) var catalogDownloads: [String: CatalogDownloadState] = [:]
+    private(set) var catalogPreviewLoadingID: String?
 
     let canImportFiles = true
 
@@ -96,6 +111,9 @@ final class LibraryModel {
     private var coverTask: Task<Void, Never>?
     private var coverCache: [String: CoverArtMatch] = [:]
     private var coverRetryTask: Task<Void, Never>?
+    private let catalog: any CatalogDownloading
+    private var catalogPreviewGeneration = UUID()
+    private var catalogDownloadGenerations: [String: UUID] = [:]
 
     init(
         store: MusicStore,
@@ -103,7 +121,8 @@ final class LibraryModel {
         systemImporter: any SystemLibraryImporting,
         playback: any LibraryPlaybackControlling,
         scansAuthorizedFolders: Bool = false,
-        coverSearch: (any CoverArtSearching)? = nil
+        coverSearch: (any CoverArtSearching)? = nil,
+        catalog: any CatalogDownloading = OnlineCatalog.shared
     ) {
         self.store = store
         self.fileImporter = fileImporter
@@ -111,6 +130,7 @@ final class LibraryModel {
         self.playback = playback
         self.scansAuthorizedFolders = scansAuthorizedFolders
         self.coverSearch = coverSearch
+        self.catalog = catalog
         playbackObserverID = playback.observeState { [weak self] state in
             self?.currentTrackID = state.currentTrack?.id
             self?.isCurrentTrackPlaying = state.isPlaying
@@ -187,6 +207,100 @@ final class LibraryModel {
         await performImport {
             try await fileImporter.importFiles(files)
         }
+    }
+
+    func toggleCatalogPreview(_ track: CatalogTrack) async throws {
+        guard let snapshot = track.previewSnapshot() else { return }
+        if playback.state.currentTrack?.id == snapshot.id {
+            if playback.state.isPlaying || catalogPreviewLoadingID == track.id {
+                catalogPreviewGeneration = UUID()
+                catalogPreviewLoadingID = nil
+                try playback.pause()
+            } else {
+                try await playback.play()
+            }
+            return
+        }
+        let generation = UUID()
+        catalogPreviewGeneration = generation
+        catalogPreviewLoadingID = track.id
+        defer {
+            if catalogPreviewGeneration == generation { catalogPreviewLoadingID = nil }
+        }
+        do { try await playback.playTrack(snapshot, in: [snapshot]) }
+        catch {
+            guard catalogPreviewGeneration == generation else { return }
+            throw error
+        }
+        guard playback.state.currentTrack?.id == snapshot.id else { return }
+        if catalogPreviewGeneration == generation { catalogPreviewLoadingID = nil }
+        // 封面晚到只更新仍在播放的同一首歌，不重新加载音频。
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AiYueCatalogPreviews").appendingPathComponent(UUID().uuidString)
+        if let artwork = try? await catalog.downloadArtwork(track, to: directory),
+           let active = playback.state.currentTrack, active.id == snapshot.id {
+            let updated = TrackSnapshot(id: active.id, title: active.title, artist: active.artist,
+                album: active.album, duration: active.duration, sourceKind: active.sourceKind,
+                sourceReference: active.sourceReference, artworkReference: artwork.path,
+                lyricsReference: active.lyricsReference, isLiked: active.isLiked,
+                isAvailable: active.isAvailable, lastPlayedAt: active.lastPlayedAt)
+            playback.refreshTrackMetadata(updated)
+        }
+    }
+
+    func downloadCatalogTrack(_ track: CatalogTrack) async {
+        guard track.license.allowsDownload,
+              catalogDownloads[track.id]?.isBusy != true,
+              catalogDownloads[track.id] != .completed else { return }
+        catalogDownloads[track.id] = .downloading(nil)
+        let generation = UUID()
+        catalogDownloadGenerations[track.id] = generation
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AiYueCatalogDownloads").appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        do {
+            let url = try await catalog.download(track, to: directory) { [weak self] value in
+                Task { @MainActor [weak self] in
+                    guard self?.catalogDownloadGenerations[track.id] == generation,
+                          case .downloading = self?.catalogDownloads[track.id] else { return }
+                    self?.catalogDownloads[track.id] = .downloading(min(max(value, 0), 1))
+                }
+            }
+            // 供应商无图或封面请求失败时，继续现有生成/后台搜索流程。
+            catalogDownloads[track.id] = .importing
+            let artwork = try? await catalog.downloadArtwork(track, to: directory)
+            while isImporting { try await Task.sleep(for: .milliseconds(100)) }
+            try Task.checkCancellation()
+            try await importCatalogTrack(track, audioURL: url, artworkURL: artwork)
+            catalogDownloads[track.id] = .completed
+        } catch {
+            catalogDownloads[track.id] = .failed(error.localizedDescription)
+        }
+    }
+
+    func importCatalogTrack(_ track: CatalogTrack, audioURL: URL, artworkURL: URL?) async throws {
+        guard !isImporting else {
+            throw NSError(domain: "AiYueCatalog", code: 1, userInfo: [NSLocalizedDescriptionKey: "正在导入其他歌曲，请稍后重试"])
+        }
+        isImporting = true
+        defer { isImporting = false }
+        let records = try await fileImporter.importFiles([ImportedFile(sourceURL: audioURL, kind: .audio)])
+        guard records.count == 1, let record = records.first else {
+            throw NSError(domain: "AiYueCatalog", code: 2, userInfo: [NSLocalizedDescriptionKey: "下载的歌曲未能导入，请重试"])
+        }
+        record.title = track.title
+        record.artist = track.artist
+        if let artworkURL {
+            let directory = URL(fileURLWithPath: record.sourceReference).deletingLastPathComponent()
+            let destination = directory.appendingPathComponent("artwork-provider")
+            try Data(contentsOf: artworkURL).write(to: destination, options: .atomic)
+            record.artworkReference = destination.path
+            record.artworkOriginRaw = CoverArtworkOrigin.downloaded.rawValue
+        }
+        try store.upsert(record)
+        playback.refreshTrackMetadata(TrackSnapshot(record))
+        try reload()
+        scheduleMissingCoverSearch()
     }
 
     func scanLocalAudio() async {

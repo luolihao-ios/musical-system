@@ -2,6 +2,24 @@ import XCTest
 @testable import LocalMusicPlayer
 
 final class OnlineCatalogTests: XCTestCase {
+    func testJamendoArtworkTravelsWithProviderMetadata() async throws {
+        let data = Data(#"{"results":[{"id":7,"name":"Rain - Night","artist_name":"A - B","audio":"https://example.org/audio.mp3","image":"https://example.org/cover.jpg","license_ccurl":"https://creativecommons.org/licenses/by/4.0/"}]}"#.utf8)
+        let parsed = try await OnlineCatalog().parseJamendo(data)
+        let track = try XCTUnwrap(parsed.first)
+        XCTAssertEqual(track.artworkURL?.absoluteString, "https://example.org/cover.jpg")
+        XCTAssertEqual(track.title, "Rain - Night")
+        XCTAssertEqual(track.artist, "A - B")
+        XCTAssertEqual(track.previewSnapshot()?.sourceKind, .onlinePreview)
+    }
+
+    func testProviderWithoutArtworkStillProvidesPlayablePreview() async throws {
+        let data = Data(#"{"results":[{"id":8,"name":"Rain","artist_name":"A","audio":"https://example.org/audio.mp3"}]}"#.utf8)
+        let parsed = try await OnlineCatalog().parseJamendo(data)
+        XCTAssertNil(parsed.first?.artworkURL)
+        XCTAssertEqual(parsed.first?.previewSnapshot()?.title, "Rain")
+        XCTAssertFalse(parsed.first!.license.allowsDownload)
+    }
+
     func testOnlyOpenLicensedResultsCanBeDownloaded() {
         XCTAssertTrue(CatalogLicense.publicDomain.allowsDownload)
         XCTAssertTrue(CatalogLicense.creativeCommons(attribution: "CC BY 4.0").allowsDownload)

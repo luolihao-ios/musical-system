@@ -44,13 +44,13 @@ class IOSAPICompatibilityTests(unittest.TestCase):
             / "NowPlayingView.swift"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("coordinateSpace: .global", mini_player)
         self.assertNotIn("DispatchQueue.main.asyncAfter", mini_player)
         self.assertNotIn(".offset(y:", mini_player)
-        self.assertIn("bottomLeadingRadius: 0", mini_player)
-        self.assertIn("bottomTrailingRadius: 0", mini_player)
-        self.assertEqual(now_playing.count("PlaybackWaveformView("), 1)
-        self.assertIn("ZStack(alignment: .bottom)", now_playing)
+        # 新需求：胶囊停靠菜单上方，封面不再叠加波形，紧凑态只允许点击展开。
+        self.assertIn(".contentShape(Rectangle())", mini_player)
+        self.assertIn("menuClearance", mini_player)
+        self.assertNotIn("PlaybackWaveformView(", now_playing)
+        self.assertNotIn(".highPriorityGesture", mini_player)
 
     def test_mini_player_is_bottom_anchored_instead_of_safe_area_inset(self) -> None:
         app_shell = (
@@ -64,7 +64,8 @@ class IOSAPICompatibilityTests(unittest.TestCase):
         self.assertIn("PlayerDockContainer(", app_shell)
         self.assertNotIn(".sheet(isPresented: $showNowPlaying)", app_shell)
         self.assertIn(".ignoresSafeArea(.container, edges: .bottom)", dock)
-        self.assertNotIn(".safeAreaInset(edge: .bottom", app_shell)
+        self.assertIn("menuClearance", dock)
+        self.assertIn("UITabBar", dock)
 
 
 if __name__ == "__main__":

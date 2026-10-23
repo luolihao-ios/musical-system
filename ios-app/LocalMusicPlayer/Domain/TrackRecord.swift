@@ -4,6 +4,8 @@ import SwiftData
 enum TrackSourceKind: String, Codable, Sendable {
     case importedFile
     case mediaLibrary
+    // 仅用于当前播放队列，不写入本地歌曲资料库。
+    case onlinePreview
 }
 
 @Model

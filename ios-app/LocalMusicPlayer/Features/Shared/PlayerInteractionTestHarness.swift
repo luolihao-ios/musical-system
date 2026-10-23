@@ -8,12 +8,15 @@ struct PlayerInteractionTestHarness: View {
     @State private var behindTapCount = 0
 
     var body: some View {
-        PlayerDockContainer(model: model, isVisible: visible, dismiss: { visible = false }) {
+        PlayerDockContainer(model: model, isVisible: visible, dismiss: {}) {
             TabView {
                 NavigationStack {
                     VStack {
                         Text("底层点击次数 \(behindTapCount)")
                         Button("重新显示播放器") { visible = true }
+                        TrackRow(track: model.state.currentTrack!, isCurrent: false, isPlaying: false,
+                            play: { behindTapCount += 1 }, toggleLike: {}, delete: {})
+                            .accessibilityIdentifier("fixture.songRow")
                         Spacer()
                         Button("底层按钮") { behindTapCount += 1 }
                     }
@@ -49,7 +52,10 @@ private final class InteractionTestPlayback: PlaybackControlling {
     private var observer: ((PlaybackState) -> Void)?
     func play() async throws { state.isPlaying = true; observer?(state) }
     func pause() throws { state.isPlaying = false; observer?(state) }
-    func next() async throws {}
+    func next() async throws {
+        state.position = 10
+        observer?(state)
+    }
     func previous() async throws {}
     func seek(to position: TimeInterval) throws { state.position = position; observer?(state) }
     func setVolume(_ volume: Double) throws {}

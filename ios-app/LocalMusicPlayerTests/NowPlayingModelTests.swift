@@ -5,6 +5,26 @@ import SwiftData
 
 @MainActor
 final class NowPlayingModelTests: XCTestCase {
+    func testOnlinePreviewCanLoadLyricsWithoutCreatingLibraryRecord() async throws {
+        let container = try ModelContainerFactory.make(inMemory: true)
+        let store = try MusicStore(context: container.mainContext)
+        let track = TrackSnapshot(id: "preview-lyrics", title: "试听歌曲", artist: "歌手", album: "",
+            duration: 120, sourceKind: .onlinePreview, sourceReference: "https://example.org/a.mp3")
+        let playback = FakeNowPlayingController(state: PlaybackState(queue: [track], currentIndex: 0))
+        let model = NowPlayingModel(playback: playback, online: RequestedLyricsFixture(), store: store)
+        await model.findLyrics()
+        for _ in 0..<200 {
+            if model.hasLyrics { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertTrue(model.hasLyrics)
+        XCTAssertNil(try store.track(id: track.id))
+        XCTAssertFalse(model.lyricsSearchMessage.contains("正在"))
+        if let path = playback.state.currentTrack?.lyricsReference {
+            try? FileManager.default.removeItem(at: URL(fileURLWithPath: path).deletingLastPathComponent())
+        }
+    }
+
     func testNetworkLyricsAreRequestedOnlyAfterExplicitAction() async throws {
         let container = try ModelContainerFactory.make(inMemory: true)
         let store = try MusicStore(context: container.mainContext)
@@ -45,7 +65,7 @@ final class NowPlayingModelTests: XCTestCase {
             lyricsReader: FakeLyricsReader(source: nil)
         )
         let controller = UIHostingController(
-            rootView: MiniPlayerView(model: model, openNowPlaying: {})
+            rootView: MiniPlayerView(model: model, openNowPlaying: {}, menuClearance: 0)
         )
 
         let size = controller.sizeThatFits(

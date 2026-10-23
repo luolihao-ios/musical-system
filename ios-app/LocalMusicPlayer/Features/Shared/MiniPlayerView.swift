@@ -24,12 +24,14 @@ struct MiniPlayerView: View {
     var dismiss: () -> Void = {}
     var maximumHeight: CGFloat = 780
     var bottomInset: CGFloat = 0
+    var menuClearance: CGFloat = 90
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var panel = PlayerPanelInteraction()
     @State private var lastSampleTime: TimeInterval = 0
     @State private var actualFrame = CGRect.zero
-    private var compactHeight: CGFloat { 60 + bottomInset }
+    @State private var queueRequest = 0
+    private var compactHeight: CGFloat { 60 }
     private var fullHeight: CGFloat { max(compactHeight, maximumHeight) }
     private var height: CGFloat { panel.height(compact: compactHeight, expanded: fullHeight) }
     private var progress: CGFloat {
@@ -41,6 +43,7 @@ struct MiniPlayerView: View {
             // 详情页始终属于同一个面板；松手后没有第二次 sheet 弹出。
             NowPlayingView(
                 model: model,
+                queueRequest: queueRequest,
                 closePanel: close,
                 panelDragChanged: dragChanged,
                 panelDragEnded: dragEnded
@@ -54,21 +57,11 @@ struct MiniPlayerView: View {
                 .opacity(1 - progress)
                 .allowsHitTesting(panel.phase == .compact)
                 .accessibilityHidden(panel.phase != .compact)
-                .highPriorityGesture(
-                    DragGesture(minimumDistance: 8, coordinateSpace: .global)
-                        .onChanged(dragChanged)
-                        .onEnded(dragEnded)
-                )
         }
         .frame(maxWidth: .infinity)
         .frame(height: height, alignment: .top)
         .background(.regularMaterial)
-        .clipShape(UnevenRoundedRectangle(
-            topLeadingRadius: 22 * progress,
-            bottomLeadingRadius: 0,
-            bottomTrailingRadius: 0,
-            topTrailingRadius: 22 * progress
-        ))
+        .clipShape(RoundedRectangle(cornerRadius: 30 - 8 * progress))
         .contentShape(Rectangle())
         .background {
             GeometryReader { geometry in
@@ -84,6 +77,8 @@ struct MiniPlayerView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("player.panel")
         .accessibilityValue("\(panel.phase.rawValue);expansions=\(panel.expansionCount)")
+        .padding(.horizontal, 12 * (1 - progress))
+        .padding(.bottom, menuClearance * (1 - progress))
         .onAppear {
             PlayerInteractionDiagnostics.log("panel appear compact=\(compactHeight) full=\(fullHeight) bottomInset=\(bottomInset)")
         }
@@ -94,7 +89,7 @@ struct MiniPlayerView: View {
         HStack(spacing: 12) {
             Button(action: expand) {
                 HStack(spacing: 12) {
-                    ArtworkView(path: model.state.currentTrack?.artworkReference, cornerRadius: 8)
+                    ArtworkView(path: model.state.currentTrack?.artworkReference, cornerRadius: 23)
                         .frame(width: 46, height: 46)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(model.state.currentTrack?.title ?? "爱乐之城")
@@ -121,14 +116,13 @@ struct MiniPlayerView: View {
             .accessibilityLabel(model.state.isPlaying ? "暂停" : "播放")
             .accessibilityIdentifier("player.compact.playback")
             .accessibilityValue(model.state.isPlaying ? "playing" : "paused")
-            Button { Task { await model.next() } } label: {
-                Image(systemName: "forward.end.fill").frame(width: 44, height: 44)
+            Button {
+                expand()
+                queueRequest += 1
+            } label: {
+                Image(systemName: "list.bullet").frame(width: 44, height: 44)
             }
-            .accessibilityLabel("下一首")
-            Button(action: close) {
-                Image(systemName: "xmark").frame(width: 36, height: 44)
-            }
-            .accessibilityLabel("关闭播放器")
+            .accessibilityLabel("播放队列")
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 12)
@@ -152,7 +146,7 @@ struct MiniPlayerView: View {
 
     private func close() {
         PlayerInteractionDiagnostics.log("close button phase=\(panel.phase.rawValue) frame=\(actualFrame)")
-        panel.close()
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) { panel.close() }
         dismiss()
     }
 
@@ -173,6 +167,11 @@ struct MiniPlayerView: View {
     }
 
     private func dragEnded(_ value: DragGesture.Value) {
+        if value.translation.height < -80 && abs(value.translation.height) > abs(value.translation.width) {
+            panel.release(compact: compactHeight, expanded: fullHeight)
+            Task { await model.next() }
+            return
+        }
         // 最后一帧也按绝对位移计算，处理快速松手。
         panel.drag(translation: value.translation.height, compact: compactHeight, expanded: fullHeight)
         let before = panel.phase
@@ -180,7 +179,7 @@ struct MiniPlayerView: View {
             panel.release(compact: compactHeight, expanded: fullHeight)
         }
         PlayerInteractionDiagnostics.log("drag end translation=\(value.translation.height) from=\(before.rawValue) to=\(panel.phase.rawValue) expansions=\(panel.expansionCount) frame=\(actualFrame)")
-        if panel.phase == .hidden { dismiss() }
+        if before == .expanded && panel.phase == .compact { dismiss() }
         if before != .expanded && panel.phase == .expanded { openNowPlaying() }
     }
 }

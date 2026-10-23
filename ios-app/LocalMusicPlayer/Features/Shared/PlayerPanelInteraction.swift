@@ -20,16 +20,16 @@ struct PlayerPanelInteraction: Equatable {
     }
 
     mutating func drag(translation: CGFloat, compact: CGFloat, expanded: CGFloat) {
-        guard phase != .hidden else { return }
+        guard phase == .expanded else { return }
         if startHeight == nil { startHeight = height(compact: compact, expanded: expanded) }
-        dragHeight = min(expanded, max(1, (startHeight ?? compact) - translation))
+        dragHeight = min(expanded, max(compact, (startHeight ?? expanded) - translation))
     }
 
     mutating func release(compact: CGFloat, expanded: CGFloat) {
         guard let startHeight, let dragHeight else { return }
         let next: Phase
         if startHeight - dragHeight > startHeight / 3 {
-            next = .hidden
+            next = .compact
         } else if phase == .expanded || dragHeight - compact >= min(80, (expanded - compact) * 0.28) {
             next = .expanded
         } else {
@@ -48,7 +48,7 @@ struct PlayerPanelInteraction: Equatable {
     mutating func close() {
         startHeight = nil
         dragHeight = nil
-        setPhase(.hidden)
+        setPhase(.compact)
     }
 
     private mutating func setPhase(_ next: Phase) {

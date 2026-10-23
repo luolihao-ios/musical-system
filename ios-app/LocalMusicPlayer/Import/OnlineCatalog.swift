@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 
 enum CatalogLicense: Sendable, Equatable {
     case publicDomain
@@ -21,8 +22,16 @@ struct CatalogTrack: Identifiable, Sendable, Equatable {
     let license: CatalogLicense
     let provider: String
     let previewURL: URL?
-    init(id: String, title: String, artist: String, audioURL: URL, license: CatalogLicense, provider: String = "", previewURL: URL? = nil) {
-        self.id = id; self.title = title; self.artist = artist; self.audioURL = audioURL; self.license = license; self.provider = provider; self.previewURL = previewURL
+    let artworkURL: URL?
+    init(id: String, title: String, artist: String, audioURL: URL, license: CatalogLicense, provider: String = "", previewURL: URL? = nil, artworkURL: URL? = nil) {
+        self.id = id; self.title = title; self.artist = artist; self.audioURL = audioURL; self.license = license; self.provider = provider; self.previewURL = previewURL; self.artworkURL = artworkURL
+    }
+    var previewID: String { "online-preview-\(id)" }
+    func previewSnapshot(artworkPath: String? = nil) -> TrackSnapshot? {
+        guard let previewURL else { return nil }
+        return TrackSnapshot(id: previewID, title: title, artist: artist, album: provider,
+            duration: 0, sourceKind: .onlinePreview, sourceReference: previewURL.absoluteString,
+            artworkReference: artworkPath)
     }
     var safeFilename: String {
         let clean = [title, artist].joined(separator: " - ").replacingOccurrences(of: "/", with: "-")
@@ -30,7 +39,12 @@ struct CatalogTrack: Identifiable, Sendable, Equatable {
     }
 }
 
-actor OnlineCatalog {
+protocol CatalogDownloading: Sendable {
+    func download(_ track: CatalogTrack, to directory: URL, progress: @escaping @Sendable (Double) -> Void) async throws -> URL
+    func downloadArtwork(_ track: CatalogTrack, to directory: URL) async throws -> URL?
+}
+
+actor OnlineCatalog: CatalogDownloading {
     static let shared = OnlineCatalog()
     private let session: URLSession
     init(session: URLSession = .shared) { self.session = session }
@@ -102,7 +116,7 @@ actor OnlineCatalog {
                   let file = metadata.files?.first(where: { isDownloadableAudio($0) }),
                   let filename = file.name,
                   let audioURL = URL(string: "https://archive.org/download/\(document.identifier)/\(filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? filename)") else { continue }
-            tracks.append(CatalogTrack(id: "archive-\(document.identifier)-\(filename)", title: metadata.metadata?.title ?? document.title ?? filename, artist: metadata.metadata?.creator ?? document.creator ?? "Internet Archive", audioURL: audioURL, license: license))
+            tracks.append(CatalogTrack(id: "archive-\(document.identifier)-\(filename)", title: metadata.metadata?.title ?? document.title ?? filename, artist: metadata.metadata?.creator ?? document.creator ?? "Internet Archive", audioURL: audioURL, license: license, provider: "Internet Archive", previewURL: audioURL, artworkURL: URL(string: "https://archive.org/services/img/\(document.identifier)")))
         }
         return tracks
     }
@@ -119,14 +133,14 @@ actor OnlineCatalog {
         return nil
     }
 
-    private func parseJamendo(_ data: Data) throws -> [CatalogTrack] {
+    func parseJamendo(_ data: Data) throws -> [CatalogTrack] {
         struct Response: Decodable { let results: [Item] }
-        struct Item: Decodable { let id: Int; let name: String; let artist_name: String; let audio: String?; let license_ccurl: String? }
+        struct Item: Decodable { let id: Int; let name: String; let artist_name: String; let audio: String?; let license_ccurl: String?; let image: String?; let album_image: String? }
         let response = try JSONDecoder().decode(Response.self, from: data)
         return response.results.compactMap { item in
             guard let raw = item.audio, let url = URL(string: raw) else { return nil }
             let license: CatalogLicense = item.license_ccurl == nil ? .unknown : .creativeCommons(attribution: item.license_ccurl!)
-            return CatalogTrack(id: "jamendo-\(item.id)", title: item.name, artist: item.artist_name, audioURL: url, license: license, provider: "Jamendo", previewURL: url)
+            return CatalogTrack(id: "jamendo-\(item.id)", title: item.name, artist: item.artist_name, audioURL: url, license: license, provider: "Jamendo", previewURL: url, artworkURL: (item.image ?? item.album_image).flatMap(URL.init(string:)))
         }
     }
 
@@ -153,7 +167,8 @@ actor OnlineCatalog {
         return songs.compactMap { song in
             guard let id = song["id"] as? Int, let title = song["name"] as? String, let artists = song["artists"] as? [[String: Any]], let artist = artists.first?["name"] as? String else { return nil }
             let preview = URL(string: "https://music.163.com/song/media/outer/url?id=\(id).mp3")
-            return CatalogTrack(id: "netease-\(id)", title: title, artist: artist, audioURL: preview ?? URL(string: "https://example.invalid")!, license: .unknown, provider: "网易云音乐", previewURL: preview)
+            let artwork = ((song["album"] as? [String: Any])?["picUrl"] as? String).flatMap(URL.init(string:))
+            return CatalogTrack(id: "netease-\(id)", title: title, artist: artist, audioURL: preview ?? URL(string: "https://example.invalid")!, license: .unknown, provider: "网易云音乐", previewURL: preview, artworkURL: artwork)
         }
     }
 
@@ -165,7 +180,8 @@ actor OnlineCatalog {
         let songs = (object?["data"] as? [String: Any])?["song"] as? [String: Any]; let list = songs?["list"] as? [[String: Any]] ?? []
         return list.compactMap { song in
             guard let id = song["songmid"] as? String, let title = song["songname"] as? String, let singers = song["singer"] as? [[String: Any]], let artist = singers.first?["name"] as? String else { return nil }
-            return CatalogTrack(id: "qq-\(id)", title: title, artist: artist, audioURL: URL(string: "https://example.invalid")!, license: .unknown, provider: "QQ音乐")
+            let artwork = (song["albummid"] as? String).flatMap { URL(string: "https://y.gtimg.cn/music/photo_new/T002R500x500M000\($0).jpg") }
+            return CatalogTrack(id: "qq-\(id)", title: title, artist: artist, audioURL: URL(string: "https://example.invalid")!, license: .unknown, provider: "QQ音乐", artworkURL: artwork)
         }
     }
 
@@ -176,7 +192,8 @@ actor OnlineCatalog {
         let list = ((object?["data"] as? [String: Any])?["info"] as? [[String: Any]]) ?? []
         return list.compactMap { song in
             guard let hash = song["hash"] as? String, let title = song["songname"] as? String else { return nil }
-            return CatalogTrack(id: "kugou-\(hash)", title: title, artist: song["singername"] as? String ?? "酷狗音乐", audioURL: URL(string: "https://example.invalid")!, license: .unknown, provider: "酷狗音乐")
+            let artwork = (song["imgurl"] as? String)?.replacingOccurrences(of: "{size}", with: "500")
+            return CatalogTrack(id: "kugou-\(hash)", title: title, artist: song["singername"] as? String ?? "酷狗音乐", audioURL: URL(string: "https://example.invalid")!, license: .unknown, provider: "酷狗音乐", artworkURL: artwork.flatMap(URL.init(string:)))
         }
     }
 
@@ -186,9 +203,36 @@ actor OnlineCatalog {
         let destination = directory.appendingPathComponent(track.safeFilename)
         let (bytes, response) = try await session.bytes(for: URLRequest(url: track.audioURL))
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw URLError(.badServerResponse) }
-        let expected = max(0, response.expectedContentLength); var data = Data(); data.reserveCapacity(expected > 0 ? Int(expected) : 0)
-        for try await byte in bytes { data.append(byte); if expected > 0 { progress(Double(data.count) / Double(expected)) } }
+        let expected = max(0, response.expectedContentLength)
+        var data = Data()
+        var lastReported = 0
+        for try await byte in bytes {
+            data.append(byte)
+            if data.count - lastReported >= 64 * 1024 {
+                try Task.checkCancellation()
+                if expected > 0 { progress(min(Double(data.count) / Double(expected), 0.99)) }
+                lastReported = data.count
+            }
+        }
+        try Task.checkCancellation()
+        guard !data.isEmpty else { throw URLError(.zeroByteResource) }
         try data.write(to: destination, options: .atomic); progress(1); return destination
+    }
+
+    func downloadArtwork(_ track: CatalogTrack, to directory: URL) async throws -> URL? {
+        guard let url = track.artworkURL else { return nil }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+              data.count <= 20 * 1024 * 1024,
+              let image = CGImageSourceCreateWithData(data as CFData, nil),
+              CGImageSourceGetCount(image) > 0 else { throw URLError(.cannotDecodeContentData) }
+        try Task.checkCancellation()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let target = directory.appendingPathComponent("provider-artwork")
+        try data.write(to: target, options: .atomic)
+        return target
     }
 }
 

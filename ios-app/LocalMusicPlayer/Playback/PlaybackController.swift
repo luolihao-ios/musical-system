@@ -54,8 +54,11 @@ final class PlaybackController: PlaybackControlling {
             try? await self?.handleCompletion()
         }
         engine.onPositionChanged = { [weak self] position in
-            guard self?.acceptsPositionUpdates == true else { return }
-            self?.state.position = position
+            guard let self, self.acceptsPositionUpdates else { return }
+            var updated = self.state
+            updated.position = position
+            if self.engine.duration > 0 { updated.duration = self.engine.duration }
+            self.state = updated
         }
     }
 
@@ -170,6 +173,7 @@ final class PlaybackController: PlaybackControlling {
         do {
             try await loadCurrent(generation: generation)
         } catch {
+            guard playbackGeneration == generation else { return }
             PlaybackDiagnostics.log(
                 "播放加载失败：id=\(track.id)，错误=\(error.localizedDescription)"
             )
@@ -216,6 +220,8 @@ final class PlaybackController: PlaybackControlling {
     }
 
     func pause() throws {
+        // 取消尚在加载的自动播放意图，保留当前条目供用户手动恢复。
+        playbackGeneration = UUID()
         engine.pause()
         var pausedState = state
         pausedState.isPlaying = false
@@ -529,7 +535,7 @@ final class PlaybackController: PlaybackControlling {
         switch track.sourceKind {
         case .importedFile:
             return URL(fileURLWithPath: track.sourceReference)
-        case .mediaLibrary:
+        case .mediaLibrary, .onlinePreview:
             return URL(string: track.sourceReference)
         }
     }

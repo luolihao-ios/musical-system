@@ -6,9 +6,10 @@ struct AppShellView: View {
     let container: AppContainer
 
     @Environment(\.scenePhase) private var scenePhase
-    @State private var miniPlayerVisibility = MiniPlayerVisibility()
     @State private var storeUpdate: AppStoreUpdate?
     @State private var didCheckStore = false
+    @State private var selectedTab = 0
+    @State private var onlineTab = false
 
     private var currentVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1"
@@ -17,42 +18,49 @@ struct AppShellView: View {
     var body: some View {
         PlayerDockContainer(
             model: container.nowPlayingModel,
-            isVisible: container.nowPlayingModel.state.currentTrack != nil && miniPlayerVisibility.isVisible,
-            dismiss: {
-                PlayerInteractionDiagnostics.log("shell hide player")
-                miniPlayerVisibility.dismiss()
-            }
+            isVisible: container.nowPlayingModel.state.currentTrack != nil,
+            dismiss: { selectedTab = 0 }
         ) { tabs }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { try? container.playback.persistCurrentState() }
         }
         .onChange(of: container.nowPlayingModel.state.currentTrack?.id) { _, _ in
             PlayerInteractionDiagnostics.log("shell show reason=track-change")
-            miniPlayerVisibility.show()
         }
         .onReceive(NotificationCenter.default.publisher(for: .showMiniPlayer)) { _ in
             PlayerInteractionDiagnostics.log("shell show reason=notification")
-            miniPlayerVisibility.show()
         }
     }
 
     private var tabs: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             NavigationStack {
-                LibraryView(
-                    model: container.libraryModel
-                )
+                VStack(spacing: 0) {
+                    Picker("音乐来源", selection: $onlineTab) {
+                        Text("本地音乐").tag(false)
+                        Text("在线音乐").tag(true)
+                    }
+                    .pickerStyle(.segmented).padding(.horizontal)
+                    if onlineTab { OnlineCatalogSearchView(model: container.libraryModel) }
+                    else { LibraryView(model: container.libraryModel) }
+                }
             }
             .tabItem {
-                Label("音乐库", systemImage: "music.note.house")
+                Label("首页", systemImage: "house")
             }
+            .tag(0)
+
+            NavigationStack { LibraryView(model: container.libraryModel, categoriesOnly: true) }
+                .tabItem { Label("音乐库", systemImage: "music.note.house") }.tag(1)
 
             NavigationStack {
                 FavoritesView(model: container.libraryModel)
+                    .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
             }
             .tabItem {
                 Label("收藏", systemImage: "heart.fill")
             }
+            .tag(2)
 
             NavigationStack {
                 List {
@@ -100,6 +108,7 @@ struct AppShellView: View {
                     }
                 }
                 .navigationTitle("设置")
+                .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
                 .task {
                     guard !didCheckStore else { return }
                     didCheckStore = true
@@ -109,6 +118,7 @@ struct AppShellView: View {
             .tabItem {
                 Label("设置", systemImage: "gearshape")
             }
+            .tag(3)
         }
         .tint(PlayerTheme.accent)
     }

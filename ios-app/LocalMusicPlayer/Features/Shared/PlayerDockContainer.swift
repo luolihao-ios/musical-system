@@ -7,6 +7,7 @@ struct PlayerDockContainer<Content: View>: View {
     let isVisible: Bool
     let dismiss: () -> Void
     @ViewBuilder let content: () -> Content
+    @State private var menuClearance: CGFloat = 90
 
     var body: some View {
         GeometryReader { safeArea in
@@ -20,12 +21,13 @@ struct PlayerDockContainer<Content: View>: View {
                                     openNowPlaying: {},
                                     dismiss: dismiss,
                                     maximumHeight: dock.size.height,
-                                    bottomInset: safeArea.safeAreaInsets.bottom
+                                    bottomInset: safeArea.safeAreaInsets.bottom,
+                                    menuClearance: menuClearance
                                 )
                             }
                         }
                         .frame(width: dock.size.width, height: dock.size.height, alignment: .bottom)
-                        .background(PlayerWindowMetricsProbe().allowsHitTesting(false))
+                        .background(PlayerWindowMetricsProbe(clearance: $menuClearance).allowsHitTesting(false))
                         .onAppear {
                             PlayerInteractionDiagnostics.beginSession()
                             PlayerInteractionDiagnostics.log("dock frame=\(dock.frame(in: .global)) bottomInset=\(safeArea.safeAreaInsets.bottom)")
@@ -38,14 +40,30 @@ struct PlayerDockContainer<Content: View>: View {
 }
 
 private struct PlayerWindowMetricsProbe: UIViewRepresentable {
+    @Binding var clearance: CGFloat
     func makeUIView(context: Context) -> MetricsView { MetricsView() }
-    func updateUIView(_ uiView: MetricsView, context: Context) {}
+    func updateUIView(_ uiView: MetricsView, context: Context) {
+        uiView.report = { value in if abs(clearance - value) > 1 { clearance = value } }
+        uiView.setNeedsLayout()
+    }
 
     final class MetricsView: UIView {
         private var previousBounds = CGRect.zero
+        var report: ((CGFloat) -> Void)?
+        private func tabBar(in view: UIView) -> UITabBar? {
+            if let bar = view as? UITabBar, !bar.isHidden { return bar }
+            return view.subviews.lazy.compactMap { self.tabBar(in: $0) }.first
+        }
         override func layoutSubviews() {
             super.layoutSubviews()
-            guard let window, window.bounds != previousBounds else { return }
+            guard let window else { return }
+            if let bar = tabBar(in: window) {
+                let clearance = window.bounds.maxY - bar.convert(bar.bounds, to: window).minY + 8
+                if clearance > 0 && clearance < window.bounds.height / 2 {
+                    DispatchQueue.main.async { [weak self] in self?.report?(clearance) }
+                }
+            }
+            guard window.bounds != previousBounds else { return }
             previousBounds = window.bounds
             PlayerInteractionDiagnostics.log("window bounds=\(window.bounds) safeArea=\(window.safeAreaInsets)")
         }

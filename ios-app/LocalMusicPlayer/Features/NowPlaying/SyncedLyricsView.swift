@@ -2,9 +2,9 @@ import SwiftUI
 
 struct SyncedLyricsView: View {
     @Bindable var model: NowPlayingModel
+    var foreground: Color = .primary
     @State private var isUserBrowsing = false
     @State private var resumeFollowingTask: Task<Void, Never>?
-    @State private var selectedLyricID: LyricLine.ID?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -14,37 +14,21 @@ struct SyncedLyricsView: View {
                         Array(model.lyricLines.enumerated()),
                         id: \.element.id
                     ) { entry in
-                        Button {
-                            selectedLyricID = entry.element.id
-                            try? model.seek(to: entry.element)
-                            isUserBrowsing = false
-                            resumeFollowingTask?.cancel()
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                proxy.scrollTo(entry.offset, anchor: .center)
-                            }
-                        } label: {
-                            Text(
-                                entry.element.text.isEmpty
-                                    ? " "
-                                    : entry.element.text
-                            )
-                            .font(
-                                entry.offset == model.currentLyricIndex
-                                    ? .title3.weight(.semibold)
-                                    : .body
-                            )
-                            .foregroundStyle(
-                                entry.offset == model.currentLyricIndex
-                                    ? PlayerTheme.accent
-                                    : selectedLyricID == entry.element.id
-                                        ? Color.primary
-                                        : Color.secondary
-                            )
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
+                        Text(
+                            entry.element.text.isEmpty
+                                ? " "
+                                : entry.element.text
+                        )
+                        .font(
+                            entry.offset == model.currentLyricIndex
+                                ? .title3.weight(.semibold)
+                                : .body
+                        )
+                        .foregroundStyle(foreground)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                         .id(entry.offset)
+                        .accessibilityIdentifier("player.lyrics.line.\(entry.offset)")
                         .accessibilityAddTraits(
                             entry.offset == model.currentLyricIndex
                                 ? .isSelected
@@ -68,29 +52,39 @@ struct SyncedLyricsView: View {
                             guard !Task.isCancelled else { return }
                             isUserBrowsing = false
                             if let index = model.currentLyricIndex {
-                                withAnimation(.easeInOut(duration: 0.35)) {
-                                    proxy.scrollTo(index, anchor: .center)
-                                }
+                                scroll(to: index, proxy: proxy)
                             }
                         }
                     }
             )
             .onChange(of: model.currentLyricIndex) { _, index in
                 guard let index, !isUserBrowsing else { return }
-                selectedLyricID = model.lyricLines.indices.contains(index)
-                    ? model.lyricLines[index].id
-                    : nil
-                withAnimation(.easeInOut(duration: 0.35)) {
-                    proxy.scrollTo(index, anchor: .center)
-                }
+                scroll(to: index, proxy: proxy)
             }
             .onChange(of: model.lyricTrackID) { _, _ in
                 resumeFollowingTask?.cancel()
                 isUserBrowsing = false
-                selectedLyricID = nil
+                if let index = model.currentLyricIndex {
+                    scroll(to: index, proxy: proxy)
+                }
+            }
+            .onAppear {
+                if let index = model.currentLyricIndex {
+                    proxy.scrollTo(index, anchor: .center)
+                }
             }
             .onDisappear {
                 resumeFollowingTask?.cancel()
+            }
+        }
+    }
+
+    private func scroll(to index: Int, proxy: ScrollViewProxy) {
+        if model.reduceMotion {
+            proxy.scrollTo(index, anchor: .center)
+        } else {
+            withAnimation(.easeInOut(duration: 0.35)) {
+                proxy.scrollTo(index, anchor: .center)
             }
         }
     }

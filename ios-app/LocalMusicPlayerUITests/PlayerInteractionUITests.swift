@@ -27,10 +27,10 @@ final class PlayerInteractionUITests: XCTestCase {
         waitForExpectations(timeout: 5)
     }
 
-    func testBottomEdgeTouchesWindowAndPlaybackButtonDoesNotTapThrough() {
+    func testPlayerSitsAboveMenuAndPlaybackButtonDoesNotTapThrough() {
         defer { attachEvidence() }
         XCTAssertTrue(panel.waitForExistence(timeout: 8))
-        XCTAssertEqual(panel.frame.maxY, app.frame.maxY, accuracy: 1)
+        XCTAssertLessThan(app.buttons["player.compact.playback"].frame.maxY, app.tabBars.firstMatch.frame.minY)
         app.buttons["player.compact.playback"].tap()
         expectation(for: NSPredicate(format: "value == 'playing'"), evaluatedWith: app.buttons["player.compact.playback"])
         waitForExpectations(timeout: 3)
@@ -38,12 +38,14 @@ final class PlayerInteractionUITests: XCTestCase {
         attachScreenshot("紧凑播放器贴底")
     }
 
-    func testUpwardDragExpandsOnePanelWithoutSheetThenDownwardReleaseCloses() {
+    func testCompactSwipeDoesNotExpandThenTapOpensAndDownwardReleaseCollapses() {
         defer { attachEvidence() }
         XCTAssertTrue(panel.waitForExistence(timeout: 8))
         let start = panel.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0))
             .withOffset(CGVector(dx: 0, dy: 24))
         start.press(forDuration: 0.1, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -220)))
+        waitForPhase("compact")
+        app.buttons["player.compact.open"].tap()
         waitForPhase("expanded")
         XCTAssertEqual(panel.value as? String, "expanded;expansions=1")
         XCTAssertEqual(app.sheets.count, 0)
@@ -53,21 +55,18 @@ final class PlayerInteractionUITests: XCTestCase {
         let header = panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0))
             .withOffset(CGVector(dx: 0, dy: 26))
         header.press(forDuration: 0.1, thenDragTo: header.withOffset(CGVector(dx: 0, dy: panel.frame.height * 0.4)))
-        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: panel)
-        waitForExpectations(timeout: 5)
+        waitForPhase("compact")
+        XCTAssertTrue(app.buttons["player.compact.playback"].isHittable)
     }
 
-    func testCompactDownwardReleaseDismissesAndCanBeShownAgain() {
+    func testCompactDownwardReleaseKeepsPlayerVisible() {
         defer { attachEvidence() }
         XCTAssertTrue(panel.waitForExistence(timeout: 8))
         let start = panel.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0))
             .withOffset(CGVector(dx: 0, dy: 16))
         start.press(forDuration: 0.1, thenDragTo: start.withOffset(CGVector(dx: 0, dy: panel.frame.height * 0.4)))
-        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: panel)
-        waitForExpectations(timeout: 5)
-        app.buttons["重新显示播放器"].tap()
         waitForPhase("compact")
-        XCTAssertEqual(panel.frame.maxY, app.frame.maxY, accuracy: 1)
+        XCTAssertTrue(app.buttons["player.compact.open"].isHittable)
     }
 
     func testTapExpandsAndShortDownwardDragReturnsToExpanded() {
@@ -81,7 +80,9 @@ final class PlayerInteractionUITests: XCTestCase {
         waitForPhase("expanded")
         XCTAssertEqual(panel.value as? String, "expanded;expansions=1")
         app.buttons["player.detail.close"].tap()
-        XCTAssertFalse(panel.exists)
+        waitForPhase("compact")
+        app.buttons["player.compact.open"].tap()
+        waitForPhase("expanded")
     }
 
     func testLyricsReturnToArtworkAndQueueControlsRemainUsable() {
@@ -89,13 +90,36 @@ final class PlayerInteractionUITests: XCTestCase {
         XCTAssertTrue(panel.waitForExistence(timeout: 8))
         app.buttons["player.compact.open"].tap()
         waitForPhase("expanded")
-        XCTAssertTrue(app.buttons["player.artwork"].waitForExistence(timeout: 5))
-        app.buttons["player.artwork"].tap()
-        XCTAssertTrue(app.buttons["player.lyrics.artwork"].waitForExistence(timeout: 3))
-        app.buttons["player.lyrics.artwork"].tap()
-        XCTAssertTrue(app.buttons["player.artwork"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["player.lyrics.snippet"].waitForExistence(timeout: 5))
+        app.buttons["player.lyrics.snippet"].tap()
+        XCTAssertTrue(app.staticTexts["player.lyrics.line.1"].waitForExistence(timeout: 3))
+        app.staticTexts["player.lyrics.line.1"].tap()
+        XCTAssertTrue(app.staticTexts["00:00"].exists, "点击歌词不得跳转到第二句的 00:10")
+        app.buttons["player.tab.song"].tap()
+        XCTAssertTrue(app.buttons["player.lyrics.snippet"].waitForExistence(timeout: 3))
         app.buttons["player.detail.queue"].tap()
         XCTAssertTrue(app.buttons["player.queue.clear"].waitForExistence(timeout: 3))
+    }
+
+    func testArtworkSwipeUpAdvancesWithoutClosingDetail() {
+        defer { attachEvidence() }
+        app.buttons["player.compact.open"].tap()
+        waitForPhase("expanded")
+        let artwork = app.otherElements["player.artwork"].firstMatch
+        XCTAssertTrue(artwork.waitForExistence(timeout: 5))
+        artwork.swipeUp()
+        waitForPhase("expanded")
+        XCTAssertTrue(app.staticTexts["00:10"].waitForExistence(timeout: 3))
+    }
+
+    func testSongRowBlankSpacePlaysButFavoriteDoesNot() {
+        defer { attachEvidence() }
+        let row = app.otherElements["fixture.songRow"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.coordinate(withNormalizedOffset: CGVector(dx: 0.60, dy: 0.5)).tap()
+        XCTAssertTrue(app.staticTexts["底层点击次数 1"].exists)
+        row.buttons["收藏"].tap()
+        XCTAssertTrue(app.staticTexts["底层点击次数 1"].exists)
     }
 
     private func attachScreenshot(_ name: String) {

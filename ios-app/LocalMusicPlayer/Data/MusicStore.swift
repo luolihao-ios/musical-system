@@ -89,7 +89,7 @@ final class MusicStore {
                 } else {
                     record.isAvailable = false
                 }
-            case .mediaLibrary:
+            case .mediaLibrary, .onlinePreview:
                 guard let url = URL(string: record.sourceReference) else {
                     record.isAvailable = false
                     continue
