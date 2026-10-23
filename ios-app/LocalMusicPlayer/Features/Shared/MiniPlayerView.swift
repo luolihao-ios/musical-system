@@ -40,6 +40,7 @@ struct MiniPlayerView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
+            if panel.phase == .expanded {
             // 详情页始终属于同一个面板；松手后没有第二次 sheet 弹出。
             NowPlayingView(
                 model: model,
@@ -52,11 +53,12 @@ struct MiniPlayerView: View {
             .opacity(progress)
             .allowsHitTesting(panel.phase == .expanded)
             .accessibilityHidden(panel.phase != .expanded)
-
+            } else {
             compactContent
                 .opacity(1 - progress)
                 .allowsHitTesting(panel.phase == .compact)
                 .accessibilityHidden(panel.phase != .compact)
+            }
         }
         .frame(maxWidth: .infinity)
         .frame(height: height, alignment: .top)
@@ -103,6 +105,12 @@ struct MiniPlayerView: View {
             }
             .accessibilityLabel("打开正在播放")
             .accessibilityIdentifier("player.compact.open")
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 8, coordinateSpace: .global)
+                    .onEnded { value in
+                        PlayerInteractionDiagnostics.log("compact swipe ignored translation=\(value.translation)")
+                    }
+            )
             Button {
                 PlayerInteractionDiagnostics.log("compact playback tap before=\(model.state.isPlaying) frame=\(actualFrame)")
                 Task {
@@ -145,6 +153,7 @@ struct MiniPlayerView: View {
     }
 
     private func close() {
+        queueRequest = 0
         PlayerInteractionDiagnostics.log("close button phase=\(panel.phase.rawValue) frame=\(actualFrame)")
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) { panel.close() }
         dismiss()
@@ -167,9 +176,14 @@ struct MiniPlayerView: View {
     }
 
     private func dragEnded(_ value: DragGesture.Value) {
+        PlayerInteractionDiagnostics.log("detail release translation=\(value.translation) phase=\(panel.phase.rawValue)")
         if value.translation.height < -80 && abs(value.translation.height) > abs(value.translation.width) {
             panel.release(compact: compactHeight, expanded: fullHeight)
-            Task { await model.next() }
+            Task {
+                PlayerInteractionDiagnostics.log("detail swipe next begin")
+                await model.next()
+                PlayerInteractionDiagnostics.log("detail swipe next complete phase=\(panel.phase.rawValue) track=\(model.state.currentTrack?.id ?? "none")")
+            }
             return
         }
         // 最后一帧也按绝对位移计算，处理快速松手。
@@ -179,7 +193,10 @@ struct MiniPlayerView: View {
             panel.release(compact: compactHeight, expanded: fullHeight)
         }
         PlayerInteractionDiagnostics.log("drag end translation=\(value.translation.height) from=\(before.rawValue) to=\(panel.phase.rawValue) expansions=\(panel.expansionCount) frame=\(actualFrame)")
-        if before == .expanded && panel.phase == .compact { dismiss() }
+        if before == .expanded && panel.phase == .compact {
+            queueRequest = 0
+            dismiss()
+        }
         if before != .expanded && panel.phase == .expanded { openNowPlaying() }
     }
 }

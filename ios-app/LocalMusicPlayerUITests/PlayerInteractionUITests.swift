@@ -114,11 +114,11 @@ final class PlayerInteractionUITests: XCTestCase {
 
     func testSongRowBlankSpacePlaysButFavoriteDoesNot() {
         defer { attachEvidence() }
-        let row = app.otherElements["fixture.songRow"].firstMatch
+        let row = app.buttons.matching(identifier: "fixture.songRow").firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
-        row.coordinate(withNormalizedOffset: CGVector(dx: 0.60, dy: 0.5)).tap()
+        row.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.5)).tap()
         XCTAssertTrue(app.staticTexts["底层点击次数 1"].exists)
-        row.buttons["收藏"].tap()
+        app.buttons.matching(NSPredicate(format: "identifier == %@ AND label == %@", "fixture.songRow", "收藏")).firstMatch.tap()
         XCTAssertTrue(app.staticTexts["底层点击次数 1"].exists)
     }
 

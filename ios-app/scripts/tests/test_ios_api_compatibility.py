@@ -50,7 +50,8 @@ class IOSAPICompatibilityTests(unittest.TestCase):
         self.assertIn(".contentShape(Rectangle())", mini_player)
         self.assertIn("menuClearance", mini_player)
         self.assertNotIn("PlaybackWaveformView(", now_playing)
-        self.assertNotIn(".highPriorityGesture", mini_player)
+        self.assertIn("compact swipe ignored", mini_player)
+        self.assertIn("if panel.phase == .expanded", mini_player)
 
     def test_mini_player_is_bottom_anchored_instead_of_safe_area_inset(self) -> None:
         app_shell = (

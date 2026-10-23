@@ -77,7 +77,10 @@ struct NowPlayingView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
         }
-        .onAppear { model.reduceMotion = reduceMotion }
+        .onAppear {
+            model.reduceMotion = reduceMotion
+            if queueRequest > 0 { showQueue = true }
+        }
         .onChange(of: reduceMotion) { _, value in model.reduceMotion = value }
         .onChange(of: model.state.currentTrack?.id) { _, _ in contentMode = .artwork }
         .onChange(of: queueRequest) { _, _ in showQueue = true }
