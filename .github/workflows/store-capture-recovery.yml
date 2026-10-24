@@ -1,0 +1,36 @@
+name: Recover verified store captures
+on:
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: write
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Recover captures from successful three-device test job
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run view 40077447803 --json jobs --jq '.jobs[] | select(.name=="adaptive-layout") | .conclusion' | grep -Fx success
+          gh run download 40077447803 -n adaptive-device-verification -D "$RUNNER_TEMP/verified-captures"
+          python3 scripts/recover_store_captures.py "$RUNNER_TEMP/verified-captures"
+      - name: Preserve verified original captures in current development branch
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add marketing/app-store-2026-10-24/sources/adaptive
+          if ! git diff --cached --quiet; then
+            git commit -m "保存三设备验证通过的四页原始截图"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: verified-store-originals
+          path: marketing/app-store-2026-10-24/sources/adaptive

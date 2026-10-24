@@ -15,7 +15,7 @@ class ReleaseMetadataTests(unittest.TestCase):
         self.assertEqual(info["CFBundleDisplayName"], "爱乐之城")
         self.assertFalse(info["ITSAppUsesNonExemptEncryption"])
         self.assertIn('MARKETING_VERSION: "0.2.1"', project)
-        self.assertIn('CURRENT_PROJECT_VERSION: "44"', project)
+        self.assertIn('CURRENT_PROJECT_VERSION: "45"', project)
 
     def test_upload_version_exceeds_last_apple_approved_version(self) -> None:
         project = (IOS_ROOT / "project.yml").read_text(encoding="utf-8")
