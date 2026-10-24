@@ -10,6 +10,7 @@ on:
         options:
           - build
           - inspect-screenshots
+          - inspect-library
           - upload-screenshots
 
 permissions:
@@ -17,7 +18,7 @@ permissions:
 
 jobs:
   screenshots:
-    if: inputs.operation == 'inspect-screenshots' || inputs.operation == 'upload-screenshots'
+    if: inputs.operation == 'inspect-screenshots' || inputs.operation == 'upload-screenshots' || inputs.operation == 'inspect-library'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -33,11 +34,18 @@ jobs:
           API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
           OPERATION: ${{ inputs.operation }}
         run: |
-          if [ "$OPERATION" = "inspect-screenshots" ]; then
+          if [ "$OPERATION" = "inspect-library" ]; then
+            python scripts/app_store_screenshots.py inspect-library
+          elif [ "$OPERATION" = "inspect-screenshots" ]; then
             python scripts/app_store_screenshots.py inspect
           else
             python scripts/app_store_screenshots.py upload
           fi
+      - uses: actions/upload-artifact@v7
+        if: inputs.operation == 'inspect-library'
+        with:
+          name: app-store-asset-specifications
+          path: .api-inspection/asset-refdata.json
   archive-and-upload:
     if: inputs.operation == 'build' || inputs.operation == ''
     runs-on: macos-latest

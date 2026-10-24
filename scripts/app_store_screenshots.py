@@ -55,6 +55,15 @@ def main(mode):
     app = api.call(f"apps/{APP}")["data"]
     if app["attributes"]["bundleId"] != "com.luolihao.musicalsystem":
         raise ValueError("目标 App 不匹配，停止")
+    if mode == "inspect-library":
+        library = api.call(f"apps/{APP}/assetLibrary")
+        print("素材库：", json.dumps(library, ensure_ascii=False), flush=True)
+        reference = api.call("appAssetLibraryRefData")
+        target = ROOT / ".api-inspection"
+        target.mkdir(exist_ok=True)
+        (target / "asset-refdata.json").write_text(json.dumps(reference, ensure_ascii=False, indent=2), encoding="utf-8")
+        print("素材规格：", json.dumps(reference, ensure_ascii=False)[:50000], flush=True)
+        return
     versions = api.call(f"apps/{APP}/appStoreVersions?filter[platform]=IOS&limit=50")["data"]
     print("商店版本：", json.dumps([{"id": v["id"], "version": v["attributes"]["versionString"],
         "state": v["attributes"]["appStoreState"]} for v in versions], ensure_ascii=False), flush=True)
