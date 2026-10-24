@@ -81,6 +81,14 @@ def image_identity(placement):
     return (placement.get("relationships", {}).get("image", {}).get("data") or {}).get("id")
 
 
+def list_placements(api, locale_id, group=None):
+    # JSON:API 默认只返回关联链接；显式 include 才包含 image.data.id。
+    path = f"appStoreVersionLocalizations/{locale_id}/placements?limit=200&include=image"
+    if group:
+        path += f"&filter[placementGroup]={group}&sort=placementGroupPosition"
+    return api.list_all(path)
+
+
 def validate_image(path):
     data = path.read_bytes()
     if data[:8] != b"\x89PNG\r\n\x1a\n":
@@ -144,8 +152,7 @@ def upload_library(api):
         raise RuntimeError("素材库上传成功；没有唯一可编辑版本，未设置展示位置")
     locales = api.call(f"appStoreVersions/{editable[0]['id']}/appStoreVersionLocalizations?limit=50")["data"]
     locale = next(v for v in locales if v["attributes"]["locale"] == "zh-Hans")
-    placement_path = f"appStoreVersionLocalizations/{locale['id']}/placements?limit=200"
-    placements = api.list_all(placement_path)
+    placements = list_placements(api, locale["id"])
     groups = {"iphone-65": "IPHONE_FACE_ID_LARGE_PROFILE", "iphone-large": "IPHONE_DYNAMIC_ISLAND_LARGE_PROFILE",
         "iphone-medium": "IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE", "ipad-13": "IPAD_13_PROFILE"}
     expected = []
@@ -169,7 +176,7 @@ def upload_library(api):
     # 新宣传图优先展示，旧素材仍保留在后面；不移除已有预览视频。
     order_expected = {}
     for group in dict.fromkeys(group for kind, group, _ in expected if kind == "APP_SCREENSHOT"):
-        in_group = api.list_all(placement_path + f"&filter[placementGroup]={group}&sort=placementGroupPosition")
+        in_group = list_placements(api, locale["id"], group)
         new_images = [identity for kind, target, identity in expected if kind == "APP_SCREENSHOT" and target == group]
         new_placements = [p for identity in new_images for p in in_group if image_identity(p) == identity]
         old_placements = [p for p in in_group if image_identity(p) not in new_images]
@@ -179,12 +186,12 @@ def upload_library(api):
             "type": "appAssetLibraryPlacementOrderingRequests", "attributes": {"placementGroup": group},
             "relationships": {"orderedPlacements": {"data": [{"type": "appAssetLibraryPlacements", "id": p["id"]} for p in ordered]},
                 "appStoreVersionLocalization": {"data": {"type": "appStoreVersionLocalizations", "id": locale["id"]}}}}})
-    confirmed = api.list_all(placement_path)
+    confirmed = list_placements(api, locale["id"])
     actual = {(p["attributes"]["placementType"], p["attributes"]["placementGroup"], image_identity(p)) for p in confirmed}
     missing = [item for item in expected if item not in actual]
     order_verified = {}
     for group, ordered in order_expected.items():
-        actual_order = api.list_all(placement_path + f"&filter[placementGroup]={group}&sort=placementGroupPosition")
+        actual_order = list_placements(api, locale["id"], group)
         order_verified[group] = [p["id"] for p in actual_order] == ordered
     report = {"app": APP, "version": editable[0]["attributes"]["versionString"], "locale": "zh-Hans",
         "libraryImagesVerified": len(selected), "placementsVerified": len(expected) - len(missing),

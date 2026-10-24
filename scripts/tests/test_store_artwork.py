@@ -56,6 +56,20 @@ class StoreArtworkTests(unittest.TestCase):
     def test_null_image_relationship_is_safe(self):
         self.assertIsNone(store.image_identity({"relationships": {"image": {"data": None}}}))
 
+    def test_placement_query_explicitly_includes_image_relationship(self):
+        class RecordingAPI:
+            def list_all(self, path):
+                self.path = path
+                if "include=image" in path:
+                    return [{"relationships": {"image": {"data": {"id": "image-1"}}}}]
+                return [{}]
+
+        api = RecordingAPI()
+        placements = store.list_placements(api, "locale-1", "IPAD_13_PROFILE")
+        self.assertEqual(store.image_identity(placements[0]), "image-1")
+        self.assertIn("filter[placementGroup]=IPAD_13_PROFILE", api.path)
+        self.assertIn("sort=placementGroupPosition", api.path)
+
     def test_all_campaign_files_pass_manifest_validation(self):
         folder = store.ROOT / "marketing/app-store-2026-10-24"
         manifest = json.loads((folder / "文件验收清单.json").read_text(encoding="utf-8"))
