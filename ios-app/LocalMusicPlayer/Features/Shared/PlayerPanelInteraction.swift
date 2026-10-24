@@ -51,6 +51,12 @@ struct PlayerPanelInteraction: Equatable {
         setPhase(.compact)
     }
 
+    // 旋转、分屏或折叠改变坐标空间时，旧手势高度不能继续覆盖新窗口。
+    mutating func cancelDragForResize() {
+        startHeight = nil
+        dragHeight = nil
+    }
+
     private mutating func setPhase(_ next: Phase) {
         if phase != .expanded && next == .expanded { expansionCount += 1 }
         phase = next

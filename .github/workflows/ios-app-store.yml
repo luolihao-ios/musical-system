@@ -104,8 +104,9 @@ jobs:
           if-no-files-found: warn
   archive-and-upload:
     if: inputs.operation == 'build' || inputs.operation == ''
-    runs-on: macos-latest
+    runs-on: xcode-27
     env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
       BUNDLE_ID: com.luolihao.musicalsystem
       KEYCHAIN_PATH: /tmp/local-music-signing.keychain-db
       TEMP_SIGNING_DIR: /tmp/local-music-signing

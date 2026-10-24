@@ -85,6 +85,10 @@ struct MiniPlayerView: View {
             PlayerInteractionDiagnostics.log("panel appear compact=\(compactHeight) full=\(fullHeight) bottomInset=\(bottomInset)")
         }
         .onDisappear { PlayerInteractionDiagnostics.log("panel disappear frame=\(actualFrame)") }
+        .onChange(of: maximumHeight) { _, _ in
+            panel.cancelDragForResize()
+            PlayerInteractionDiagnostics.log("panel resized height=\(maximumHeight) phase=\(panel.phase.rawValue)")
+        }
     }
 
     private var compactContent: some View {

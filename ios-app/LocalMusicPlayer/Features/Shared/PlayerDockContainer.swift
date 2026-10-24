@@ -57,12 +57,11 @@ private struct PlayerWindowMetricsProbe: UIViewRepresentable {
         override func layoutSubviews() {
             super.layoutSubviews()
             guard let window else { return }
-            if let bar = tabBar(in: window) {
-                let clearance = window.bounds.maxY - bar.convert(bar.bounds, to: window).minY + 8
-                if clearance > 0 && clearance < window.bounds.height / 2 {
-                    DispatchQueue.main.async { [weak self] in self?.report?(clearance) }
-                }
-            }
+            let menu = tabBar(in: window).map { $0.convert($0.bounds, to: window) }
+            let clearance = AdaptivePlayerLayout.menuClearance(
+                window: window.bounds, menu: menu, bottomInset: window.safeAreaInsets.bottom
+            )
+            DispatchQueue.main.async { [weak self] in self?.report?(clearance) }
             guard window.bounds != previousBounds else { return }
             previousBounds = window.bounds
             PlayerInteractionDiagnostics.log("window bounds=\(window.bounds) safeArea=\(window.safeAreaInsets)")

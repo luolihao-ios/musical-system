@@ -121,5 +121,6 @@ struct AppShellView: View {
             .tag(3)
         }
         .tint(PlayerTheme.accent)
+        .modifier(AdaptiveTabNavigation())
     }
 }

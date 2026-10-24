@@ -23,11 +23,23 @@ final class AdaptivePlayerLayoutTests: XCTestCase {
     func testWideBoundaryAndInvalidSizes() {
         XCTAssertFalse(AdaptivePlayerLayout.resolve(size: CGSize(width: 719, height: 900)).isWide)
         XCTAssertTrue(AdaptivePlayerLayout.resolve(size: CGSize(width: 720, height: 900)).isWide)
-        for size in [CGSize.zero, CGSize(width: -1, height: 0), CGSize(width: .infinity, height: .nan)] {
+        for size in [CGSize.zero, CGSize(width: -1, height: 0), CGSize(width: CGFloat.infinity, height: CGFloat.nan)] {
             let layout = AdaptivePlayerLayout.resolve(size: size)
             XCTAssertFalse(layout.isWide)
             XCTAssertTrue(layout.artworkSide.isFinite)
             XCTAssertGreaterThanOrEqual(layout.artworkSide, 0)
         }
+    }
+
+    func testBottomMenuAndSideMenuUseDifferentClearance() {
+        let window = CGRect(x: 0, y: 0, width: 1024, height: 1366)
+        XCTAssertEqual(AdaptivePlayerLayout.menuClearance(window: window,
+            menu: CGRect(x: 100, y: 1260, width: 824, height: 80), bottomInset: 20), 114)
+        XCTAssertEqual(AdaptivePlayerLayout.menuClearance(window: window,
+            menu: CGRect(x: 0, y: 0, width: 80, height: 1366), bottomInset: 20), 28)
+        XCTAssertEqual(AdaptivePlayerLayout.menuClearance(window: window,
+            menu: nil, bottomInset: 20), 28)
+        XCTAssertEqual(AdaptivePlayerLayout.menuClearance(window: window,
+            menu: CGRect(x: 0, y: 0, width: 1024, height: 60), bottomInset: 20), 28)
     }
 }

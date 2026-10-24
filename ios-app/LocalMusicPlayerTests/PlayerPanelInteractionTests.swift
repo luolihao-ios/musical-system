@@ -2,6 +2,16 @@ import XCTest
 @testable import LocalMusicPlayer
 
 final class PlayerPanelInteractionTests: XCTestCase {
+    func testResizeCancelsOldGestureHeightWithoutClosingOrReopening() {
+        var panel = PlayerPanelInteraction()
+        panel.expand()
+        panel.drag(translation: 180, compact: 60, expanded: 1000)
+        panel.cancelDragForResize()
+        XCTAssertFalse(panel.isDragging)
+        XCTAssertEqual(panel.phase, .expanded)
+        XCTAssertEqual(panel.expansionCount, 1)
+        XCTAssertEqual(panel.height(compact: 60, expanded: 650), 650)
+    }
     func testEmptyPreferenceDoesNotEraseMeasuredPanelFrame() {
         let measured = CGRect(x: 0, y: 780, width: 402, height: 94)
         var value = CGRect.zero

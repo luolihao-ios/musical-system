@@ -52,25 +52,32 @@ struct NowPlayingView: View {
                 VStack(spacing: 0) {
                     header
                     GeometryReader { geometry in
-                        ScrollView {
-                            VStack(spacing: 18) {
-                                mainContent(in: geometry.size)
-                                trackIdentity
-                                if !model.hasLyrics { lyricsSearch }
+                        let layout = AdaptivePlayerLayout.resolve(size: geometry.size)
+                        if layout.isWide {
+                            widePlayer(layout: layout)
+                        } else {
+                            VStack(spacing: 0) {
+                                GeometryReader { viewport in
+                                    ScrollView {
+                                        VStack(spacing: 18) {
+                                            mainContent(in: viewport.size, artworkSide: layout.artworkSide)
+                                            trackIdentity
+                                            if !model.hasLyrics { lyricsSearch }
+                                        }
+                                        .padding(.horizontal, 24)
+                                        .padding(.bottom, 12)
+                                        .frame(maxWidth: .infinity)
+                                    }
+                                    .scrollIndicators(.hidden)
+                                }
+                                playerControls
+                                    .padding(.horizontal, 24)
+                                    .padding(.top, 12)
+                                    .padding(.bottom, 16)
                             }
-                            .padding(.horizontal, 24)
-                            .padding(.bottom, 12)
-                            .frame(maxWidth: .infinity)
+                            .accessibilityIdentifier("player.layout.compact")
                         }
-                        .scrollIndicators(.hidden)
                     }
-                    VStack(spacing: 12) {
-                        progressControls
-                        transportControls
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 12)
-                    .padding(.bottom, 16)
                 }
                 .foregroundStyle(foreground)
                 .tint(foreground)
@@ -148,9 +155,7 @@ struct NowPlayingView: View {
     }
 
     @ViewBuilder
-    private func mainContent(in size: CGSize) -> some View {
-        let reservedHeight: CGFloat = model.hasLyrics ? 160 : 218
-        let dimension = max(120, min(size.width - 48, size.height - reservedHeight, 390))
+    private func mainContent(in size: CGSize, artworkSide: CGFloat) -> some View {
         if contentMode == .lyrics {
             Group {
                 if model.hasLyrics {
@@ -170,27 +175,101 @@ struct NowPlayingView: View {
             .transition(.opacity)
         } else {
             VStack(spacing: 16) {
-                Group {
-                    if model.state.currentTrack?.artworkReference != nil {
-                        ArtworkView(path: model.state.currentTrack?.artworkReference, cornerRadius: 24)
-                    } else {
-                        RecordVisual(model: model)
-                    }
-                }
-                .frame(width: dimension, height: dimension)
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .shadow(color: .black.opacity(0.22), radius: 20, y: 10)
-                .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .highPriorityGesture(panelDrag)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("歌曲封面")
-                .accessibilityIdentifier("player.artwork")
+                artwork(side: artworkSide)
                 if model.hasLyrics { lyricSnippet }
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 10)
             .transition(.opacity)
         }
+    }
+
+    private var playerControls: some View {
+        VStack(spacing: 12) {
+            progressControls
+            transportControls
+        }
+    }
+
+    private func artwork(side: CGFloat) -> some View {
+        Group {
+            if model.state.currentTrack?.artworkReference != nil {
+                ArtworkView(path: model.state.currentTrack?.artworkReference, cornerRadius: 24)
+            } else {
+                RecordVisual(model: model)
+            }
+        }
+        .frame(width: side, height: side)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .shadow(color: .black.opacity(0.22), radius: 20, y: 10)
+        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .highPriorityGesture(panelDrag)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("歌曲封面")
+        .accessibilityIdentifier("player.artwork")
+    }
+
+    private func widePlayer(layout: AdaptivePlayerLayout) -> some View {
+        HStack(spacing: 32) {
+            VStack(spacing: 16) {
+                Spacer(minLength: 0)
+                artwork(side: layout.artworkSide)
+                if model.hasLyrics { lyricSnippet }
+                trackIdentity
+                if !model.hasLyrics { lyricsSearch }
+                Spacer(minLength: 12)
+                playerControls
+            }
+            .frame(width: layout.columnWidth)
+            VStack(alignment: .leading, spacing: 16) {
+                Text(contentMode == .lyrics ? "同步歌词" : "播放队列")
+                    .font(.title2.weight(.bold))
+                if contentMode == .lyrics {
+                    if model.hasLyrics {
+                        SyncedLyricsView(model: model, foreground: foreground)
+                            .accessibilityIdentifier("player.lyrics.full")
+                    } else {
+                        ContentUnavailableView("暂无歌词", systemImage: "text.alignleft")
+                    }
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(Array(model.state.queue.enumerated()), id: \.element.id) { entry in
+                                Button { Task { await model.playQueueItem(at: entry.offset) } } label: {
+                                    HStack(spacing: 12) {
+                                        ArtworkView(path: entry.element.artworkReference, cornerRadius: 8)
+                                            .frame(width: 44, height: 44)
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(entry.element.title).font(.headline).lineLimit(2)
+                                            Text(entry.element.artist).font(.subheadline).opacity(0.7).lineLimit(1)
+                                        }
+                                        Spacer(minLength: 0)
+                                        if entry.offset == model.state.currentIndex {
+                                            Image(systemName: "speaker.wave.2.fill")
+                                        }
+                                    }
+                                    .padding(12)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(foreground.opacity(entry.offset == model.state.currentIndex ? 0.13 : 0.04), in: RoundedRectangle(cornerRadius: 12))
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(20)
+            .frame(width: layout.columnWidth, alignment: .leading)
+            .frame(maxHeight: .infinity)
+            .background(foreground.opacity(0.055), in: RoundedRectangle(cornerRadius: 24))
+        }
+        .padding(.horizontal, 32)
+        .padding(.top, 16)
+        .padding(.bottom, 20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("player.layout.wide")
     }
 
     private var lyricSnippet: some View {

@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct LibraryView: View {
     @Bindable var model: LibraryModel
     var categoriesOnly = false
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @State private var showDocumentPicker = false
     @State private var showMusicFolderPicker = false
@@ -13,7 +14,7 @@ struct LibraryView: View {
         Group {
             if categoriesOnly {
                 VStack {
-                    libraryEntrances.frame(height: 150)
+                    libraryEntrances.frame(maxHeight: horizontalSizeClass == .regular ? 400 : 150)
                     Spacer()
                 }
             } else if model.tracks.isEmpty {
@@ -109,8 +110,26 @@ struct LibraryView: View {
     }
 
     private var libraryEntrances: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 12) {
+        Group {
+            if horizontalSizeClass == .regular {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 16)], spacing: 16) {
+                        libraryEntranceItems
+                    }
+                    .padding(24)
+                }
+            } else {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 12) { libraryEntranceItems }
+                        .padding(.horizontal)
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private var libraryEntranceItems: some View {
+        Group {
                 ForEach(LibraryGroupKind.allCases) { kind in
                     NavigationLink {
                         LibraryGroupsView(
@@ -141,10 +160,7 @@ struct LibraryView: View {
                     )
                 }
                 .buttonStyle(.plain)
-            }
-            .padding(.horizontal)
         }
-        .scrollIndicators(.hidden)
     }
 
     @ViewBuilder

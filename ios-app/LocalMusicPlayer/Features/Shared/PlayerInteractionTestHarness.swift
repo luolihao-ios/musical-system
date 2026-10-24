@@ -26,6 +26,7 @@ struct PlayerInteractionTestHarness: View {
                 .tabItem { Label("音乐库", systemImage: "music.note") }
                 Text("收藏").tabItem { Label("收藏", systemImage: "heart") }
             }
+            .modifier(AdaptiveTabNavigation())
         }
     }
 }
