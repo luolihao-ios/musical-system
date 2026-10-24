@@ -1,6 +1,11 @@
 name: Recover verified store captures
 on:
   workflow_dispatch:
+  push:
+    branches: [codex/aiyue-greenfield]
+    paths:
+      - .github/workflows/store-capture-recovery.yml
+      - scripts/recover_store_captures.py
 permissions:
   actions: read
   contents: write
