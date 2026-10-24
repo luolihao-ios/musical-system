@@ -2,12 +2,44 @@ name: iOS App Store Connect upload
 
 on:
   workflow_dispatch:
+    inputs:
+      operation:
+        description: 执行操作
+        type: choice
+        default: build
+        options:
+          - build
+          - inspect-screenshots
+          - upload-screenshots
 
 permissions:
   contents: read
 
 jobs:
+  screenshots:
+    if: inputs.operation == 'inspect-screenshots' || inputs.operation == 'upload-screenshots'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install API authentication dependency
+        run: python -m pip install 'PyJWT[crypto]==2.10.1'
+      - name: Inspect or upload Chinese screenshots
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          if [ "$OPERATION" = "inspect-screenshots" ]; then
+            python scripts/app_store_screenshots.py inspect
+          else
+            python scripts/app_store_screenshots.py upload
+          fi
   archive-and-upload:
+    if: inputs.operation == 'build' || inputs.operation == ''
     runs-on: macos-latest
     env:
       BUNDLE_ID: com.luolihao.musicalsystem
