@@ -1,0 +1,98 @@
+[
+  {
+    "device": "iphone",
+    "file": "iphone/01-local.png",
+    "width": 1206,
+    "height": 2622,
+    "sourceRun": 40077447803,
+    "sha256": "6cb5d843f86bac5d4982cadaa1439acfc7d9152c197341f76feaf2990ff5a70f"
+  },
+  {
+    "device": "iphone",
+    "file": "iphone/02-artwork.png",
+    "width": 1206,
+    "height": 2622,
+    "sourceRun": 40077447803,
+    "sha256": "17c961b780bf959d31b84bbad2cc9b9ba6bf8e7f8f209ad07bca942433763aba"
+  },
+  {
+    "device": "iphone",
+    "file": "iphone/03-lyrics.png",
+    "width": 1206,
+    "height": 2622,
+    "sourceRun": 40077447803,
+    "sha256": "1b402bca688c2563698eeaff44f74934b653fbb58ba7311898c9acdb304be02b"
+  },
+  {
+    "device": "iphone",
+    "file": "iphone/04-online.png",
+    "width": 1206,
+    "height": 2622,
+    "sourceRun": 40077447803,
+    "sha256": "66a78463fe5ea3cc5798a05f81bea698efd8d245b25a64702320e23959c1c152"
+  },
+  {
+    "device": "ipad",
+    "file": "ipad/01-local.png",
+    "width": 2064,
+    "height": 2752,
+    "sourceRun": 40077447803,
+    "sha256": "7717fdb72521d92506bcbc140d9bf2d4c709effaea4bbd77c1cb8881b4af72f3"
+  },
+  {
+    "device": "ipad",
+    "file": "ipad/02-artwork.png",
+    "width": 2064,
+    "height": 2752,
+    "sourceRun": 40077447803,
+    "sha256": "16fe497908a46066d4275c3edd074c38903be0b031625a4b92ac814556c57579"
+  },
+  {
+    "device": "ipad",
+    "file": "ipad/03-lyrics.png",
+    "width": 2064,
+    "height": 2752,
+    "sourceRun": 40077447803,
+    "sha256": "89325f0e1e7467d2883c54d57c98cd5680d88b169bb0b74a6bef61b193a29615"
+  },
+  {
+    "device": "ipad",
+    "file": "ipad/04-online.png",
+    "width": 2064,
+    "height": 2752,
+    "sourceRun": 40077447803,
+    "sha256": "78d0ff84cd55c55e780ea83170932886e349d9e7c5d63b338d2f437e8a34036a"
+  },
+  {
+    "device": "duo",
+    "file": "duo/01-local.png",
+    "width": 1398,
+    "height": 2034,
+    "sourceRun": 40077447803,
+    "sha256": "1d150b78cbc783902ecec618061de7d553ad0983a5e74dd5c69aec0b6bda39f5"
+  },
+  {
+    "device": "duo",
+    "file": "duo/02-artwork.png",
+    "width": 1398,
+    "height": 2034,
+    "sourceRun": 40077447803,
+    "sha256": "f8042ce56257dd4c9267fbac161e40c38d3bb21d0a95b24dc3d7459f3fd06c87"
+  },
+  {
+    "device": "duo",
+    "file": "duo/03-lyrics.png",
+    "width": 1398,
+    "height": 2034,
+    "sourceRun": 40077447803,
+    "sha256": "b9dc77fc144bfd3977ea46ad59d583486bd1988479c8e715e53d7e5e61b4fc93"
+  },
+  {
+    "device": "duo",
+    "file": "duo/04-online.png",
+    "width": 1398,
+    "height": 2034,
+    "sourceRun": 40077447803,
+    "sha256": "15e58852fb72bff9e64d272f583aa940db2c177ac65907729e743dd1553904b4"
+  }
+]
