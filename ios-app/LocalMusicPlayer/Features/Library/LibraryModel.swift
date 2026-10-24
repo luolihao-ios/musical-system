@@ -280,13 +280,13 @@ final class LibraryModel {
 
     func importCatalogTrack(_ track: CatalogTrack, audioURL: URL, artworkURL: URL?) async throws {
         guard !isImporting else {
-            throw NSError(domain: "AiYueCatalog", code: 1, userInfo: [NSLocalizedDescriptionKey: "正在导入其他歌曲，请稍后重试"])
+            throw NSError(domain: "AiYueCatalog", code: 1, userInfo: [NSLocalizedDescriptionKey: String(localized: "正在导入其他歌曲，请稍后重试")])
         }
         isImporting = true
         defer { isImporting = false }
         let records = try await fileImporter.importFiles([ImportedFile(sourceURL: audioURL, kind: .audio)])
         guard records.count == 1, let record = records.first else {
-            throw NSError(domain: "AiYueCatalog", code: 2, userInfo: [NSLocalizedDescriptionKey: "下载的歌曲未能导入，请重试"])
+            throw NSError(domain: "AiYueCatalog", code: 2, userInfo: [NSLocalizedDescriptionKey: String(localized: "下载的歌曲未能导入，请重试")])
         }
         record.title = track.title
         record.artist = track.artist
@@ -354,7 +354,7 @@ final class LibraryModel {
                 if !Task.isCancelled { self.scheduleCoverRetry() }
             }
             guard await coverSearch.isAvailable() else {
-                self.coverSearchMessage = "封面搜索暂时不可用，可稍后重试"
+                self.coverSearchMessage = String(localized: "封面搜索暂时不可用，可稍后重试")
                 return
             }
             self.isCompletingResources = true
@@ -371,7 +371,7 @@ final class LibraryModel {
                     activeTrackID = snapshot.id
                     let queryKey = CoverSearchHistory.queryKey(for: track)
                     try self.store.saveCoverHistory(.searching, track: track)
-                    self.coverSearchMessage = "正在后台查找封面，已处理 \(completed) 首，可继续播放"
+                    self.coverSearchMessage = String(format: NSLocalizedString("正在后台查找封面，已处理 %lld 首，可继续播放", comment: ""), Int64(completed))
                     let query = MusicResourceQuery(title: snapshot.title, artist: snapshot.artist,
                                                    album: snapshot.album, duration: snapshot.duration)
                     let cacheKey = [CoverQueryPolicy.cleanedTitle(query.title), query.artist, query.album]
@@ -435,13 +435,13 @@ final class LibraryModel {
                     CoverSearchDiagnostics.log("已保存 track=\(snapshot.id) provider=\(match.provider) file=\(url.lastPathComponent)")
                     PlayerInteractionDiagnostics.log("cover completion result=saved fallback=\(match.artistFallback) processed=\(completed)")
                 }
-                self.coverSearchMessage = "封面搜索完成：处理 \(completed) 首，补齐 \(found) 首"
+                self.coverSearchMessage = String(format: NSLocalizedString("封面搜索完成：处理 %lld 首，补齐 %lld 首", comment: ""), Int64(completed), Int64(found))
             } catch is CancellationError {
                 if let id = activeTrackID, let track = try? self.store.track(id: id),
                    CoverSearchHistory.read(track)?.status == .searching {
                     try? self.store.saveCoverHistory(.pending, track: track)
                 }
-                self.coverSearchMessage = "封面搜索已暂停"
+                self.coverSearchMessage = String(localized: "封面搜索已暂停")
                 CoverSearchDiagnostics.log("队列已暂停")
             } catch {
                 if let id = activeTrackID, let track = try? self.store.track(id: id),
@@ -501,7 +501,7 @@ final class LibraryModel {
             PlaybackDiagnostics.log(
                 "音乐库播放失败：id=\(track.id)，标题=\(track.title)，错误=\(error.localizedDescription)"
             )
-            errorMessage = "无法播放《\(track.title)》：\(error.localizedDescription)"
+            errorMessage = String(format: NSLocalizedString("无法播放《%@》：%@", comment: ""), track.title, error.localizedDescription)
             throw error
         }
     }

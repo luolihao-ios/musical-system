@@ -135,16 +135,16 @@ final class NowPlayingModel {
 
     func findLyrics() async {
         guard !isSearchingLyrics, !hasLyrics, let track = state.currentTrack else { return }
-        guard let online, let store else { lyricsSearchMessage = "歌词查询未配置"; return }
+        guard let online, let store else { lyricsSearchMessage = String(localized: "歌词查询未配置"); return }
         isSearchingLyrics = true
-        lyricsSearchMessage = "正在查找歌词…"
+        lyricsSearchMessage = String(localized: "正在查找歌词…")
         defer { isSearchingLyrics = false }
         let result = await online.search(MusicResourceQuery(title: track.title, artist: track.artist,
             album: track.album, duration: track.duration), lyrics: true, cover: false)
         guard !Task.isCancelled else { return }
         do {
             guard let text = result.lyrics, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                if state.currentTrack?.id == track.id { lyricsSearchMessage = "没有找到匹配的歌词，可导入同名 LRC 文件" }
+                if state.currentTrack?.id == track.id { lyricsSearchMessage = String(localized: "没有找到匹配的歌词，可导入同名 LRC 文件") }
                 return
             }
             guard state.currentTrack?.id == track.id else { return }
@@ -166,16 +166,16 @@ final class NowPlayingModel {
                     sourceReference: active.sourceReference, artworkReference: active.artworkReference,
                     lyricsReference: url.path)
             } else {
-                lyricsSearchMessage = "歌曲已移除，请重新选择"
+                lyricsSearchMessage = String(localized: "歌曲已移除，请重新选择")
                 return
             }
             playback.refreshTrackMetadata(updated)
             if state.currentTrack?.id == track.id {
                 loadLyrics(for: updated)
-                lyricsSearchMessage = "已找到歌词，点击歌词查看"
+                lyricsSearchMessage = String(localized: "已找到歌词，点击歌词查看")
             }
         } catch {
-            if state.currentTrack?.id == track.id { lyricsSearchMessage = "歌词保存失败，请重试" }
+            if state.currentTrack?.id == track.id { lyricsSearchMessage = String(localized: "歌词保存失败，请重试") }
         }
     }
 

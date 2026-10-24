@@ -4,6 +4,7 @@ enum AppLanguage: Equatable, Sendable {
     case simplifiedChinese
     case traditionalChinese
     case english
+    case french
 
     init(localeIdentifier: String) {
         let language = localeIdentifier.replacingOccurrences(of: "_", with: "-").lowercased()
@@ -11,6 +12,8 @@ enum AppLanguage: Equatable, Sendable {
             self = .simplifiedChinese
         } else if language.hasPrefix("zh-hant") || language == "zh-tw" || language == "zh-hk" || language == "zh-mo" {
             self = .traditionalChinese
+        } else if language == "fr" || language.hasPrefix("fr-") {
+            self = .french
         } else {
             self = .english
         }

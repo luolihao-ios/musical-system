@@ -104,9 +104,9 @@ struct MiniPlayerView: View {
                     ArtworkView(path: model.state.currentTrack?.artworkReference, cornerRadius: 23)
                         .frame(width: 46, height: 46)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(model.state.currentTrack?.title ?? "爱乐之城")
+                        Text(model.state.currentTrack?.title ?? String(localized: "爱乐之城"))
                             .font(.subheadline.weight(.semibold)).lineLimit(1)
-                        Text(model.state.currentTrack?.artist ?? "本地播放")
+                        Text(model.state.currentTrack?.artist ?? String(localized: "本地播放"))
                             .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                     Spacer(minLength: 0)
@@ -131,7 +131,7 @@ struct MiniPlayerView: View {
                 Image(systemName: model.state.isPlaying ? "pause.fill" : "play.fill")
                     .frame(width: 44, height: 44)
             }
-            .accessibilityLabel(model.state.isPlaying ? "暂停" : "播放")
+            .accessibilityLabel(model.state.isPlaying ? String(localized: "暂停") : String(localized: "播放"))
             .accessibilityIdentifier("player.compact.playback")
             .accessibilityValue(model.state.isPlaying ? "playing" : "paused")
             Button {

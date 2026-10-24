@@ -153,7 +153,7 @@ struct NowPlayingView: View {
 
     private func contentTab(_ title: String, mode: NowPlayingContentMode, identifier: String) -> some View {
         Button { switchContent(to: mode) } label: {
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(.subheadline.weight(contentMode == mode ? .bold : .medium))
                 .frame(minWidth: 64, minHeight: 36)
                 .background(foreground.opacity(contentMode == mode ? 0.15 : 0), in: Capsule())
@@ -268,7 +268,7 @@ struct NowPlayingView: View {
 
     private var secondaryPane: some View {
         VStack(alignment: .leading, spacing: 16) {
-                Text(contentMode == .lyrics ? "同步歌词" : "播放队列")
+                Text(contentMode == .lyrics ? String(localized: "同步歌词") : String(localized: "播放队列"))
                     .font(.title2.weight(.bold))
                 if contentMode == .lyrics {
                     if model.hasLyrics {
@@ -315,7 +315,7 @@ struct NowPlayingView: View {
         return Button { switchContent(to: .lyrics) } label: {
             VStack(spacing: 7) {
                 if lines.isEmpty {
-                    Text(model.hasLyrics ? "点击查看完整歌词" : "暂无歌词 · 点击查看")
+                    Text(model.hasLyrics ? String(localized: "点击查看完整歌词") : String(localized: "暂无歌词 · 点击查看"))
                         .font(.subheadline)
                 } else {
                     ForEach(Array(lines.enumerated()), id: \.element.id) { entry in
@@ -350,10 +350,10 @@ struct NowPlayingView: View {
 
     private var trackIdentity: some View {
         VStack(spacing: 6) {
-            Text(model.state.currentTrack?.title ?? "选择一首本地音乐")
+            Text(model.state.currentTrack?.title ?? String(localized: "选择一首本地音乐"))
                 .font(.title2.weight(.bold))
                 .lineLimit(1)
-            Text(model.state.currentTrack?.artist ?? "爱乐之城")
+            Text(model.state.currentTrack?.artist ?? String(localized: "爱乐之城"))
                 .font(.subheadline)
                 .lineLimit(1)
         }
@@ -363,7 +363,7 @@ struct NowPlayingView: View {
     private var lyricsSearch: some View {
         VStack(spacing: 6) {
             Button { Task { await model.findLyrics() } } label: {
-                Label(model.isSearchingLyrics ? "正在查找歌词…" : "查找歌词", systemImage: "text.magnifyingglass")
+                Label(model.isSearchingLyrics ? String(localized: "正在查找歌词…") : String(localized: "查找歌词"), systemImage: "text.magnifyingglass")
             }
             .disabled(model.isSearchingLyrics)
             .accessibilityIdentifier("player.lyrics.search")
@@ -411,7 +411,7 @@ struct NowPlayingView: View {
                     .background(foreground, in: Circle())
                     .foregroundStyle(artworkTheme.top.color)
             }
-            .accessibilityLabel(model.state.isPlaying ? "暂停" : "播放")
+            .accessibilityLabel(model.state.isPlaying ? String(localized: "暂停") : String(localized: "播放"))
             .accessibilityIdentifier("player.detail.playPause")
             Spacer(minLength: 0)
             Button { Task { await model.next() } } label: {

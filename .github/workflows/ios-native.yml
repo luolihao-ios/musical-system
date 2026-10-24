@@ -64,7 +64,9 @@ jobs:
               -resultBundlePath "ios-app/build/adaptive/$KIND.xcresult" -parallel-testing-enabled NO \
               -only-testing:LocalMusicPlayerTests/AdaptivePlayerLayoutTests \
               -only-testing:LocalMusicPlayerTests/PlayerPanelInteractionTests \
+              -only-testing:LocalMusicPlayerTests/LocalizationPolicyTests \
               -only-testing:LocalMusicPlayerUITests/AdaptivePlayerUITests \
+              -only-testing:LocalMusicPlayerUITests/LocalizationUITests \
               -only-testing:LocalMusicPlayerUITests/StoreAssetCaptureTests \
               CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO || TEST_STATUS=1
             xcrun xcresulttool export attachments --path "ios-app/build/adaptive/$KIND.xcresult" --output-path "ios-app/build/adaptive/$KIND-images" || TEST_STATUS=1

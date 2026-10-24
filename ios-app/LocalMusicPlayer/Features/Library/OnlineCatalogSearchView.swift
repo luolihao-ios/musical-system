@@ -41,7 +41,7 @@ struct OnlineCatalogSearchView: View {
             Text([track.provider, track.license.displayName].filter { !$0.isEmpty }.joined(separator: " · "))
                 .font(.caption2).foregroundStyle(.secondary).lineLimit(2)
             if case .failed(let reason) = model.catalogDownloads[track.id] {
-                Text("下载失败：\(reason)").font(.caption2).foregroundStyle(.red).lineLimit(2)
+                Text(String(format: NSLocalizedString("下载失败：%@", comment: ""), reason)).font(.caption2).foregroundStyle(.red).lineLimit(2)
             }
         }
     }
@@ -54,7 +54,7 @@ struct OnlineCatalogSearchView: View {
                         Button {
                             Task {
                                 do { try await model.toggleCatalogPreview(track) }
-                                catch { message = "试听失败：\(error.localizedDescription)" }
+                                catch { message = String(format: NSLocalizedString("试听失败：%@", comment: ""), error.localizedDescription) }
                             }
                         } label: {
                             Image(systemName: selected && (model.isCurrentTrackPlaying || pending) ? "pause.fill" : "play.fill")
@@ -62,7 +62,7 @@ struct OnlineCatalogSearchView: View {
                                 .background(Color.accentColor.opacity(0.1), in: Circle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(selected && (model.isCurrentTrackPlaying || pending) ? "暂停试听 \(track.title)" : "试听 \(track.title)")
+                        .accessibilityLabel(String(format: NSLocalizedString(selected && (model.isCurrentTrackPlaying || pending) ? "暂停试听 %@" : "试听 %@", comment: ""), track.title))
                     }
                     if track.license.allowsDownload { downloadButton(track) }
         }
@@ -116,11 +116,11 @@ struct OnlineCatalogSearchView: View {
 
     private func downloadLabel(_ state: CatalogDownloadState?, title: String) -> String {
         switch state {
-        case .downloading: "正在下载 \(title)"
-        case .importing: "正在导入 \(title)"
-        case .completed: "已下载 \(title)"
-        case .failed: "重试下载 \(title)"
-        case nil: "下载 \(title)"
+        case .downloading: String(format: NSLocalizedString("正在下载 %@", comment: ""), title)
+        case .importing: String(format: NSLocalizedString("正在导入 %@", comment: ""), title)
+        case .completed: String(format: NSLocalizedString("已下载 %@", comment: ""), title)
+        case .failed: String(format: NSLocalizedString("重试下载 %@", comment: ""), title)
+        case nil: String(format: NSLocalizedString("下载 %@", comment: ""), title)
         }
     }
 

@@ -10,7 +10,7 @@ enum CatalogLicense: Sendable, Equatable {
         switch self { case .publicDomain, .creativeCommons: true; case .unknown: false }
     }
     var displayName: String {
-        switch self { case .publicDomain: "Public Domain"; case .creativeCommons(let value): value; case .unknown: "License unknown" }
+        switch self { case .publicDomain: String(localized: "Public Domain"); case .creativeCommons(let value): value; case .unknown: String(localized: "License unknown") }
     }
 }
 

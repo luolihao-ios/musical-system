@@ -66,8 +66,8 @@ struct AppShellView: View {
             NavigationStack {
                 List {
                     Section("播放") {
-                        LabeledContent("来源", value: "本地文件与开放许可音乐")
-                        LabeledContent("后台播放", value: "已启用")
+                        LabeledContent("来源", value: String(localized: "本地文件与开放许可音乐"))
+                        LabeledContent("后台播放", value: String(localized: "已启用"))
                     }
                     Section("格式") {
                         Text("MP3 · M4A/AAC · FLAC · WAV · AIFF")

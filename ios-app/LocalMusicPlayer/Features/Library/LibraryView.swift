@@ -42,7 +42,7 @@ struct LibraryView: View {
                 .listStyle(.plain)
             }
         }
-        .navigationTitle(categoriesOnly ? "音乐库" : "")
+        .navigationTitle(categoriesOnly ? String(localized: "音乐库") : "")
         .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .searchable(
             text: $model.searchText,
@@ -339,7 +339,7 @@ struct TrackRow: View {
                         .frame(width: 38, height: 44)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(track.isLiked ? "取消收藏" : "收藏")
+                .accessibilityLabel(track.isLiked ? String(localized: "取消收藏") : String(localized: "收藏"))
             }
         }
         .opacity(track.isAvailable ? 1 : 0.45)
