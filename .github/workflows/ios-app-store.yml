@@ -44,7 +44,9 @@ jobs:
           path: ios-app/build/adaptive-environment
   capture-ipad:
     if: inputs.operation == 'capture-ipad'
-    runs-on: macos-latest
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
       - uses: actions/checkout@v7
       - run: brew install xcodegen

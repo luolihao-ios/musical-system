@@ -46,7 +46,8 @@ jobs:
               ipad) DEVICE_TYPE=com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB ;;
               duo) DEVICE_TYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-Duo ;;
             esac
-            DEVICE_ID=$(xcrun simctl create "AiYue $KIND" "$DEVICE_TYPE" com.apple.CoreSimulator.SimRuntime.iOS-27-1)
+            RUNTIME=$(python3 ios-app/scripts/adaptive_runtime.py --runtimes ios-app/build/adaptive/runtimes.json --type "$DEVICE_TYPE")
+            DEVICE_ID=$(xcrun simctl create "AiYue $KIND" "$DEVICE_TYPE" "$RUNTIME")
             xcrun simctl boot "$DEVICE_ID"
             xcrun simctl bootstatus "$DEVICE_ID" -b
             xcrun simctl status_bar "$DEVICE_ID" override --time '9:41' --batteryState charged --batteryLevel 100
@@ -67,7 +68,9 @@ jobs:
           name: adaptive-device-verification
           path: ios-app/build/adaptive
   test-and-package:
-    runs-on: macos-latest
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
       - uses: actions/checkout@v7
       - name: Install XcodeGen

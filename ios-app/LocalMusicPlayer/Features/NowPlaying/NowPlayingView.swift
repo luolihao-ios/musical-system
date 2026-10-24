@@ -53,7 +53,9 @@ struct NowPlayingView: View {
                     header
                     GeometryReader { geometry in
                         let layout = AdaptivePlayerLayout.resolve(size: geometry.size)
-                        if layout.isWide {
+                        if #available(iOS 27.1, *), !geometry.reservedRegions(kind: .division, options: .includeInactive).isEmpty {
+                            duoPlayer
+                        } else if layout.isWide {
                             widePlayer(layout: layout)
                         } else {
                             VStack(spacing: 0) {
@@ -211,17 +213,55 @@ struct NowPlayingView: View {
 
     private func widePlayer(layout: AdaptivePlayerLayout) -> some View {
         HStack(spacing: 32) {
+            GeometryReader { pane in
+                primaryPane(size: pane.size)
+            }
+            .frame(width: layout.columnWidth)
+            secondaryPane
+                .frame(width: layout.columnWidth)
+        }
+        .padding(.horizontal, 32)
+        .padding(.top, 16)
+        .padding(.bottom, 20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("player.layout.wide")
+    }
+
+    @available(iOS 27.1, *)
+    private var duoPlayer: some View {
+        // 系统容器负责真正的折痕分割与横纵方向切换，不假定折痕永远在水平中心。
+        ArrangementView {
+            GeometryReader { pane in primaryPane(size: pane.size) }
+        } secondary: {
+            secondaryPane
+        }
+        .arrangementViewStyle(.split)
+        .padding(16)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("player.layout.wide")
+    }
+
+    private func primaryPane(size: CGSize) -> some View {
+        let side = min(max(0, size.width), max(96, size.height - 330), 640)
+        return ScrollView {
             VStack(spacing: 16) {
                 Spacer(minLength: 0)
-                artwork(side: layout.artworkSide)
+                artwork(side: side)
                 if model.hasLyrics { lyricSnippet }
                 trackIdentity
                 if !model.hasLyrics { lyricsSearch }
                 Spacer(minLength: 12)
                 playerControls
             }
-            .frame(width: layout.columnWidth)
-            VStack(alignment: .leading, spacing: 16) {
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: max(0, size.height))
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private var secondaryPane: some View {
+        VStack(alignment: .leading, spacing: 16) {
                 Text(contentMode == .lyrics ? "同步歌词" : "播放队列")
                     .font(.title2.weight(.bold))
                 if contentMode == .lyrics {
@@ -258,18 +298,10 @@ struct NowPlayingView: View {
                         }
                     }
                 }
-            }
-            .padding(20)
-            .frame(width: layout.columnWidth, alignment: .leading)
-            .frame(maxHeight: .infinity)
-            .background(foreground.opacity(0.055), in: RoundedRectangle(cornerRadius: 24))
         }
-        .padding(.horizontal, 32)
-        .padding(.top, 16)
-        .padding(.bottom, 20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("player.layout.wide")
+        .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(foreground.opacity(0.055), in: RoundedRectangle(cornerRadius: 24))
     }
 
     private var lyricSnippet: some View {
