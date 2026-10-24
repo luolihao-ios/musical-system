@@ -14,6 +14,15 @@ def strings(path):
     return result
 
 class FrenchLocalizationTests(unittest.TestCase):
+    def test_library_interpolated_statuses_are_localized(self):
+        source = (ROOT / "Features/Library/LibraryView.swift").read_text(encoding="utf-8")
+        french = strings(ROOT / "Resources/fr.lproj/Localizable.strings")
+        for key in ["%lld 首", "暂无%@", "无法获得文件夹访问权限：%@"]:
+            self.assertIn(key, french)
+            self.assertIn('NSLocalizedString("' + key + '"', source)
+        self.assertNotIn('count) 首"', source)
+        self.assertNotIn('"暂无\\(title)"', source)
+
     def test_french_resources_cover_existing_keys_and_preserve_format_arguments(self):
         french = strings(ROOT / "Resources/fr.lproj/Localizable.strings")
         english = strings(ROOT / "Resources/en.lproj/Localizable.strings")

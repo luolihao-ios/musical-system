@@ -155,3 +155,6 @@
 "移除" = "Retirer";
 "Public Domain" = "Domaine public";
 "License unknown" = "Licence inconnue";
+"%lld 首" = "%lld titres";
+"暂无%@" = "Aucun élément dans « %@ »";
+"无法获得文件夹访问权限：%@" = "Impossible d’accéder au dossier : %@";

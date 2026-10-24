@@ -2,6 +2,7 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
+from copy import deepcopy
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("metadata_sync", ROOT / "scripts/app_store_localizations.py")
@@ -41,3 +42,43 @@ class StoreLocalizationTests(unittest.TestCase):
         data["infos"][0]["locales"].append({"id": "fr-info", "attributes": {"locale": "fr-FR"}})
         requests = sync.prepare_requests(data, self.campaign)
         self.assertTrue(all(r["method"] == "PATCH" for r in requests))
+
+    def test_french_version_auto_created_after_info_creation_is_updated(self):
+        data = fixture()
+        # Apple 创建 appInfoLocalization 时可能同时建立空版本本地化。
+        data["infos"][0]["locales"].append({"id": "fr-info", "attributes": {"locale": "fr-FR"}})
+        data["versions"][0]["locales"].append({"id": "auto-fr-version", "attributes": {"locale": "fr-FR"}})
+        requests = sync.prepare_requests(data, self.campaign)
+        french = next(r for r in requests if r["path"].endswith("/auto-fr-version"))
+        self.assertEqual(french["method"], "PATCH")
+        self.assertEqual(french["payload"]["data"]["attributes"]["description"], self.campaign["french"]["versionInfo"]["description"])
+
+    def test_missing_existing_locale_translation_is_rejected(self):
+        del self.campaign["whatsNew"]["en-US"]
+        with self.assertRaises(ValueError):
+            sync.prepare_requests(fixture(), self.campaign)
+
+    def verified_fixture(self):
+        before = fixture()
+        before["versions"].append({"version": {"id": "published", "attributes": {"versionString": "0.2", "appStoreState": "READY_FOR_SALE"}},
+                                  "locales": [{"id": "published-en", "attributes": {"locale": "en-US", "description": "Published description"}}]})
+        after = deepcopy(before)
+        after["versions"][0]["locales"][0]["attributes"]["whatsNew"] = self.campaign["whatsNew"]["en-US"]
+        after["versions"][0]["locales"].append({"id": "fr-version", "attributes": {"locale": "fr-FR", **self.campaign["french"]["versionInfo"], "whatsNew": self.campaign["whatsNew"]["fr-FR"]}})
+        after["infos"][0]["locales"].append({"id": "fr-info", "attributes": {"locale": "fr-FR", **self.campaign["french"]["appInfo"]}})
+        return before, after
+
+    def test_readback_accepts_only_authorized_fields(self):
+        before, after = self.verified_fixture()
+        sync.verify(before, after, self.campaign)
+        for version_index in [0, 1]:
+            changed = deepcopy(after)
+            changed["versions"][version_index]["locales"][0]["attributes"]["description"] = "Unintended change"
+            with self.assertRaises(ValueError):
+                sync.verify(before, changed, self.campaign)
+
+    def test_readback_rejects_incorrect_french_fields(self):
+        before, after = self.verified_fixture()
+        after["versions"][0]["locales"][1]["attributes"]["description"] = "Incorrect description"
+        with self.assertRaises(ValueError):
+            sync.verify(before, after, self.campaign)

@@ -94,3 +94,6 @@
 "从音乐库删除" = "Remove from library";
 "歌曲操作" = "Song actions";
 "从音乐库删除这首歌？" = "Remove this song from the library?";
+"%lld 首" = "%lld tracks";
+"暂无%@" = "No items in %@";
+"无法获得文件夹访问权限：%@" = "Unable to access folder: %@";

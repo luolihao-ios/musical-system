@@ -8,6 +8,11 @@ APP = "6806107359"
 EDITABLE = {"PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED"}
 
 
+def require(condition, message):
+    if not condition:
+        raise ValueError(message)
+
+
 def editable(resource):
     attrs = resource["attributes"]
     return attrs.get("appStoreState", attrs.get("state")) in EDITABLE
@@ -80,10 +85,10 @@ def verify(before, after, campaign):
     version, info = targets(after, campaign["version"])
     for entry in version["locales"]:
         attrs = entry["attributes"]
-        assert attrs["whatsNew"] == campaign["whatsNew"][attrs["locale"]], "更新记录回读不一致"
+        require(attrs["whatsNew"] == campaign["whatsNew"][attrs["locale"]], "更新记录回读不一致")
     for entries, expected in [(version["locales"], campaign["french"]["versionInfo"]), (info["locales"], campaign["french"]["appInfo"])]:
         french = next(x["attributes"] for x in entries if x["attributes"]["locale"] == "fr-FR")
-        assert all(french.get(k) == v for k, v in expected.items()), "法语字段回读不一致"
+        require(all(french.get(k) == v for k, v in expected.items()), "法语字段回读不一致")
     for kind, field, target in [("versions", "version", old_version["version"]["id"]), ("infos", "info", old_info["info"]["id"])]:
         current = {x[field]["id"]: x for x in after[kind]}
         for old in before[kind]:
@@ -97,7 +102,7 @@ def verify(before, after, campaign):
                         expected["whatsNew"] = campaign["whatsNew"][locale]
                     if locale == "fr-FR":
                         expected.update(campaign["french"]["versionInfo" if field == "version" else "appInfo"])
-                assert actual == expected, "非授权字段或已发布资料被改变"
+                require(actual == expected, "非授权字段或已发布资料被改变")
 
 
 def main():
@@ -107,7 +112,7 @@ def main():
     args = parser.parse_args()
     campaign = json.loads((ROOT / "marketing/app-store-2026-10-24/localizations/0.2.1.json").read_text(encoding="utf-8"))
     api = AppleAPI()
-    assert api.call(f"apps/{APP}")["data"]["attributes"]["bundleId"] == "com.luolihao.musicalsystem"
+    require(api.call(f"apps/{APP}")["data"]["attributes"]["bundleId"] == "com.luolihao.musicalsystem", "应用标识不符")
     before = snapshot(api)
     requests = prepare_requests(before, campaign)
     backup = ROOT / ".api-inspection"
@@ -121,12 +126,18 @@ def main():
     # 同时核对所有旧本地化的图片位置，保证本任务不影响宣传图。
     placements = {x["id"]: list_placements(api, x["id"]) for v in before["versions"] for x in v["locales"]}
     for request in requests:
+        if request["method"] == "POST" and request["path"] == "appStoreVersionLocalizations":
+            # App 信息新增语言后，Apple 可能自动建立空的版本记录。
+            # 重新读取身份再决定创建/更新；不对 409 进行盲目重试。
+            refreshed = prepare_requests(snapshot(api), campaign)
+            request = next(r for r in refreshed if r["path"].startswith("appStoreVersionLocalizations")
+                           and r["payload"]["data"]["attributes"].get("description") is not None)
         api.call(request["path"], request["method"], request["payload"])
         print("已保存：", request["path"], flush=True)
     after = snapshot(api)
     verify(before, after, campaign)
     for identity, items in placements.items():
-        assert list_placements(api, identity) == items, "图片位置回读发生变化"
+        require(list_placements(api, identity) == items, "图片位置回读发生变化")
     version, info = targets(after, campaign["version"])
     report = {"version": campaign["version"], "versionId": version["version"]["id"],
               "locales": [x["attributes"]["locale"] for x in version["locales"]],

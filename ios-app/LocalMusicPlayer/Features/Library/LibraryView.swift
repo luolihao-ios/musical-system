@@ -84,7 +84,7 @@ struct LibraryView: View {
                     try AuthorizedMusicFolderAccess.save(url)
                     Task { await model.scanLocalAudio() }
                 } catch {
-                    model.showImportError("无法获得文件夹访问权限：\(error.localizedDescription)")
+                    model.showImportError(String(format: NSLocalizedString("无法获得文件夹访问权限：%@", comment: "文件夹访问失败"), error.localizedDescription))
                 }
             }
         }
@@ -156,7 +156,7 @@ struct LibraryView: View {
                     LibraryEntranceCard(
                         title: String(localized: "最近播放"),
                         systemImage: "clock.arrow.circlepath",
-                        countText: "\(model.recentlyPlayed.count) 首"
+                        countText: String(format: NSLocalizedString("%lld 首", comment: "歌曲数量"), Int64(model.recentlyPlayed.count))
                     )
                 }
                 .buttonStyle(.plain)
@@ -232,7 +232,7 @@ private struct LibraryGroupsView: View {
         .overlay {
             if groups.isEmpty {
                 ContentUnavailableView(
-                    "暂无\(title)",
+                    String(format: NSLocalizedString("暂无%@", comment: "分类为空"), title),
                     systemImage: "music.note.list"
                 )
             }
