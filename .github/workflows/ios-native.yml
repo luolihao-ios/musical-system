@@ -12,12 +12,19 @@ on:
       - "shared-swift/**"
       - ".github/workflows/ios-native.yml"
   workflow_dispatch:
+    inputs:
+      focus:
+        description: "验证范围（诊断模式不出包）"
+        type: choice
+        options: [full, lyrics]
+        default: full
 
 permissions:
   contents: read
 
 jobs:
   adaptive-layout:
+    if: github.event.inputs.focus != 'lyrics'
     runs-on: xcode-27
     timeout-minutes: 45
     env:
@@ -84,8 +91,11 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Run iOS simulator tests
+        env:
+          TEST_FOCUS: ${{ github.event.inputs.focus }}
         run: ./ios-app/scripts/verify.sh
       - name: Build unsigned device IPA
+        if: github.event.inputs.focus != 'lyrics'
         run: ./ios-app/scripts/package-unsigned-ipa.sh
       - name: Preserve simulator test evidence
         if: always()
@@ -98,6 +108,7 @@ jobs:
             ios-app/build/player-evidence
           if-no-files-found: warn
       - uses: actions/upload-artifact@v7
+        if: github.event.inputs.focus != 'lyrics'
         with:
           name: LocalMusicPlayer-iOS-unsigned
           path: ios-app/build/ipa/LocalMusicPlayer-unsigned.ipa

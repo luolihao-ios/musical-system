@@ -3,6 +3,10 @@ import Foundation
 enum PlaybackDiagnostics {
     private static let lock = NSLock()
     static func log(_ message: String) {
+        #if DEBUG
+        // 云端单元测试也保留边界证据；真机仍自动写 Documents 文件。
+        print("[PlaybackDiagnostics] \(message)")
+        #endif
         lock.lock()
         defer { lock.unlock() }
         guard let documents = FileManager.default.urls(

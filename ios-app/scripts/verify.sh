@@ -35,16 +35,21 @@ collect_player_diagnostics() {
   # 测试结束后 simctl 容器查询可能失效，保留每个测试容器的实际日志。
   mkdir -p "$ios_root/build/player-evidence"
   find "$HOME/Library/Developer/CoreSimulator/Devices" \
-    -path '*/data/Containers/Data/Application/*/Documents/music-player-interaction.log' \
+    -path '*/data/Containers/Data/Application/*/Documents/*.log' \
     -type f -print | while IFS= read -r logfile; do
       container_id="$(basename "$(dirname "$(dirname "$logfile")")")"
-      cp "$logfile" "$ios_root/build/player-evidence/$container_id.log"
+      cp "$logfile" "$ios_root/build/player-evidence/$container_id-$(basename "$logfile")"
     done
   xcrun xcresulttool export attachments \
     --path "$ios_root/build/PlayerTests.xcresult" \
     --output-path "$ios_root/build/player-evidence/screenshots" || true
 }
 trap collect_player_diagnostics EXIT
+
+test_selection=()
+if [ "${TEST_FOCUS:-}" = "lyrics" ]; then
+  test_selection=(-only-testing:LocalMusicPlayerTests/NowPlayingModelTests)
+fi
 
 xcodebuild test \
   -project "$ios_root/LocalMusicPlayer.xcodeproj" \
@@ -54,5 +59,6 @@ xcodebuild test \
   -derivedDataPath "$ios_root/build/DerivedData" \
   -resultBundlePath "$ios_root/build/PlayerTests.xcresult" \
   -parallel-testing-enabled NO \
+  "${test_selection[@]}" \
   CODE_SIGNING_ALLOWED=NO \
   COMPILER_INDEX_STORE_ENABLE=NO

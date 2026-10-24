@@ -9,8 +9,15 @@ struct FileLyricsReader: LyricsReading {
     func read(path: String) async throws -> String? {
         try await Task.detached(priority: .utility) {
             let fileManager = FileManager()
-            guard fileManager.fileExists(atPath: path) else { return nil }
-            return try String(contentsOfFile: path, encoding: .utf8)
+            guard fileManager.fileExists(atPath: path) else {
+                PlaybackDiagnostics.log("歌词文件不存在 path=\(path)")
+                return nil
+            }
+            do { return try String(contentsOfFile: path, encoding: .utf8) }
+            catch {
+                PlaybackDiagnostics.log("歌词文件读取失败 path=\(path) error=\(error)")
+                throw error
+            }
         }.value
     }
 }
