@@ -39,21 +39,7 @@ async function main() {
   manifest.push({file:'creative/aiyue-20261024-universal.png',width:5244,height:2950,
     title:'产品页页首与搜索结果通用宣传图',category:'CREATIVE_ASSETS',
     sha256:crypto.createHash('sha256').update(fs.readFileSync(creative)).digest('hex')});
-  fs.mkdirSync(path.join(root,'ipad-13'),{recursive:true});
-  for (const [source,filename,title] of [
-    ['ipad-artwork.png','01-aiyue-20261024-ipad-artwork.png','iPad 实际封面播放界面'],
-    ['ipad-lyrics.png','02-aiyue-20261024-ipad-lyrics.png','iPad 实际同步歌词界面']
-  ]) {
-    const destination=path.join(root,'ipad-13',filename);
-    const input=path.join(root,'sources',source);
-    const inputMeta=await sharp(input).metadata();
-    if (inputMeta.width!==2064 || inputMeta.height!==2752) throw Error('iPad 必须使用 13 英寸实际截图');
-    await sharp(input).flatten({background:'#000000'}).removeAlpha().toColourspace('srgb').png().toFile(destination);
-    const meta=await sharp(destination).metadata();
-    if(meta.hasAlpha || meta.channels!==3) throw Error('iPad 不透明导出验收失败');
-    manifest.push({file:'ipad-13/'+filename,width:2064,height:2752,title,type:'APP_IPAD_PRO_3GEN_129',
-      sha256:crypto.createHash('sha256').update(fs.readFileSync(destination)).digest('hex')});
-  }
+  // 用户撤下旧 iPad 两图；待真实大屏适配通过后再加入新的四图，旧文件仅保留作历史记录。
   fs.writeFileSync(path.join(root,'文件验收清单.json'), JSON.stringify(manifest,null,2));
   console.log(JSON.stringify(manifest.map(({file,width,height})=>({file,width,height})),null,2));
 }

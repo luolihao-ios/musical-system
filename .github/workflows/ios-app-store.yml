@@ -12,6 +12,7 @@ on:
           - inspect-screenshots
           - inspect-library
           - capture-ipad
+          - inspect-adaptive-environment
           - upload-library
           - upload-screenshots
 
@@ -19,6 +20,28 @@ permissions:
   contents: read
 
 jobs:
+  adaptive-environment:
+    if: inputs.operation == 'inspect-adaptive-environment'
+    runs-on: xcode-27
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Inspect Xcode 27.1 and Duo simulator support
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode_27.1.app/Contents/Developer
+          mkdir -p ios-app/build/adaptive-environment
+          xcodebuild -version | tee ios-app/build/adaptive-environment/xcode.txt
+          xcodebuild -showsdks | tee ios-app/build/adaptive-environment/sdks.txt
+          xcrun simctl list devicetypes -j > ios-app/build/adaptive-environment/device-types.json
+          xcodebuild -downloadPlatform iOS -buildVersion 27.1 -architectureVariant arm64
+          xcrun simctl list runtimes -j > ios-app/build/adaptive-environment/runtimes.json
+          xcrun simctl list devices available -j > ios-app/build/adaptive-environment/devices.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: adaptive-environment
+          path: ios-app/build/adaptive-environment
   capture-ipad:
     if: inputs.operation == 'capture-ipad'
     runs-on: macos-latest

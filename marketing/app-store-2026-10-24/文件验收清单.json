@@ -102,21 +102,5 @@
     "title": "产品页页首与搜索结果通用宣传图",
     "category": "CREATIVE_ASSETS",
     "sha256": "e294e5bc77554b24f36a9f5d3d08c37f283bdc91bea83ba81a50dec07ad770b0"
-  },
-  {
-    "file": "ipad-13/01-aiyue-20261024-ipad-artwork.png",
-    "width": 2064,
-    "height": 2752,
-    "title": "iPad 实际封面播放界面",
-    "type": "APP_IPAD_PRO_3GEN_129",
-    "sha256": "932df1575678dabd951d5670858922d681782fce0e1e249345eb61e38a5a195c"
-  },
-  {
-    "file": "ipad-13/02-aiyue-20261024-ipad-lyrics.png",
-    "width": 2064,
-    "height": 2752,
-    "title": "iPad 实际同步歌词界面",
-    "type": "APP_IPAD_PRO_3GEN_129",
-    "sha256": "49d5369c0d80af413e5991514dc8eec805b1dcc9a978e6b9838fdab947adfb90"
   }
 ]
