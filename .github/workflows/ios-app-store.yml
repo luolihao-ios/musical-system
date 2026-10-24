@@ -11,12 +11,34 @@ on:
           - build
           - inspect-screenshots
           - inspect-library
+          - capture-ipad
+          - upload-library
           - upload-screenshots
 
 permissions:
   contents: read
 
 jobs:
+  capture-ipad:
+    if: inputs.operation == 'capture-ipad'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: brew install xcodegen
+      - name: Capture actual iPad player UI
+        run: |
+          set -euo pipefail
+          xcodegen generate --spec ios-app/project.yml
+          DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; p=json.load(sys.stdin); print(next(d["udid"] for ds in p["devices"].values() for d in ds if "iPad Pro" in d["name"] and "13" in d["name"]))')
+          xcodebuild test -project ios-app/LocalMusicPlayer.xcodeproj -scheme LocalMusicPlayer -destination "platform=iOS Simulator,id=$DEVICE_ID" -derivedDataPath ios-app/build/StoreDerivedData -resultBundlePath ios-app/build/StoreScreens.xcresult -parallel-testing-enabled NO -only-testing:LocalMusicPlayerUITests/StoreAssetCaptureTests CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO
+      - name: Export captured images
+        if: always()
+        run: xcrun xcresulttool export attachments --path ios-app/build/StoreScreens.xcresult --output-path ios-app/build/store-assets
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ipad-store-screenshots
+          path: ios-app/build/store-assets
   screenshots:
     if: inputs.operation == 'inspect-screenshots' || inputs.operation == 'upload-screenshots' || inputs.operation == 'inspect-library'
     runs-on: ubuntu-latest

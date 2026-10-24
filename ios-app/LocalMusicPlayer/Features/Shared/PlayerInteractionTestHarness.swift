@@ -34,16 +34,22 @@ struct PlayerInteractionTestHarness: View {
 private final class InteractionTestPlayback: PlaybackControlling {
     var state: PlaybackState
     init() {
+        let storeAssets = ProcessInfo.processInfo.arguments.contains("--store-assets")
+        let title = storeAssets ? "夜色慢行" : "播放器交互测试"
+        let artist = storeAssets ? "爱乐之城 · 演示音乐" : "测试音频"
         let root = FileManager.default.temporaryDirectory
         let artwork = root.appendingPathComponent("gesture-fixture.jpg")
         let lyrics = root.appendingPathComponent("gesture-fixture.lrc")
         let data = try? ProceduralArtworkGenerator().generateArtwork(
-            title: "播放器交互测试", artist: "测试音频", seed: "gesture-fixture"
+            title: title, artist: artist, seed: "gesture-fixture"
         )
         try? data?.write(to: artwork)
-        try? "[00:00.00]第一句测试歌词\n[00:10.00]第二句测试歌词".write(to: lyrics, atomically: true, encoding: .utf8)
+        let lyricText = storeAssets
+            ? "[00:00.00]晚风经过安静的街\n[00:10.00]耳边是熟悉的旋律\n[00:20.00]把今天慢慢收进歌里\n[00:30.00]让心情随音乐远行\n[00:40.00]灯光落在回家的路\n[00:50.00]喜欢的歌一直在身边"
+            : "[00:00.00]第一句测试歌词\n[00:10.00]第二句测试歌词"
+        try? lyricText.write(to: lyrics, atomically: true, encoding: .utf8)
         state = PlaybackState(queue: [TrackSnapshot(
-            id: "gesture-fixture", title: "播放器交互测试", artist: "测试音频",
+            id: "gesture-fixture", title: title, artist: artist,
             album: "测试专辑", duration: 240, sourceKind: .importedFile,
             sourceReference: "/test/audio.m4a", artworkReference: artwork.path,
             lyricsReference: lyrics.path
