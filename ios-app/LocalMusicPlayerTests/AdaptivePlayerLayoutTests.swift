@@ -2,6 +2,13 @@ import XCTest
 @testable import LocalMusicPlayer
 
 final class AdaptivePlayerLayoutTests: XCTestCase {
+    func testShortPositiveWindowKeepsArtworkVisibleInsideScrollablePane() {
+        for height: CGFloat in [200, 300, 330, 350] {
+            XCTAssertGreaterThanOrEqual(AdaptivePlayerLayout.resolve(size: CGSize(width: 844, height: height)).artworkSide, 120)
+        }
+        XCTAssertEqual(AdaptivePlayerLayout.resolve(size: CGSize(width: 100, height: 200)).artworkSide, 52)
+        XCTAssertEqual(AdaptivePlayerLayout.resolve(size: CGSize(width: 844, height: 0)).artworkSide, 0)
+    }
     func testIPhoneAndNarrowWindowRemainSingleColumn() {
         XCTAssertFalse(AdaptivePlayerLayout.resolve(size: CGSize(width: 393, height: 700)).isWide)
         XCTAssertFalse(AdaptivePlayerLayout.resolve(size: CGSize(width: 700, height: 900)).isWide)

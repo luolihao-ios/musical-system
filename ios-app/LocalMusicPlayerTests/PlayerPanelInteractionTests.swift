@@ -2,6 +2,21 @@ import XCTest
 @testable import LocalMusicPlayer
 
 final class PlayerPanelInteractionTests: XCTestCase {
+    func testResizeRejectsRemainingCallbacksUntilGestureSessionEnds() {
+        var panel = PlayerPanelInteraction()
+        panel.expand()
+        panel.drag(translation: 100, compact: 60, expanded: 1000)
+        panel.cancelDragForResize()
+        panel.drag(translation: 400, compact: 60, expanded: 650)
+        panel.release(compact: 60, expanded: 650)
+        XCTAssertEqual(panel.phase, .expanded)
+        XCTAssertFalse(panel.acceptsGesture)
+        XCTAssertEqual(panel.height(compact: 60, expanded: 650), 650)
+        panel.finishGestureSession()
+        panel.drag(translation: 250, compact: 60, expanded: 650)
+        panel.release(compact: 60, expanded: 650)
+        XCTAssertEqual(panel.phase, .compact)
+    }
     func testResizeCancelsOldGestureHeightWithoutClosingOrReopening() {
         var panel = PlayerPanelInteraction()
         panel.expand()

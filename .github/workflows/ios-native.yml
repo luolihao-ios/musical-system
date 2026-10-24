@@ -40,6 +40,7 @@ jobs:
         run: |
           set -euo pipefail
           xcodegen generate --spec ios-app/project.yml
+          TEST_STATUS=0
           for KIND in iphone ipad duo; do
             case "$KIND" in
               iphone) DEVICE_TYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-17 ;;
@@ -58,10 +59,17 @@ jobs:
               -only-testing:LocalMusicPlayerTests/PlayerPanelInteractionTests \
               -only-testing:LocalMusicPlayerUITests/AdaptivePlayerUITests \
               -only-testing:LocalMusicPlayerUITests/StoreAssetCaptureTests \
-              CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO
-            xcrun xcresulttool export attachments --path "ios-app/build/adaptive/$KIND.xcresult" --output-path "ios-app/build/adaptive/$KIND-images"
+              CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO || TEST_STATUS=1
+            xcrun xcresulttool export attachments --path "ios-app/build/adaptive/$KIND.xcresult" --output-path "ios-app/build/adaptive/$KIND-images" || TEST_STATUS=1
+            xcrun simctl get_app_container "$DEVICE_ID" com.luolihao.musicalsystem data > "ios-app/build/adaptive/$KIND-container.txt" || true
+            APP_DATA=$(cat "ios-app/build/adaptive/$KIND-container.txt")
+            if [ -d "$APP_DATA/Documents" ]; then
+              mkdir -p "ios-app/build/adaptive/$KIND-logs"
+              find "$APP_DATA/Documents" -name '*.log' -exec cp {} "ios-app/build/adaptive/$KIND-logs/" \;
+            fi
             xcrun simctl shutdown "$DEVICE_ID"
           done
+          exit "$TEST_STATUS"
       - uses: actions/upload-artifact@v7
         if: always()
         with:

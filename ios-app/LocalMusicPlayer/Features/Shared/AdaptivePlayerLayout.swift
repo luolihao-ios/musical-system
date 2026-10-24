@@ -12,7 +12,7 @@ struct AdaptivePlayerLayout: Equatable {
         let height = size.height.isFinite ? max(0, size.height) : 0
         let wide = width >= 720 && height >= 420
         let column = wide ? min(720, max(0, (width - 96) / 2)) : max(0, width - 48)
-        let artwork = min(column, max(0, height - 330), wide ? 640 : 390)
+        let artwork = height > 0 ? min(column, max(120, height - 330), wide ? 640 : 390) : 0
         return Self(isWide: wide, columnWidth: column, artworkSide: artwork)
     }
 
@@ -30,10 +30,7 @@ struct AdaptivePlayerLayout: Equatable {
 struct AdaptiveTabNavigation: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(iOS 18.0, *) {
-            content.tabViewStyle(.sidebarAdaptable)
-        } else {
-            content
-        }
+        // 保留系统默认页签，不主动开启侧栏；全局小播放器不能覆盖展开侧栏。
+        content
     }
 }

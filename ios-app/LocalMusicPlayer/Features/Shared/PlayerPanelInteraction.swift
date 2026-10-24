@@ -7,6 +7,7 @@ struct PlayerPanelInteraction: Equatable {
     private(set) var startHeight: CGFloat?
     private(set) var dragHeight: CGFloat?
     private(set) var expansionCount = 0
+    private(set) var acceptsGesture = true
 
     var isDragging: Bool { startHeight != nil }
 
@@ -20,7 +21,7 @@ struct PlayerPanelInteraction: Equatable {
     }
 
     mutating func drag(translation: CGFloat, compact: CGFloat, expanded: CGFloat) {
-        guard phase == .expanded else { return }
+        guard acceptsGesture, phase == .expanded else { return }
         if startHeight == nil { startHeight = height(compact: compact, expanded: expanded) }
         dragHeight = min(expanded, max(compact, (startHeight ?? expanded) - translation))
     }
@@ -53,6 +54,13 @@ struct PlayerPanelInteraction: Equatable {
 
     // 旋转、分屏或折叠改变坐标空间时，旧手势高度不能继续覆盖新窗口。
     mutating func cancelDragForResize() {
+        if isDragging { acceptsGesture = false }
+        startHeight = nil
+        dragHeight = nil
+    }
+
+    mutating func finishGestureSession() {
+        acceptsGesture = true
         startHeight = nil
         dragHeight = nil
     }

@@ -2,6 +2,32 @@ import XCTest
 
 @MainActor
 final class AdaptivePlayerUITests: XCTestCase {
+    func testProductionAudioPositionAndEngineSurviveRotation() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--adaptive-store-assets", "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
+        app.launch()
+        let evidence = app.otherElements["fixture.realPlayback"]
+        XCTAssertTrue(evidence.waitForExistence(timeout: 15))
+        func sample() -> [String] { (evidence.value as? String ?? "").components(separatedBy: "|") }
+        let running = NSPredicate { _, _ in
+            let fields = sample()
+            return fields.count == 3 && fields[2] == "true" && (Double(fields[1]) ?? 0) > 0.5
+        }
+        expectation(for: running, evaluatedWith: evidence)
+        waitForExpectations(timeout: 15)
+        let before = sample()
+        app.buttons["player.compact.open"].tap()
+        XCTAssertTrue(app.buttons["player.detail.playPause"].waitForExistence(timeout: 10))
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let advances = NSPredicate { _, _ in
+            let after = sample()
+            return after.count == 3 && after[0] == before[0] && after[2] == "true"
+                && (Double(after[1]) ?? 0) > (Double(before[1]) ?? 0) + 1
+        }
+        expectation(for: advances, evaluatedWith: evidence)
+        waitForExpectations(timeout: 15)
+        XCTAssertTrue(app.buttons["player.detail.playPause"].isHittable)
+    }
     override func tearDown() {
         XCUIDevice.shared.orientation = .portrait
         super.tearDown()

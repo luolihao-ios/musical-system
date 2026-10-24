@@ -28,8 +28,8 @@ final class AppContainer {
             fileImporter: FileImportService(),
             systemImporter: SystemLibraryImporter(),
             playback: playback,
-            scansAuthorizedFolders: true,
-            coverSearch: CatalogCoverSearch.shared
+            scansAuthorizedFolders: !inMemory,
+            coverSearch: inMemory ? nil : CatalogCoverSearch.shared
         )
         CoverSearchDiagnostics.log("session version=\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") ?? "?") build=\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") ?? "?") provider=existing-catalogs baidu=disabled")
         let playlistsModel = PlaylistsModel(
@@ -50,7 +50,7 @@ final class AppContainer {
         self.playlistsModel = playlistsModel
         self.nowPlayingModel = nowPlayingModel
         self.transferHandoffImporter = TransferHandoffImporter(importer: FileImportService(), store: store)
-        libraryModel.scheduleMissingCoverSearch()
+        if !inMemory { libraryModel.scheduleMissingCoverSearch() }
     }
 }
 

@@ -8,7 +8,9 @@ struct LocalMusicPlayerApp: App {
     var body: some Scene {
         WindowGroup {
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--player-interaction-tests") {
+            if ProcessInfo.processInfo.arguments.contains("--adaptive-store-assets") {
+                AdaptiveStoreAssetHarness().preferredColorScheme(.dark)
+            } else if ProcessInfo.processInfo.arguments.contains("--player-interaction-tests") {
                 PlayerInteractionTestHarness().preferredColorScheme(.dark)
             } else {
                 applicationContent

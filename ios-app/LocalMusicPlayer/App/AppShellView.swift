@@ -4,6 +4,7 @@ import UIKit
 
 struct AppShellView: View {
     let container: AppContainer
+    var initialOnlineResults: [CatalogTrack] = []
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var storeUpdate: AppStoreUpdate?
@@ -41,7 +42,7 @@ struct AppShellView: View {
                         Text("在线音乐").tag(true)
                     }
                     .pickerStyle(.segmented).padding(.horizontal)
-                    if onlineTab { OnlineCatalogSearchView(model: container.libraryModel) }
+                    if onlineTab { OnlineCatalogSearchView(model: container.libraryModel, initialResults: initialOnlineResults) }
                     else { LibraryView(model: container.libraryModel) }
                 }
             }

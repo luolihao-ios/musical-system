@@ -23,6 +23,7 @@ struct MiniPlayerView: View {
     let openNowPlaying: () -> Void
     var dismiss: () -> Void = {}
     var maximumHeight: CGFloat = 780
+    var maximumWidth: CGFloat = 390
     var bottomInset: CGFloat = 0
     var menuClearance: CGFloat = 90
 
@@ -47,7 +48,8 @@ struct MiniPlayerView: View {
                 queueRequest: queueRequest,
                 closePanel: close,
                 panelDragChanged: dragChanged,
-                panelDragEnded: dragEnded
+                panelDragEnded: dragEnded,
+                panelGestureFinished: { panel.finishGestureSession() }
             )
             .frame(height: max(1, fullHeight - bottomInset))
             .opacity(progress)
@@ -88,6 +90,10 @@ struct MiniPlayerView: View {
         .onChange(of: maximumHeight) { _, _ in
             panel.cancelDragForResize()
             PlayerInteractionDiagnostics.log("panel resized height=\(maximumHeight) phase=\(panel.phase.rawValue)")
+        }
+        .onChange(of: maximumWidth) { _, _ in
+            panel.cancelDragForResize()
+            PlayerInteractionDiagnostics.log("panel resized width=\(maximumWidth) phase=\(panel.phase.rawValue)")
         }
     }
 
@@ -180,6 +186,10 @@ struct MiniPlayerView: View {
     }
 
     private func dragEnded(_ value: DragGesture.Value) {
+        guard panel.acceptsGesture else {
+            PlayerInteractionDiagnostics.log("detail release ignored after resize")
+            return
+        }
         PlayerInteractionDiagnostics.log("detail release translation=\(value.translation) phase=\(panel.phase.rawValue)")
         if value.translation.height < -80 && abs(value.translation.height) > abs(value.translation.width) {
             panel.release(compact: compactHeight, expanded: fullHeight)

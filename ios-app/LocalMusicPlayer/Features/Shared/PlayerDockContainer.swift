@@ -21,6 +21,7 @@ struct PlayerDockContainer<Content: View>: View {
                                     openNowPlaying: {},
                                     dismiss: dismiss,
                                     maximumHeight: dock.size.height,
+                                    maximumWidth: dock.size.width,
                                     bottomInset: safeArea.safeAreaInsets.bottom,
                                     menuClearance: menuClearance
                                 )

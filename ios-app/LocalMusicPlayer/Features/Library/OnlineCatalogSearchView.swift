@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OnlineCatalogSearchView: View {
     @Bindable var model: LibraryModel
+    var initialResults: [CatalogTrack] = []
     @State private var query = ""
     @State private var results: [CatalogTrack] = []
     @State private var loading = false
@@ -27,6 +28,7 @@ struct OnlineCatalogSearchView: View {
             .overlay { if loading { ProgressView() } else if results.isEmpty { ContentUnavailableView("搜索公开音乐", systemImage: "globe", description: Text("搜索 Jamendo 等开放许可音乐")) } }
             .searchable(text: $query, prompt: "搜索歌曲、艺术家或歌词关键词")
             .onSubmit(of: .search) { Task { await search() } }
+            .task { if results.isEmpty { results = initialResults } }
             .navigationTitle("在线音乐")
             .alert("提示", isPresented: Binding(get: { !message.isEmpty }, set: { if !$0 { message = "" } })) { Button("好") { message = "" } } message: { Text(message) }
         }

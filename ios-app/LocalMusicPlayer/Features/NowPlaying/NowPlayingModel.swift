@@ -189,6 +189,7 @@ final class NowPlayingModel {
     }
 
     private func loadLyrics(for track: TrackSnapshot?) {
+        PlaybackDiagnostics.log("歌词加载请求 id=\(track?.id ?? "none") path=\(track?.lyricsReference ?? "none")")
         lyricsTask?.cancel()
         requestedLyricTrackID = track?.id
         requestedLyricsPath = track?.lyricsReference
@@ -203,6 +204,7 @@ final class NowPlayingModel {
         let reader = lyricsReader
         lyricsTask = Task { [weak self] in
             let source = try? await reader.read(path: path)
+            PlaybackDiagnostics.log("歌词读取结束 id=\(requestedID) chars=\(source?.count ?? 0) cancelled=\(Task.isCancelled)")
             guard !Task.isCancelled,
                   let self,
                   self.state.currentTrack?.id == requestedID,

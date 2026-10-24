@@ -21,6 +21,8 @@ struct NowPlayingView: View {
     var closePanel: (() -> Void)? = nil
     var panelDragChanged: ((DragGesture.Value) -> Void)? = nil
     var panelDragEnded: ((DragGesture.Value) -> Void)? = nil
+    var panelGestureFinished: (() -> Void)? = nil
+    @GestureState private var panelGestureActive = false
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -77,6 +79,7 @@ struct NowPlayingView: View {
                                     .padding(.top, 12)
                                     .padding(.bottom, 16)
                             }
+                            .accessibilityElement(children: .contain)
                             .accessibilityIdentifier("player.layout.compact")
                         }
                     }
@@ -93,6 +96,9 @@ struct NowPlayingView: View {
         .onChange(of: reduceMotion) { _, value in model.reduceMotion = value }
         .onChange(of: model.state.currentTrack?.id) { _, _ in contentMode = .artwork }
         .onChange(of: queueRequest) { _, _ in showQueue = true }
+        .onChange(of: panelGestureActive) { _, active in
+            if !active { panelGestureFinished?() }
+        }
         .task(id: artworkRequest) {
             let request = artworkRequest
             artworkTheme = .fallback
@@ -329,6 +335,7 @@ struct NowPlayingView: View {
 
     private var panelDrag: some Gesture {
         DragGesture(minimumDistance: 8, coordinateSpace: .global)
+            .updating($panelGestureActive) { _, active, _ in active = true }
             .onChanged { panelDragChanged?($0) }
             .onEnded { panelDragEnded?($0) }
     }
