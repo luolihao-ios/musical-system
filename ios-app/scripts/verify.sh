@@ -44,11 +44,11 @@ collect_player_diagnostics() {
     --path "$ios_root/build/PlayerTests.xcresult" \
     --output-path "$ios_root/build/player-evidence/screenshots" || true
 }
-trap collect_player_diagnostics EXIT
+trap 'test_status=$?; collect_player_diagnostics || true; exit "$test_status"' EXIT
 
-test_selection=()
+test_selection=(-parallel-testing-enabled NO)
 if [ "${TEST_FOCUS:-}" = "lyrics" ]; then
-  test_selection=(-only-testing:LocalMusicPlayerTests/NowPlayingModelTests)
+  test_selection+=(-only-testing:LocalMusicPlayerTests/NowPlayingModelTests)
 fi
 
 xcodebuild test \
@@ -58,7 +58,6 @@ xcodebuild test \
   -destination "platform=iOS Simulator,id=$simulator_id" \
   -derivedDataPath "$ios_root/build/DerivedData" \
   -resultBundlePath "$ios_root/build/PlayerTests.xcresult" \
-  -parallel-testing-enabled NO \
   "${test_selection[@]}" \
   CODE_SIGNING_ALLOWED=NO \
   COMPILER_INDEX_STORE_ENABLE=NO

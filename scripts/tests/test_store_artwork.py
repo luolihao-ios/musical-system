@@ -27,6 +27,12 @@ def tiny_png(color=2, transparency=False):
 
 
 class StoreArtworkTests(unittest.TestCase):
+    def test_device_placement_groups_include_native_duo_without_watch(self):
+        self.assertEqual(store.screenshot_group("ipad-13/01.png"), "IPAD_13_PROFILE")
+        self.assertEqual(store.screenshot_group("iphone-duo/01.png"), "IPHONE_DUO_PROFILE")
+        self.assertEqual(store.screenshot_group("iphone-65/01.png"), "IPHONE_FACE_ID_LARGE_PROFILE")
+        with self.assertRaises(ValueError):
+            store.screenshot_group("watch/01.png")
     def validate(self, data, **changes):
         with tempfile.TemporaryDirectory() as temporary:
             folder = Path(temporary)
@@ -73,7 +79,13 @@ class StoreArtworkTests(unittest.TestCase):
     def test_all_campaign_files_pass_manifest_validation(self):
         folder = store.ROOT / "marketing/app-store-2026-10-24"
         manifest = json.loads((folder / "文件验收清单.json").read_text(encoding="utf-8"))
-        self.assertGreaterEqual(len(manifest), 13)
+        self.assertEqual(len(manifest), 14)
+        for group in ("iphone-medium", "iphone-duo", "ipad-13"):
+            self.assertEqual(sum(entry["file"].startswith(group+"/") for entry in manifest), 4)
+        creative = [entry for entry in manifest if entry.get("category") == "CREATIVE_ASSETS"]
+        self.assertEqual({entry["placementType"] for entry in creative},
+                         {"PRODUCT_PAGE_HEADER_ASSET", "APP_STORE_SEARCH_RESULTS_ASSET"})
+        self.assertEqual(len({entry["sha256"] for entry in creative}), 2)
         for entry in manifest:
             with self.subTest(file=entry["file"]):
                 store.validate_manifest_image(folder, entry)

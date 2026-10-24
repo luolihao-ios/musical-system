@@ -1,74 +1,9 @@
 [
   {
-    "file": "iphone-65/01-aiyue-20261024-local.png",
-    "width": 1242,
-    "height": 2688,
-    "title": "你的音乐，随身珍藏",
-    "type": "APP_IPHONE_65",
-    "sha256": "9341180ca73562105df4ac5d3b475985799e929b31dc154e5d7161ace09721f5"
-  },
-  {
-    "file": "iphone-65/02-aiyue-20261024-artwork.png",
-    "width": 1242,
-    "height": 2688,
-    "title": "封面随歌，色彩随心",
-    "type": "APP_IPHONE_65",
-    "sha256": "daf2345ceffebc503e779127b462cc369cc8ed146c75a146f89a21c1fe83da45"
-  },
-  {
-    "file": "iphone-65/03-aiyue-20261024-lyrics.png",
-    "width": 1242,
-    "height": 2688,
-    "title": "每一句，都跟得上",
-    "type": "APP_IPHONE_65",
-    "sha256": "fa55f9d99d86b681320b76e405a9f0b32b9810cf10cff0852c2fa997215de5ff"
-  },
-  {
-    "file": "iphone-65/04-aiyue-20261024-online.png",
-    "width": 1242,
-    "height": 2688,
-    "title": "搜到喜欢，即刻试听",
-    "type": "APP_IPHONE_65",
-    "sha256": "67ad57ea1a4299b698d9fa0065aaef445c095abe70c2183b7f8b39a444b59e3e"
-  },
-  {
-    "file": "iphone-large/01-aiyue-20261024-local.png",
-    "width": 1320,
-    "height": 2868,
-    "title": "你的音乐，随身珍藏",
-    "type": "APP_IPHONE_67",
-    "sha256": "a1ead3accf419b3c022d98cbbe4315ff38a5d3aa5f04dca536b584100184ef25"
-  },
-  {
-    "file": "iphone-large/02-aiyue-20261024-artwork.png",
-    "width": 1320,
-    "height": 2868,
-    "title": "封面随歌，色彩随心",
-    "type": "APP_IPHONE_67",
-    "sha256": "29bc2c3453bfa4a62c0ea17419d0200261c99b8b28ad4dc4be1fa32213a6d28c"
-  },
-  {
-    "file": "iphone-large/03-aiyue-20261024-lyrics.png",
-    "width": 1320,
-    "height": 2868,
-    "title": "每一句，都跟得上",
-    "type": "APP_IPHONE_67",
-    "sha256": "27d8b60bd6758ce140224a3ff6e798cb8b17911540ffd8667733ddeeaff13c91"
-  },
-  {
-    "file": "iphone-large/04-aiyue-20261024-online.png",
-    "width": 1320,
-    "height": 2868,
-    "title": "搜到喜欢，即刻试听",
-    "type": "APP_IPHONE_67",
-    "sha256": "7197bab1bd86bcd66029de1a7b74b95c8ad451a82a3f6fe9fbb447b377d0f06b"
-  },
-  {
     "file": "iphone-medium/01-aiyue-20261024-local.png",
     "width": 1206,
     "height": 2622,
     "title": "你的音乐，随身珍藏",
-    "type": "APP_IPHONE_61",
     "sha256": "790ed95630434b7488832a3c57956ed3ba7b9b6970b3cd87937f20644b927053"
   },
   {
@@ -76,7 +11,6 @@
     "width": 1206,
     "height": 2622,
     "title": "封面随歌，色彩随心",
-    "type": "APP_IPHONE_61",
     "sha256": "dbbacc22077e5c5e0f51a9d9a4790a8f70927d5f933a319f818cff481b59795d"
   },
   {
@@ -84,7 +18,6 @@
     "width": 1206,
     "height": 2622,
     "title": "每一句，都跟得上",
-    "type": "APP_IPHONE_61",
     "sha256": "8bdb76f4921805673b681279d12d4e5320001b48cfbce1c182d8cadb8b2d1151"
   },
   {
@@ -92,15 +25,80 @@
     "width": 1206,
     "height": 2622,
     "title": "搜到喜欢，即刻试听",
-    "type": "APP_IPHONE_61",
     "sha256": "d8e963f257313c3a9448ddc699c8cd58d6100e59a24dbd53cf9319524f70d3b0"
   },
   {
-    "file": "creative/aiyue-20261024-universal.png",
+    "file": "ipad-13/01-aiyue-20261024-v2-local.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "你的音乐，随身珍藏",
+    "sha256": "93c961622968914e78847ec7752e228fef9dbee3132e1d9f24f2779e01e02a79"
+  },
+  {
+    "file": "ipad-13/02-aiyue-20261024-v2-artwork.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "封面随歌，色彩随心",
+    "sha256": "5c19a09e510b942341608ec737aca57c2e3a848e7fb473e9b15421ace977f9d7"
+  },
+  {
+    "file": "ipad-13/03-aiyue-20261024-v2-lyrics.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "每一句，都跟得上",
+    "sha256": "d9fbf0ca549725e3ae739bb68733a397975ef126f61953356cc2de5980caf969"
+  },
+  {
+    "file": "ipad-13/04-aiyue-20261024-v2-online.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "搜到喜欢，即刻试听",
+    "sha256": "5a8610b364a871f1fd777d413663795d27b525129dce945291e818be3160cd6f"
+  },
+  {
+    "file": "iphone-duo/01-aiyue-20261024-v2-local.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "你的音乐，随身珍藏",
+    "sha256": "2e614a9425f348aaef6b51e656303775e8cbf578c55e04c90ede514705fdbda1"
+  },
+  {
+    "file": "iphone-duo/02-aiyue-20261024-v2-artwork.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "封面随歌，色彩随心",
+    "sha256": "50647df101a2c9d552140421c4727c228bfcfbbc9487d01b547738767e3926fb"
+  },
+  {
+    "file": "iphone-duo/03-aiyue-20261024-v2-lyrics.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "每一句，都跟得上",
+    "sha256": "f0b5c1c976db17faec3f9fa6305dfa82ae04b249df543c0913af630d66fbff66"
+  },
+  {
+    "file": "iphone-duo/04-aiyue-20261024-v2-online.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "搜到喜欢，即刻试听",
+    "sha256": "885a99342eca2b6243ec62c2f8397d454576191941700985b9a56ee6c618c318"
+  },
+  {
+    "file": "creative/aiyue-20261024-v2-header.png",
     "width": 5244,
     "height": 2950,
-    "title": "产品页页首与搜索结果通用宣传图",
+    "title": "产品页页首宣传图",
     "category": "CREATIVE_ASSETS",
-    "sha256": "e294e5bc77554b24f36a9f5d3d08c37f283bdc91bea83ba81a50dec07ad770b0"
+    "placementType": "PRODUCT_PAGE_HEADER_ASSET",
+    "sha256": "443d6e1398c11cd0d88f5d64f7de8d6572438dd6f3b428a721708f17a5aa4dfd"
+  },
+  {
+    "file": "creative/aiyue-20261024-v2-search.png",
+    "width": 5244,
+    "height": 2950,
+    "title": "搜索结果宣传图",
+    "category": "CREATIVE_ASSETS",
+    "placementType": "APP_STORE_SEARCH_RESULTS_ASSET",
+    "sha256": "78744a1c2a1e13e7b2dbd024086ce0f4a75fafb6fcd1b9a9008f1589d8fdd1c2"
   }
 ]

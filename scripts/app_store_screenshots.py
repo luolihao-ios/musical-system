@@ -16,6 +16,16 @@ FOLDER = ROOT / "marketing/app-store-2026-10-24/iphone-65"
 EDITABLE = {"PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED"}
 
 
+def screenshot_group(filename):
+    groups = {"iphone-65": "IPHONE_FACE_ID_LARGE_PROFILE", "iphone-large": "IPHONE_DYNAMIC_ISLAND_LARGE_PROFILE",
+              "iphone-medium": "IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE", "ipad-13": "IPAD_13_PROFILE",
+              "iphone-duo": "IPHONE_DUO_PROFILE"}
+    folder = filename.split("/")[0]
+    if folder not in groups:
+        raise ValueError(f"未授权的设备截图分组：{folder}")
+    return groups[folder]
+
+
 class AppleAPI:
     def __init__(self):
         import jwt
@@ -153,12 +163,10 @@ def upload_library(api):
     locales = api.call(f"appStoreVersions/{editable[0]['id']}/appStoreVersionLocalizations?limit=50")["data"]
     locale = next(v for v in locales if v["attributes"]["locale"] == "zh-Hans")
     placements = list_placements(api, locale["id"])
-    groups = {"iphone-65": "IPHONE_FACE_ID_LARGE_PROFILE", "iphone-large": "IPHONE_DYNAMIC_ISLAND_LARGE_PROFILE",
-        "iphone-medium": "IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE", "ipad-13": "IPAD_13_PROFILE"}
     expected = []
     for entry, identity in selected:
-        requests = [("APP_SCREENSHOT", groups[entry["file"].split("/")[0]])] if entry.get("category") != "CREATIVE_ASSETS" else [
-            ("PRODUCT_PAGE_HEADER_ASSET", "DEFAULT_PROFILE"), ("APP_STORE_SEARCH_RESULTS_ASSET", "DEFAULT_PROFILE")]
+        requests = [("APP_SCREENSHOT", screenshot_group(entry["file"]))] if entry.get("category") != "CREATIVE_ASSETS" else [
+            (entry["placementType"], "DEFAULT_PROFILE")]
         for kind, group in requests:
             expected.append((kind, group, identity))
             in_group = [p for p in placements if p["attributes"]["placementType"] == kind and p["attributes"]["placementGroup"] == group]
