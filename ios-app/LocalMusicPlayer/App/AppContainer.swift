@@ -31,7 +31,7 @@ final class AppContainer {
             scansAuthorizedFolders: !inMemory,
             coverSearch: inMemory ? nil : CatalogCoverSearch.shared
         )
-        CoverSearchDiagnostics.log("session version=\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") ?? "?") build=\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") ?? "?") provider=existing-catalogs baidu=disabled")
+        CoverSearchDiagnostics.log("session version=\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") ?? "?") build=\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") ?? "?") provider=existing-catalogs")
         let playlistsModel = PlaylistsModel(
             store: store,
             playback: playback

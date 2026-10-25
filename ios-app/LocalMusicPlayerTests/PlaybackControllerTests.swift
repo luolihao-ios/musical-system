@@ -79,9 +79,9 @@ final class PlaybackControllerTests: XCTestCase {
         let loadCount = engine.loadedURLs.count
         let updated = TrackSnapshot(id: original.id, title: original.title, artist: original.artist,
             album: original.album, duration: original.duration, sourceKind: original.sourceKind,
-            sourceReference: original.sourceReference, artworkReference: "/music/artwork-baidu.jpg")
+            sourceReference: original.sourceReference, artworkReference: "/music/artwork-downloaded.jpg")
         controller.refreshTrackMetadata(updated)
-        XCTAssertEqual(controller.state.currentTrack?.artworkReference, "/music/artwork-baidu.jpg")
+        XCTAssertEqual(controller.state.currentTrack?.artworkReference, "/music/artwork-downloaded.jpg")
         XCTAssertEqual(controller.state.position, before.position)
         XCTAssertEqual(controller.state.isPlaying, before.isPlaying)
         XCTAssertEqual(engine.loadedURLs.count, loadCount)

@@ -6,7 +6,7 @@ struct CoverSearchSettingsView: View {
         Form {
             Section {
                 Text("导入后立即显示程序化封面并可播放，后台再逐首替换找到的封面。已有内嵌或自选封面会保留。")
-                Text("中文歌优先网易、QQ、酷狗；英文歌优先 iTunes、MusicBrainz 等，失败后交叉回退。百度查询已停用，不需要填写密钥。")
+                Text("中文歌优先网易、QQ、酷狗；英文歌优先 iTunes、MusicBrainz 等，失败后交叉回退。不需要填写密钥。")
             } header: { Text("自动补全封面") }
             Section {
                 Button("重新查找缺失封面") { library.retryMissingCovers() }

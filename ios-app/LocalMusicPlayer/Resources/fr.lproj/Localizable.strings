@@ -109,7 +109,7 @@
 "授权音乐文件夹" = "Autoriser un dossier musical";
 "自动补全封面" = "Recherche automatique de pochettes";
 "导入后立即显示程序化封面并可播放，后台再逐首替换找到的封面。已有内嵌或自选封面会保留。" = "Une pochette est créée dès l’importation et la lecture peut commencer. Les pochettes trouvées en arrière-plan la remplacent ensuite. Les pochettes intégrées ou choisies sont conservées.";
-"中文歌优先网易、QQ、酷狗；英文歌优先 iTunes、MusicBrainz 等，失败后交叉回退。百度查询已停用，不需要填写密钥。" = "Les titres chinois sont d’abord recherchés sur NetEase, QQ et Kugou ; les titres anglais sur iTunes, MusicBrainz et d’autres sources. D’autres catalogues sont essayés si nécessaire. La recherche Baidu est désactivée ; aucune clé n’est requise.";
+"中文歌优先网易、QQ、酷狗；英文歌优先 iTunes、MusicBrainz 等，失败后交叉回退。不需要填写密钥。" = "Les titres chinois sont d’abord recherchés sur NetEase, QQ et Kugou ; les titres anglais sur iTunes, MusicBrainz et d’autres sources. D’autres catalogues sont essayés si nécessaire. Aucune clé n’est requise.";
 "重新查找缺失封面" = "Relancer la recherche des pochettes";
 "暂停封面搜索" = "Suspendre la recherche des pochettes";
 "导出封面查询日志" = "Exporter le journal des pochettes";

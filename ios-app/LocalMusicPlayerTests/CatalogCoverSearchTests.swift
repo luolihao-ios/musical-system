@@ -12,7 +12,7 @@ final class CatalogCoverSearchTests: XCTestCase {
         XCTAssertNil(CoverQueryPolicy.score(title: "完全无关", artist: "其他人", album: "", query: query, fallback: false))
     }
 
-    func testChineseImportsQueryDomesticSourcesFirstAndNeverBaidu() async throws {
+    func testChineseImportsQueryDomesticSourcesFirstUsingOnlyCatalogHosts() async throws {
         let fixture = CoverHTTPFixtures(image: imageData())
         let service = CatalogCoverSearch(transport: fixture)
         let result = try await service.findCover(MusicResourceQuery(title: "无匹配中文歌", artist: "", album: "", duration: 0))
@@ -20,7 +20,6 @@ final class CatalogCoverSearchTests: XCTestCase {
         let requests = await fixture.requests
         XCTAssertEqual(Set(requests.prefix(3).compactMap { $0.url?.host }), ["music.163.com", "c.y.qq.com", "mobilecdn.kugou.com"])
         XCTAssertEqual(Set(requests.compactMap { $0.url?.host }), ["music.163.com", "c.y.qq.com", "mobilecdn.kugou.com", "itunes.apple.com", "musicbrainz.org", "api.jamendo.com", "archive.org"])
-        XCTAssertFalse(requests.contains { $0.url?.host == "qianfan.baidubce.com" })
         XCTAssertTrue(requests.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == nil })
     }
 

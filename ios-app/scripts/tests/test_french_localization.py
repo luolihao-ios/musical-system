@@ -43,7 +43,7 @@ class FrenchLocalizationTests(unittest.TestCase):
         french = strings(ROOT / "Resources/fr.lproj/Localizable.strings")
         missing = set()
         pattern = r'(?:Text|Label|Button|Section|ContentUnavailableView|Picker|\.navigationTitle|\.accessibilityLabel|\.accessibilityHint|\.alert)\(\s*("(?:[^"\\]|\\.)*")'
-        excluded = {"BaiduCoverSettingsView.swift", "PlayerInteractionTestHarness.swift", "AdaptiveStoreAssetHarness.swift"}
+        excluded = {"PlayerInteractionTestHarness.swift", "AdaptiveStoreAssetHarness.swift"}
         for file in ROOT.rglob("*.swift"):
             if file.name in excluded:
                 continue
