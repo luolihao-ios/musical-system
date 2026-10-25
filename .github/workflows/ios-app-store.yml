@@ -34,8 +34,7 @@ jobs:
           xcodebuild -version | tee ios-app/build/adaptive-environment/xcode.txt
           xcodebuild -showsdks | tee ios-app/build/adaptive-environment/sdks.txt
           xcrun simctl list devicetypes -j > ios-app/build/adaptive-environment/device-types.json
-          xcodebuild -downloadPlatform iOS -buildVersion 27.1 -architectureVariant arm64
-          xcrun simctl list runtimes -j > ios-app/build/adaptive-environment/runtimes.json
+          python3 ios-app/scripts/prepare_adaptive_runtime.py --output ios-app/build/adaptive-environment/runtimes.json
           xcrun simctl list devices available -j > ios-app/build/adaptive-environment/devices.json
       - uses: actions/upload-artifact@v7
         if: always()

@@ -36,13 +36,12 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild -version
-          xcodebuild -downloadPlatform iOS -buildVersion 27.1 -architectureVariant arm64
           mkdir -p ios-app/build/adaptive
+          python3 ios-app/scripts/prepare_adaptive_runtime.py --output ios-app/build/adaptive/runtimes.json
           xcrun simctl help > ios-app/build/adaptive/simctl-help.txt
           xcrun simctl help ui > ios-app/build/adaptive/simctl-ui-help.txt
           xcrun simctl help io > ios-app/build/adaptive/simctl-io-help.txt
           xcrun simctl list devicetypes -j > ios-app/build/adaptive/device-types.json
-          xcrun simctl list runtimes -j > ios-app/build/adaptive/runtimes.json
       - name: Test iPhone, iPad and iPhone Duo production player
         run: |
           set -euo pipefail
