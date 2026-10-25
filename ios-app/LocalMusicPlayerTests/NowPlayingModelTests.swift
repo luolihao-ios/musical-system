@@ -5,6 +5,29 @@ import SwiftData
 
 @MainActor
 final class NowPlayingModelTests: XCTestCase {
+    func testDownloadedLyricsArePublishedBeforeReturningWithoutReadingSavedFileAgain() async throws {
+        let container = try ModelContainerFactory.make(inMemory: true)
+        let store = try MusicStore(context: container.mainContext)
+        let track = TrackSnapshot(id: "immediate-lyrics", title: "即时歌词", artist: "歌手", album: "",
+            duration: 120, sourceKind: .onlinePreview, sourceReference: "https://example.org/a.mp3")
+        let playback = FakeNowPlayingController(state: PlaybackState(queue: [track], currentIndex: 0))
+        let reader = CountingLyricsReader()
+        let resources = RequestedLyricsFixture()
+        let model = NowPlayingModel(playback: playback, lyricsReader: reader, online: resources, store: store)
+        await model.findLyrics()
+        let path = try XCTUnwrap(playback.state.currentTrack?.lyricsReference)
+        defer { try? FileManager.default.removeItem(at: URL(fileURLWithPath: path).deletingLastPathComponent()) }
+        XCTAssertEqual(try String(contentsOfFile: path, encoding: .utf8), "[00:01.00]按需歌词")
+        XCTAssertEqual(model.lyricLines.map(\.text), ["按需歌词"], "已取得的文本必须立即显示，不等待磁盘二次读取")
+        XCTAssertEqual(model.lyricTrackID, track.id)
+        XCTAssertFalse(model.isSearchingLyrics)
+        let reads = await reader.calls
+        XCTAssertEqual(reads, 0)
+        await model.findLyrics()
+        let requests = await resources.requests
+        XCTAssertEqual(requests, 1, "已有歌词不能重复搜索")
+    }
+
     func testOnlinePreviewCanLoadLyricsWithoutCreatingLibraryRecord() async throws {
         let container = try ModelContainerFactory.make(inMemory: true)
         let store = try MusicStore(context: container.mainContext)
@@ -232,6 +255,14 @@ private actor RequestedLyricsFixture: MusicResourceSearching {
     }
 }
 
+private actor CountingLyricsReader: LyricsReading {
+    private(set) var calls = 0
+    func read(path: String) async throws -> String? {
+        calls += 1
+        return nil
+    }
+}
+
 private struct FakeLyricsReader: LyricsReading {
     let source: String?
 
@@ -287,6 +318,14 @@ private final class FakeNowPlayingController: PlaybackControlling {
     ) async throws {}
 
     func playQueueItem(at index: Int) async throws {}
+
+    func refreshTrackMetadata(_ track: TrackSnapshot) {
+        var updated = state
+        for index in updated.queue.indices where updated.queue[index].id == track.id {
+            updated.queue[index] = track
+        }
+        publish(updated)
+    }
 
     func moveQueue(fromOffsets: IndexSet, toOffset: Int) throws {
         lastMoveOffsets = fromOffsets

@@ -169,9 +169,15 @@ final class NowPlayingModel {
                 lyricsSearchMessage = String(localized: "歌曲已移除，请重新选择")
                 return
             }
+            // 搜索结果已在内存中且完成持久化，无需重新排队读取同一文件。
+            // 先登记路径，再通知播放模型，避免状态回调再次发起磁盘任务。
+            lyricsTask?.cancel()
+            requestedLyricTrackID = updated.id
+            requestedLyricsPath = updated.lyricsReference
+            applyLyrics(text, trackID: updated.id)
+            PlaybackDiagnostics.log("歌词搜索结果直接显示 id=\(updated.id) chars=\(text.count)")
             playback.refreshTrackMetadata(updated)
             if state.currentTrack?.id == track.id {
-                loadLyrics(for: updated)
                 lyricsSearchMessage = String(localized: "已找到歌词，点击歌词查看")
             }
         } catch {
@@ -215,17 +221,22 @@ final class NowPlayingModel {
             guard !Task.isCancelled,
                   let self,
                   self.state.currentTrack?.id == requestedID,
-                  self.requestedLyricTrackID == requestedID else {
+                  self.requestedLyricTrackID == requestedID,
+                  self.requestedLyricsPath == path else {
                 return
             }
-            self.lyricLines = LRCParser.parse(source ?? "")
-            if self.lyricLines.isEmpty, let source {
-                self.lyricLines = source.split(whereSeparator: \.isNewline).map {
-                    LyricLine(timestamp: .infinity, text: String($0))
-                }
-            }
-            self.lyricTrackID = requestedID
-            self.updateCurrentLyricIndex()
+            self.applyLyrics(source, trackID: requestedID)
         }
+    }
+
+    private func applyLyrics(_ source: String?, trackID: String) {
+        lyricLines = LRCParser.parse(source ?? "")
+        if lyricLines.isEmpty, let source {
+            lyricLines = source.split(whereSeparator: \.isNewline).map {
+                LyricLine(timestamp: .infinity, text: String($0))
+            }
+        }
+        lyricTrackID = trackID
+        updateCurrentLyricIndex()
     }
 }
