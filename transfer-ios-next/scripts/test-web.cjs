@@ -1,17 +1,18 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 const nodes=new Map();
 function element(){return{hidden:false,value:'',textContent:'',classList:{add(){},remove(){},toggle(){}},replaceChildren(){},append(){},click(){}}}
-const context={document:{getElementById:id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id)},body:element(),createElement:element},Blob,File,TextEncoder,Uint8Array,DataView,URL,Math,Error,setTimeout,fetch:async()=>{throw Error('offline')}};
+const context={document:{getElementById:id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id)},body:element(),createElement:element,documentElement:{},querySelectorAll:()=>[]},navigator:{languages:['zh-CN'],language:'zh-CN'},Blob,File,TextEncoder,Uint8Array,DataView,URL,Math,Error,setTimeout,fetch:async()=>{throw Error('offline')}};
 vm.createContext(context);
+vm.runInContext(fs.readFileSync('transfer-ios-next/MuseTransfer/WebAssets/i18n.js','utf8'),context);
 vm.runInContext(fs.readFileSync('transfer-ios-next/MuseTransfer/WebAssets/app.js','utf8'),context);
 const browserJS=fs.readFileSync('transfer-ios-next/MuseTransfer/WebAssets/app.js','utf8');
 assert.match(browserJS,/\/web\/outbound/);
 assert.match(browserJS,/link\.click\(\)/);
-assert.match(browserJS,/const direct=Array\.from\(e\.dataTransfer\.files/);
+assert.match(browserJS,/Array\.from\(event\.dataTransfer\.files \|\| \[\]\)/);
 assert.match(browserJS,/receiveTab/);
 assert.match(browserJS,/outbound\/decision/);
 assert.match(browserJS,/outboundDownloads\.has/);
-assert.match(browserJS,/actions\.replaceChildren\(\);try\{await api\('\/web\/outbound\/decision'/);
+assert.match(browserJS,/actions\.replaceChildren\(\);\s*try\s*\{\s*await api\('\/web\/outbound\/decision'/);
 assert.match(browserJS,/polling can race with the phone closing a completed session/);
 assert.match(fs.readFileSync('transfer-ios-next/MuseTransfer/WebAssets/style.css','utf8'),/\.row progress\{flex:1 1 240px;width:auto/);
 (async()=>{

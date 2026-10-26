@@ -1,2 +1,2 @@
-"CFBundleDisplayName" = "AiYue Transfer";
-"NSLocalNetworkUsageDescription" = "AiYue Transfer needs local network access to discover nearby devices you choose to connect to.";
+"CFBundleDisplayName" = "fileSend";
+"NSLocalNetworkUsageDescription" = "fileSend needs local network access to discover and connect to nearby devices you choose.";

@@ -4,7 +4,7 @@ public enum DiagnosticLog {
     private static let queue = DispatchQueue(label: "com.luolihao.aiyuetransfer.diagnostics")
     public static let fileURL: URL = {
         let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return folder.appendingPathComponent("aiyue-transfer-diagnostics.log")
+        return folder.appendingPathComponent("filesend-diagnostics.log")
     }()
 
     public static func write(_ message: String) {

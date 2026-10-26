@@ -63,7 +63,7 @@ struct BrowserTransferView: View {
                     Text(String(format: String(localized: "访问码：%@"), model.code)).font(.title.bold())
                 }
                 Text("不要关闭此应用。请保持此页面打开，切换到后台后服务会关闭。").foregroundStyle(.secondary)
-                Text("文件保存到：文件 › 我的 iPhone › 爱乐互传 › 按日期分类").font(.footnote)
+                Text("文件保存到：文件 › 我的 iPhone › fileSend › 按日期分类").font(.footnote)
                 Picker("传输方向", selection: $tab) {
                     ForEach(Tab.allCases) { Text($0.localizedTitle).tag($0) }
                 }
@@ -101,7 +101,7 @@ struct BrowserTransferView: View {
                                 Text(file.name).lineLimit(2)
                                 Text(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file)).font(.caption)
                                 if let path = batch.saved[file.id] {
-                                    Text(String(format: String(localized: "已保存到文件 › 爱乐互传 / %@"), path)).font(.caption).foregroundStyle(.green)
+                                    Text(String(format: String(localized: "已保存到文件 › fileSend / %@"), path)).font(.caption).foregroundStyle(.green)
                                     if path.lowercased().hasSuffix(".aiyuepack") { ShareLink("导入爱乐之城", item: sharedRoot.appendingPathComponent(path)) }
                                 }
                                 else { Text((batch.progress[file.id] ?? 0) > 0 ? "正在接收…" : "等待接收").font(.caption).foregroundStyle(.secondary) }
@@ -114,7 +114,11 @@ struct BrowserTransferView: View {
                     }
                 }
                 Button("重新开启服务") { model.start() }
-            }.padding()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: 1_160, alignment: .leading)
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }.navigationTitle("浏览器传文件").tint(.indigo)
         .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             do {

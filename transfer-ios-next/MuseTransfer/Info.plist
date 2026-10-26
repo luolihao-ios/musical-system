@@ -7,7 +7,7 @@
     <key>CFBundleLocalizations</key>
     <array><string>en</string><string>zh-Hans</string><string>zh-Hant</string></array>
     <key>CFBundleDisplayName</key>
-    <string>爱乐互传</string>
+    <string>fileSend</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -33,7 +33,7 @@
         <string>_aiyue._tcp</string>
     </array>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>爱乐互传需要访问局域网，以发现并连接您确认的附近设备。</string>
+    <string>fileSend needs local network access to discover and connect to nearby devices you choose.</string>
     <key>UIApplicationSupportsIndirectInputEvents</key>
     <true/>
     <key>UILaunchScreen</key>

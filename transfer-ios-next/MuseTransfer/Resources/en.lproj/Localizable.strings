@@ -1,7 +1,7 @@
-"爱乐互传" = "AiYue Transfer";
+"fileSend" = "fileSend";
 "电脑和手机连接同一个 Wi-Fi，在电脑浏览器打开下面的地址。" = "Connect your computer and iPhone to the same Wi-Fi, then open the address below in a browser.";
 "不要关闭此应用。请保持此页面打开，切换到后台后服务会关闭。" = "Keep this app open. The service stops when the app is sent to the background.";
-"文件保存到：文件 › 我的 iPhone › 爱乐互传 › 按日期分类" = "Files are saved to Files › On My iPhone › AiYue Transfer › by date";
+"文件保存到：文件 › 我的 iPhone › fileSend › 按日期分类" = "Files are saved to Files › On My iPhone › fileSend › by date";
 "添加媒体" = "Add media";
 "待提供给电脑" = "Pending for computer";
 "已提供给电脑下载" = "Available for computer download";
@@ -40,7 +40,7 @@
 "电脑请求发送 %lld 个文件" = "Computer requested to send %lld files";
 "接收完成" = "Receive complete";
 "传输状态：" = "Transfer status: ";
-"已保存到文件 › 爱乐互传 / %@" = "Saved to Files › AiYue Transfer / %@";
+"已保存到文件 › fileSend / %@" = "Saved to Files › fileSend / %@";
 "正在接收…" = "Receiving…";
 "重新开启服务" = "Restart service";
 "浏览器传文件" = "Browser transfer";

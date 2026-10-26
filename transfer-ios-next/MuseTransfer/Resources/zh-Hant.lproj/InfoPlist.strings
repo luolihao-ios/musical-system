@@ -1,1 +1,2 @@
-"CFBundleDisplayName" = "愛樂互傳";
+"CFBundleDisplayName" = "fileSend";
+"NSLocalNetworkUsageDescription" = "fileSend 需要存取本地網路，以探索並連接您確認的附近裝置。";
