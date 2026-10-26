@@ -31,7 +31,12 @@ final class StoreAssetCaptureTests: XCTestCase {
                 save(app, name: "filesend-landscape")
                 XCUIDevice.shared.orientation = .portrait
             }
-            app.terminate()
+            // Duo 的前台退出自动化曾在截图完成后超时。先让系统完成
+            // 前后台切换，再结束进程，保留所有页面及尺寸断言。
+            XCUIDevice.shared.press(.home)
+            let backgrounded = app.wait(for: .runningBackground, timeout: 10)
+            XCTAssertTrue(backgrounded || app.state == .runningBackgroundSuspended || app.state == .notRunning)
+            if app.state != .notRunning { app.terminate() }
         }
     }
 

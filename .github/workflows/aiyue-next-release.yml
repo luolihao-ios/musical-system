@@ -17,6 +17,11 @@ on:
         description: 明确授权创建的商店草稿版本（留空只操作现有草稿）
         type: string
         default: ''
+      preview_device:
+        description: 实际截图设备（用于 capture-iphone 操作）
+        type: choice
+        default: iphone
+        options: [iphone, ipad, duo]
 
 permissions:
   contents: read
@@ -28,6 +33,7 @@ jobs:
     timeout-minutes: 25
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      PREVIEW_DEVICE: ${{ inputs.preview_device || 'iphone' }}
     steps:
       - uses: actions/checkout@v7
       - run: brew install xcodegen
@@ -36,19 +42,28 @@ jobs:
           set -euo pipefail
           xcodegen generate --spec transfer-ios-next/project.yml
           mkdir -p transfer-ios-next/build/preview
-          DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; print(next(d["udid"] for ds in json.load(sys.stdin)["devices"].values() for d in ds if d["name"]=="iPhone 17" and d.get("isAvailable")))')
+          python3 ios-app/scripts/prepare_adaptive_runtime.py --output transfer-ios-next/build/preview/runtimes.json
+          case "$PREVIEW_DEVICE" in
+            iphone) DEVICE_TYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-17 ;;
+            ipad) DEVICE_TYPE=com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB ;;
+            duo) DEVICE_TYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-Duo ;;
+          esac
+          RUNTIME=$(python3 ios-app/scripts/adaptive_runtime.py --runtimes transfer-ios-next/build/preview/runtimes.json --type "$DEVICE_TYPE")
+          DEVICE_ID=$(xcrun simctl create "file send preview $PREVIEW_DEVICE" "$DEVICE_TYPE" "$RUNTIME")
+          xcrun simctl boot "$DEVICE_ID"
+          xcrun simctl bootstatus "$DEVICE_ID" -b
           xcodebuild test -project transfer-ios-next/AiYueTransferNext.xcodeproj -scheme AiyueTransfer \
             -destination "platform=iOS Simulator,id=$DEVICE_ID" -derivedDataPath transfer-ios-next/build/PreviewDerivedData \
-            -resultBundlePath transfer-ios-next/build/preview/iphone.xcresult -parallel-testing-enabled NO \
+            -resultBundlePath "transfer-ios-next/build/preview/$PREVIEW_DEVICE.xcresult" -parallel-testing-enabled NO \
             -only-testing:AiyueTransferUITests/StoreAssetCaptureTests \
             CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO
       - name: Export original App screenshots
         if: always()
-        run: xcrun xcresulttool export attachments --path transfer-ios-next/build/preview/iphone.xcresult --output-path transfer-ios-next/build/preview/iphone-images
+        run: xcrun xcresulttool export attachments --path "transfer-ios-next/build/preview/$PREVIEW_DEVICE.xcresult" --output-path "transfer-ios-next/build/preview/$PREVIEW_DEVICE-images"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: filesend-five-actual-iphone-pages
+          name: filesend-five-actual-${{ inputs.preview_device || 'iphone' }}-pages
           path: transfer-ios-next/build/preview
   store:
     if: github.event_name == 'workflow_dispatch' && contains(fromJSON('["inspect-store","update-store","upload-assets"]'), inputs.operation)
