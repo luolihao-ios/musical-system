@@ -9,9 +9,9 @@ import struct
 PAGES = ("connect", "receive", "send", "edit", "completed")
 
 
-def recover(source, destination, run_id):
+def recover(source, destination, run_id, devices=("iphone", "ipad", "duo")):
     records = []
-    for device in ("iphone", "ipad", "duo"):
+    for device in devices:
         folder = source / f"{device}-images"
         manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
         attachments = [attachment for test in manifest
@@ -40,5 +40,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path)
     parser.add_argument("--run-id", type=int, required=True)
+    parser.add_argument("--device", choices=("iphone", "ipad", "duo"))
     args = parser.parse_args()
-    recover(args.source, Path(__file__).resolve().parents[1] / "marketing/file-send-2026-10-26/sources/actual", args.run_id)
+    recover(args.source, Path(__file__).resolve().parents[1] / "marketing/file-send-2026-10-26/sources/actual", args.run_id,
+            (args.device,) if args.device else ("iphone", "ipad", "duo"))
