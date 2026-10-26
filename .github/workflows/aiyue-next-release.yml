@@ -13,6 +13,10 @@ on:
         type: choice
         default: release
         options: [release, verify, capture, inspect-store, update-store, upload-assets]
+      draft_version:
+        description: 明确授权创建的商店草稿版本（留空只操作现有草稿）
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -35,11 +39,12 @@ jobs:
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
           OPERATION: ${{ inputs.operation }}
+          DRAFT_VERSION: ${{ inputs.draft_version }}
         run: |
           set -euo pipefail
           case "$OPERATION" in
             inspect-store) python scripts/filesend_store.py inspect ;;
-            update-store) python scripts/filesend_store.py update-metadata ;;
+            update-store) python scripts/filesend_store.py update-metadata --draft-version "$DRAFT_VERSION" ;;
             upload-assets) python scripts/filesend_store.py upload-library ;;
           esac
       - uses: actions/upload-artifact@v7
@@ -47,6 +52,7 @@ jobs:
         with:
           name: filesend-store-verification
           path: .api-inspection
+          include-hidden-files: true
   adaptive:
     if: github.event_name == 'push' || contains(fromJSON('["release","verify","capture"]'), inputs.operation)
     runs-on: xcode-27

@@ -60,6 +60,22 @@ def update_metadata(api, before):
     return {locale: {key: mapped[locale][key] for key in labels} for locale, labels in LABELS.items()}
 
 
+def ensure_draft(api, state, version):
+    """仅使用工作流中明确指定的版本创建草稿，永不自行递增营销版本。"""
+    existing = [item for item in state["versions"] if item["attributes"]["versionString"] == version]
+    if existing:
+        if len(existing) != 1 or existing[0]["attributes"]["appStoreState"] not in EDITABLE:
+            raise ValueError("指定版本已发布或不可编辑")
+        return existing[0]
+    if any(item["attributes"]["appStoreState"] in EDITABLE for item in state["versions"]):
+        raise ValueError("已有其他可编辑版本，停止创建")
+    if version != "1.0.2":
+        raise ValueError("本次只授权创建 1.0.2 草稿")
+    return api.call("appStoreVersions", "POST", {"data": {
+        "type": "appStoreVersions", "attributes": {"platform": "IOS", "versionString": version, "releaseType": "MANUAL"},
+        "relationships": {"app": {"data": {"type": "apps", "id": state["app"]["id"]}}}}})["data"]
+
+
 def next_build(api, app_id):
     builds = api.list_all(f"builds?filter[app]={app_id}&limit=200")
     values = [int(item["attributes"]["version"]) for item in builds
@@ -70,14 +86,20 @@ def next_build(api, app_id):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("operation", choices=["inspect", "update-metadata", "next-build", "upload-library"])
+    parser.add_argument("--draft-version", default="", help="明确授权创建的商店草稿版本")
     args = parser.parse_args()
     api = AppleAPI()
     state = read_state(api)
     report = Path(".api-inspection/filesend")
     report.mkdir(parents=True, exist_ok=True)
     (report / "before.json").write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(json.dumps(state, ensure_ascii=False, indent=2), flush=True)
+    print(json.dumps({"app": {"id": state["app"]["id"], "bundleId": state["app"]["attributes"]["bundleId"]},
+        "versions": [{"version": item["attributes"]["versionString"], "state": item["attributes"]["appStoreState"]} for item in state["versions"]],
+        "latestBuilds": [item["attributes"]["version"] for item in state["latestBuilds"]]}, ensure_ascii=False), flush=True)
     if args.operation == "update-metadata":
+        if args.draft_version:
+            ensure_draft(api, state, args.draft_version)
+            state = read_state(api)
         updated = update_metadata(api, state)
         (report / "metadata-verified.json").write_text(json.dumps(updated, ensure_ascii=False, indent=2), encoding="utf-8")
         print("三语言名称与副标题回读通过：", json.dumps(updated, ensure_ascii=False), flush=True)
@@ -85,7 +107,7 @@ def main():
         version = next_build(api, state["app"]["id"])
         with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as stream:
             stream.write(f"FILE_SEND_BUILD={version}\n")
-        print(f"营销版本沿用 1.0.1，本次构建号：{version}", flush=True)
+        print(f"本次构建号：{version}", flush=True)
     elif args.operation == "upload-library":
         import app_store_screenshots as assets
         assets.APP = state["app"]["id"]

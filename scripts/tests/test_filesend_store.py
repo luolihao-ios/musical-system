@@ -4,7 +4,7 @@ from pathlib import Path
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from filesend_store import BUNDLE, LABELS, next_build, resolve_app
+from filesend_store import BUNDLE, LABELS, ensure_draft, next_build, resolve_app
 
 
 class FileSendStoreTests(unittest.TestCase):
@@ -34,6 +34,17 @@ class FileSendStoreTests(unittest.TestCase):
         for value in LABELS.values():
             self.assertEqual(value["name"], "file send")
             self.assertLessEqual(len(value["subtitle"]), 30)
+
+    def test_draft_creation_requires_explicit_authorized_version(self):
+        class API:
+            def call(self, *args):
+                raise AssertionError("不可写入其他版本")
+        with self.assertRaises(ValueError):
+            ensure_draft(API(), {"app": {"id": "transfer"}, "versions": []}, "1.0.3")
+
+    def test_existing_editable_draft_is_reused(self):
+        draft = {"id": "draft", "attributes": {"versionString": "1.0.2", "appStoreState": "PREPARE_FOR_SUBMISSION"}}
+        self.assertEqual(ensure_draft(None, {"versions": [draft]}, "1.0.2"), draft)
 
 
 if __name__ == "__main__":
