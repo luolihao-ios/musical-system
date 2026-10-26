@@ -85,6 +85,36 @@ def ensure_draft(api, state, version):
         "relationships": {"app": {"data": {"type": "apps", "id": state["app"]["id"]}}}}})["data"]
 
 
+def update_whats_new(api, state, notes):
+    targets = [item for item in state["versions"] if item["attributes"]["appStoreState"] in EDITABLE]
+    if len(targets) != 1 or targets[0]["attributes"]["versionString"] != "1.0.2":
+        raise ValueError("仅授权填写 1.0.2 可编辑草稿的新增内容")
+    path = f"appStoreVersions/{targets[0]['id']}/appStoreVersionLocalizations?limit=50"
+    before = api.call(path)["data"]
+    if not before:
+        raise ValueError("当前草稿没有语言版本")
+    missing = [item["attributes"]["locale"] for item in before if not notes.get(item["attributes"]["locale"])]
+    if missing:
+        raise ValueError("缺少对应语言的更新说明：" + ", ".join(missing))
+    if any(len(notes[item["attributes"]["locale"]]) > 4000 for item in before):
+        raise ValueError("更新说明超过 4000 字符")
+    for item in before:
+        locale = item["attributes"]["locale"]
+        api.call(f"appStoreVersionLocalizations/{item['id']}", "PATCH", {"data": {
+            "type": "appStoreVersionLocalizations", "id": item["id"],
+            "attributes": {"whatsNew": notes[locale]}}})
+    after = api.call(path)["data"]
+    mapped = {item["id"]: item["attributes"] for item in after}
+    for item in before:
+        attributes = mapped.get(item["id"], {})
+        locale = item["attributes"]["locale"]
+        if attributes.get("whatsNew") != notes[locale]:
+            raise RuntimeError("更新说明回读不匹配：" + locale)
+        if any(attributes.get(key) != value for key, value in item["attributes"].items() if key != "whatsNew"):
+            raise RuntimeError("新增内容之外的字段发生变化：" + locale)
+    return {item["attributes"]["locale"]: mapped[item["id"]]["whatsNew"] for item in before}
+
+
 def next_build(api, app_id):
     builds = api.list_all(f"builds?filter[app]={app_id}&limit=200")
     values = [int(item["attributes"]["version"]) for item in builds
@@ -94,7 +124,7 @@ def next_build(api, app_id):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=["inspect", "update-metadata", "next-build", "upload-library"])
+    parser.add_argument("operation", choices=["inspect", "update-metadata", "next-build", "upload-library", "update-whats-new"])
     parser.add_argument("--draft-version", default="", help="明确授权创建的商店草稿版本")
     args = parser.parse_args()
     api = AppleAPI()
@@ -112,6 +142,13 @@ def main():
         updated = update_metadata(api, state)
         (report / "metadata-verified.json").write_text(json.dumps(updated, ensure_ascii=False, indent=2), encoding="utf-8")
         print("三语言名称与副标题回读通过：", json.dumps(updated, ensure_ascii=False), flush=True)
+    elif args.operation == "update-whats-new":
+        campaign = json.loads(Path("marketing/file-send-2026-10-26/localizations/1.0.2.json").read_text(encoding="utf-8"))
+        if campaign["version"] != "1.0.2":
+            raise ValueError("更新说明版本不匹配")
+        updated = update_whats_new(api, state, campaign["whatsNew"])
+        (report / "whats-new-verified.json").write_text(json.dumps(updated, ensure_ascii=False, indent=2), encoding="utf-8")
+        print("新增内容已保存并回读：", json.dumps(updated, ensure_ascii=False), flush=True)
     elif args.operation == "next-build":
         version = next_build(api, state["app"]["id"])
         with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as stream:
