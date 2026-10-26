@@ -14,6 +14,8 @@ APP = "6806107359"
 ROOT = Path(__file__).resolve().parents[1]
 FOLDER = ROOT / "marketing/app-store-2026-10-24/iphone-65"
 EDITABLE = {"PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED"}
+CAMPAIGN_FOLDER = Path("marketing/app-store-2026-10-24")
+CAMPAIGN_REFERENCE = "爱乐之城 20261024"
 
 
 def screenshot_group(filename):
@@ -112,7 +114,7 @@ def validate_image(path):
 def upload_library(api):
     library = api.call(f"apps/{APP}/assetLibrary")["data"]["id"]
     specs = api.call("appAssetLibraryRefData")["data"][0]["attributes"]["imageSpecs"]
-    folder = ROOT / "marketing/app-store-2026-10-24"
+    folder = ROOT / CAMPAIGN_FOLDER
     manifest = json.loads((folder / "文件验收清单.json").read_text(encoding="utf-8"))
     existing = api.list_all(f"appAssetLibraries/{library}/images?limit=200")
     names = {item["attributes"]["fileName"]: item for item in existing}
@@ -126,7 +128,7 @@ def upload_library(api):
         if not matched:
             raise ValueError(f"Apple 规格中未找到此尺寸：{width}x{height}")
         filename = entry["file"].replace("/", "-")
-        reference = f"爱乐之城 20261024 {entry['title']} {width}x{height} {entry['sha256'][:12]}"
+        reference = f"{CAMPAIGN_REFERENCE} {entry['title']} {width}x{height} {entry['sha256'][:12]}"
         item = names.get(filename)
         if item:
             if item["attributes"].get("referenceName") != reference:

@@ -158,7 +158,7 @@ public final class LocalSendReceiver: @unchecked Sendable {
                 try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try request.body.write(to: target, options: .atomic)
                 TransferStorage.mirrorForMusicPlayer(target, relativePath: Self.transferFolderName() + "/" + target.lastPathComponent)
-                let savedDescription = "已保存到文件 > fileSend > \(Self.transferFolderName())"
+                let savedDescription = "已保存到文件 > file send > \(Self.transferFolderName())"
                 let received = ReceivedTransferFile(id: fileID, fileName: target.lastPathComponent,
                                                     size: Int64(request.body.count), savedDescription: savedDescription, url: target)
                 DiagnosticLog.write("Incoming upload saved: session=\(sessionID); file=\(received.fileName); bytes=\(received.size); destination=\(savedDescription).")

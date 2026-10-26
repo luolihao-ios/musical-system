@@ -1,2 +1,2 @@
-"CFBundleDisplayName" = "fileSend";
-"NSLocalNetworkUsageDescription" = "fileSend needs local network access to discover and connect to nearby devices you choose.";
+"CFBundleDisplayName" = "file send";
+"NSLocalNetworkUsageDescription" = "file send needs local network access to discover and connect to nearby devices you choose.";

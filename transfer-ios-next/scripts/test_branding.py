@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""fileSend 品牌显示回归检查。"""
+"""file send 品牌显示回归检查。"""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -12,12 +12,12 @@ def text(path: Path) -> str:
 
 def main() -> None:
     plist = text(APP / "Info.plist")
-    assert "<string>fileSend</string>" in plist, "默认 App 显示名必须为 fileSend"
-    assert "fileSend needs local network access" in plist, "默认局域网权限文案必须使用 fileSend"
+    assert "<string>file send</string>" in plist, "默认 App 显示名必须为 file send"
+    assert "file send needs local network access" in plist, "默认局域网权限文案必须使用 file send"
 
     for language in ("en", "zh-Hans", "zh-Hant"):
         info = text(APP / "Resources" / f"{language}.lproj" / "InfoPlist.strings")
-        assert '"CFBundleDisplayName" = "fileSend";' in info, f"{language} 显示名必须为 fileSend"
+        assert '"CFBundleDisplayName" = "file send";' in info, f"{language} 显示名必须为 file send"
 
     visible_files = [
         APP / "Features" / "TransferView.swift",

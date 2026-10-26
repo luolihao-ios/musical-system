@@ -72,7 +72,7 @@ final class BrowserTransferServer: @unchecked Sendable {
         var reserved: String?
         client.authorize = { [weak self, weak client] request in
             guard let self else { return false }
-            if request.method == "GET", ["/", "/app.js", "/style.css"].contains(request.path) { return request.length == 0 }
+            if request.method == "GET", WebStaticAssets.filename(for: request.path) != nil { return request.length == 0 }
             if let origin = request.headers["origin"], origin != "http://" + (request.headers["host"] ?? "") { return false }
             if request.path == "/web/session", request.method == "POST" { return request.length <= 1024 && self.attempts < 30 }
             let cookies = request.headers["cookie"]?.components(separatedBy: ";").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
@@ -116,8 +116,7 @@ final class BrowserTransferServer: @unchecked Sendable {
     func clearOutbound() { queue.async { try? self.outboundStore.list("").filter { !$0.directory }.forEach { try? FileManager.default.removeItem(at: try self.outboundStore.resolve($0.path)) }; self.outboundStates.removeAll(); self.outboundProgress.removeAll(); self.outboundPublished = false } }
     private func route(_ request: WebRequest, body: URL, client: WebHTTPConnection) {
         do {
-            if request.method == "GET", ["/", "/app.js", "/style.css"].contains(request.path) {
-                let name = request.path == "/" ? "index.html" : String(request.path.dropFirst())
+            if request.method == "GET", let name = WebStaticAssets.filename(for: request.path) {
                 guard let url = Bundle.main.url(forResource: name, withExtension: nil, subdirectory: "WebAssets") ?? Bundle.main.url(forResource: name, withExtension: nil) else { throw WebFailure.invalidRequest }
                 client.reply(200, data: try Data(contentsOf: url), type: name.hasSuffix("html") ? "text/html; charset=utf-8" : name.hasSuffix("js") ? "application/javascript" : "text/css"); return
             }

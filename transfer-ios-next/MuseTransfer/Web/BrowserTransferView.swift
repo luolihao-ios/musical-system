@@ -13,6 +13,9 @@ import CoreTransferable
     @Published var outboundCompleted = false
     private var server: BrowserTransferServer?
     func start() {
+        #if DEBUG
+        if let page = Self.storeCapturePage { loadStoreCapture(page); return }
+        #endif
         address = ""; code = ""; error = ""; upload = nil
         TransferStorage.normalize()
         DiagnosticLog.reset()
@@ -37,6 +40,33 @@ import CoreTransferable
     func publishOutbound() { outboundCompleted = false; outboundProgress = [:]; server?.publishOutbound() }
     func clearOutbound() { outboundFiles = []; outboundProgress = [:]; outboundCompleted = false; server?.clearOutbound() }
     var outboundRoot: URL { FileManager.default.temporaryDirectory.appendingPathComponent("AiYueBrowserOutbound", isDirectory: true) }
+
+    #if DEBUG
+    static var storeCapturePage: String? {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "--file-send-store-page"), arguments.indices.contains(index + 1) else { return nil }
+        return arguments[index + 1]
+    }
+
+    private func loadStoreCapture(_ page: String) {
+        address = "http://192.168.1.23:8080"
+        code = "826451"
+        let files = [WebUploadFile(id: "photo", name: "旅行照片.zip", size: 48_200_000),
+                     WebUploadFile(id: "notes", name: "会议记录.pdf", size: 2_400_000),
+                     WebUploadFile(id: "audio", name: "我的音乐.mp3", size: 7_800_000)]
+        if page == "receive" || page == "completed" {
+            var batch = WebUpload(id: "store-demo", files: files, folder: "2026-10-26")
+            batch.state = page == "completed" ? "completed" : "accepted"
+            for file in files {
+                batch.progress[file.id] = page == "completed" ? file.size : file.size / 2
+                if page == "completed" { batch.saved[file.id] = "2026-10-26/" + file.name }
+            }
+            upload = batch
+        } else if page == "send" || page == "edit" {
+            outboundFiles = files.map { BrowserOutboundTask(id: $0.id, name: $0.name, bytes: $0.size, url: "/tmp/" + $0.name) }
+        }
+    }
+    #endif
 }
 
 struct BrowserTransferView: View {
@@ -60,23 +90,24 @@ struct BrowserTransferView: View {
                 if model.address.isEmpty { Text(model.error.isEmpty ? String(localized: "正在启动网页服务…") : model.error) }
                 else {
                     Text(model.address).font(.title2.monospaced()).textSelection(.enabled)
+                        .lineLimit(2).minimumScaleFactor(0.7).accessibilityIdentifier("transfer.address")
                     Text(String(format: String(localized: "访问码：%@"), model.code)).font(.title.bold())
                 }
                 Text("不要关闭此应用。请保持此页面打开，切换到后台后服务会关闭。").foregroundStyle(.secondary)
-                Text("文件保存到：文件 › 我的 iPhone › fileSend › 按日期分类").font(.footnote)
+                Text("文件保存到：文件 › 我的 iPhone › file send › 按日期分类").font(.footnote)
                 Picker("传输方向", selection: $tab) {
                     ForEach(Tab.allCases) { Text($0.localizedTitle).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 if tab == .send {
-                    HStack {
-                        Button("添加手机文件发送给电脑") { importing = true }
-                        PhotosPicker(selection: $photos, maxSelectionCount: 50, matching: .any(of: [.images, .videos])) { Text("添加媒体") }
+                    ViewThatFits(in: .horizontal) {
+                        HStack { selectionActions }
+                        VStack(alignment: .leading) { selectionActions }
                     }.buttonStyle(.bordered)
                     if !importMessage.isEmpty { Text(importMessage).foregroundStyle(.secondary) }
                     if !model.outboundFiles.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
-                            HStack { Text("发送给电脑").font(.headline); Spacer(); Button(editingOutbound ? "完成" : "编辑") { editingOutbound.toggle() } }
+                            HStack { Text("发送给电脑").font(.headline); Spacer(); Button(editingOutbound ? "完成" : "编辑") { editingOutbound.toggle() }.accessibilityIdentifier("transfer.edit") }
                             ForEach(model.outboundFiles) { file in
                                 HStack {
                                     Image(systemName: "doc").foregroundStyle(.indigo)
@@ -86,7 +117,7 @@ struct BrowserTransferView: View {
                                 }
                             }
                         }
-                        Button(model.outboundCompleted ? "完成" : "发送给电脑") { model.outboundCompleted ? model.clearOutbound() : model.publishOutbound() }.buttonStyle(.borderedProminent)
+                        Button(model.outboundCompleted ? "完成" : "发送给电脑") { model.outboundCompleted ? model.clearOutbound() : model.publishOutbound() }.buttonStyle(.borderedProminent).accessibilityIdentifier("transfer.send")
                     .padding().background(.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
                     }
                 }
@@ -101,7 +132,7 @@ struct BrowserTransferView: View {
                                 Text(file.name).lineLimit(2)
                                 Text(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file)).font(.caption)
                                 if let path = batch.saved[file.id] {
-                                    Text(String(format: String(localized: "已保存到文件 › fileSend / %@"), path)).font(.caption).foregroundStyle(.green)
+                                    Text(String(format: String(localized: "已保存到文件 › file send / %@"), path)).font(.caption).foregroundStyle(.green)
                                     if path.lowercased().hasSuffix(".aiyuepack") { ShareLink("导入爱乐之城", item: sharedRoot.appendingPathComponent(path)) }
                                 }
                                 else { Text((batch.progress[file.id] ?? 0) > 0 ? "正在接收…" : "等待接收").font(.caption).foregroundStyle(.secondary) }
@@ -119,7 +150,11 @@ struct BrowserTransferView: View {
             .frame(maxWidth: 1_160, alignment: .leading)
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
-        }.navigationTitle("浏览器传文件").tint(.indigo)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+        .accessibilityIdentifier("transfer.content")
+        .navigationTitle("浏览器传文件").tint(.indigo)
         .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             do {
                     let store = try WebFileStore(root: model.outboundRoot)
@@ -151,8 +186,18 @@ struct BrowserTransferView: View {
             } catch { importMessage = error.localizedDescription }
             photos = []
         } }
-        .onAppear { model.start() }.onDisappear { model.stop() }
+        .onAppear {
+            #if DEBUG
+            if let page = BrowserTransferModel.storeCapturePage { tab = ["send", "edit"].contains(page) ? .send : .receive; editingOutbound = page == "edit" }
+            #endif
+            model.start()
+        }.onDisappear { model.stop() }
         .onChange(of: scenePhase) { _, phase in if phase == .active { model.start() } else if phase == .background { model.stop() } }
+    }
+    @ViewBuilder private var selectionActions: some View {
+        Button("添加手机文件发送给电脑") { importing = true }
+            .accessibilityIdentifier("transfer.addFiles")
+        PhotosPicker(selection: $photos, maxSelectionCount: 50, matching: .any(of: [.images, .videos])) { Text("添加媒体") }
     }
     private var sharedRoot: URL { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0] }
     private func stateLabel(_ value: String) -> String {

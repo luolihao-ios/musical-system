@@ -12,8 +12,8 @@ struct TransferView: View {
             VStack(alignment: .leading, spacing: 18) {
                 BrowserTransferView()
             }
-            .padding()
-            .navigationTitle("fileSend")
+            .navigationTitle("file send")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { ShareLink(item: DiagnosticLog.fileURL) { Image(systemName: "stethoscope") }.accessibilityLabel("导出诊断日志") } }
         }
         .fileImporter(isPresented: $model.showImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { model.select($0) }

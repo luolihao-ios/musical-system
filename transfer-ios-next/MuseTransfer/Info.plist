@@ -7,7 +7,7 @@
     <key>CFBundleLocalizations</key>
     <array><string>en</string><string>zh-Hans</string><string>zh-Hant</string></array>
     <key>CFBundleDisplayName</key>
-    <string>fileSend</string>
+    <string>file send</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -33,7 +33,7 @@
         <string>_aiyue._tcp</string>
     </array>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>fileSend needs local network access to discover and connect to nearby devices you choose.</string>
+    <string>file send needs local network access to discover and connect to nearby devices you choose.</string>
     <key>UIApplicationSupportsIndirectInputEvents</key>
     <true/>
     <key>UILaunchScreen</key>
