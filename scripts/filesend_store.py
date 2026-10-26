@@ -8,9 +8,18 @@ from app_store_screenshots import AppleAPI, EDITABLE
 
 BUNDLE = "com.luolihao.aiyuetransfer"
 LABELS = {
-    "zh-Hans": {"name": "file send", "subtitle": "手机电脑双向互传，局域网轻松传文件"},
-    "zh-Hant": {"name": "file send", "subtitle": "手機電腦雙向互傳，區域網路輕鬆傳檔"},
-    "en-US": {"name": "file send", "subtitle": "Wi-Fi file transfer, made easy"},
+    "en-US": {
+        "name": "ios file send",
+        "subtitle": "WiFi file transfer&ios deliver"
+    },
+    "zh-Hant": {
+        "name": "ios 文件傳輸助手",
+        "subtitle": "手機電腦雙向互傳，區域網路輕鬆傳檔"
+    },
+    "zh-Hans": {
+        "name": "ios文件传输助手",
+        "subtitle": "手机电脑双向互传，局域网轻松传文件"
+    }
 }
 
 
@@ -124,7 +133,7 @@ def main():
         assets.APP = state["app"]["id"]
         assets.CAMPAIGN_FOLDER = Path("marketing/file-send-2026-10-26")
         assets.CAMPAIGN_REFERENCE = "file send 20261026"
-        assets.upload_library(api)
+        assets.upload_library(api, target_locales=("en-US", "zh-Hans", "zh-Hant"))
 
 
 if __name__ == "__main__":

@@ -1,2 +1,3 @@
-"CFBundleDisplayName" = "file send";
+"CFBundleDisplayName" = "ios file send";
+"CFBundleName" = "ios file send";
 "NSLocalNetworkUsageDescription" = "file send 需要访问局域网，以发现并连接您确认的附近设备。";

@@ -76,6 +76,54 @@ class StoreArtworkTests(unittest.TestCase):
         self.assertIn("filter[placementGroup]=IPAD_13_PROFILE", api.path)
         self.assertIn("sort=placementGroupPosition", api.path)
 
+    def test_upload_selects_all_requested_store_localizations_in_order(self):
+        locales = [{"id": key, "attributes": {"locale": key}} for key in ("zh-Hant", "en-US", "zh-Hans")]
+        result = store.select_upload_locales(locales, ("en-US", "zh-Hans", "zh-Hant"))
+        self.assertEqual([item["id"] for item in result], ["en-US", "zh-Hans", "zh-Hant"])
+
+    def test_upload_rejects_missing_localization_before_placing_any_assets(self):
+        with self.assertRaisesRegex(ValueError, "zh-Hant"):
+            store.select_upload_locales([{"id": "en", "attributes": {"locale": "en-US"}}], ("en-US", "zh-Hant"))
+
+    def test_repeated_placement_is_idempotent_and_keeps_locale_isolation(self):
+        class API:
+            def __init__(self):
+                self.items = {}
+                self.created = 0
+            def list_all(self, path):
+                locale_id = path.split("/")[1]
+                items = self.items.setdefault(locale_id, [])
+                if "filter[placementGroup]=" in path:
+                    group = path.split("filter[placementGroup]=")[1].split("&")[0]
+                    return [item for item in items if item["attributes"]["placementGroup"] == group]
+                return list(items)
+            def call(self, path, method, payload):
+                data = payload["data"]
+                locale_id = data["relationships"]["appStoreVersionLocalization"]["data"]["id"]
+                items = self.items.setdefault(locale_id, [])
+                if path == "appAssetLibraryPlacements":
+                    self.created += 1
+                    placed = {"id": str(self.created), "attributes": data["attributes"], "relationships": {"image": data["relationships"]["image"]}}
+                    items.append(placed)
+                    return {"data": placed}
+                if path == "appAssetLibraryPlacementOrderingRequests":
+                    ids = [item["id"] for item in data["relationships"]["orderedPlacements"]["data"]]
+                    lookup = {item["id"]: item for item in items}
+                    self.items[locale_id] = [lookup[key] for key in ids] + [item for item in items if item["id"] not in ids]
+                    return {}
+                raise AssertionError(path)
+        api = API()
+        selected = [({"file": "iphone-medium/1.png"}, "image-1"), ({"file": "ipad-13/1.png"}, "image-2")]
+        for language in ("en-US", "zh-Hans", "zh-Hant"):
+            locale = {"id": language, "attributes": {"locale": language}}
+            first = store.place_library_images(api, locale, selected)
+            second = store.place_library_images(api, locale, selected)
+            self.assertEqual(first, second)
+            self.assertEqual(first["placementsVerified"], 2)
+            self.assertFalse(first["missingPlacements"])
+            self.assertTrue(all(first["orderVerified"].values()))
+        self.assertEqual(api.created, 6)
+
     def test_all_campaign_files_pass_manifest_validation(self):
         folder = store.ROOT / "marketing/app-store-2026-10-24"
         manifest = json.loads((folder / "文件验收清单.json").read_text(encoding="utf-8"))

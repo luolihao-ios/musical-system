@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """file send 品牌显示回归检查。"""
 from pathlib import Path
+import plistlib
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "MuseTransfer"
@@ -12,12 +13,15 @@ def text(path: Path) -> str:
 
 def main() -> None:
     plist = text(APP / "Info.plist")
-    assert "<string>file send</string>" in plist, "默认 App 显示名必须为 file send"
+    metadata = plistlib.loads(plist.encode("utf-8"))
+    assert metadata["CFBundleDisplayName"] == "ios file send", "默认显示名必须匹配商店英文标题"
+    assert metadata["CFBundleName"] == "ios file send", "Bundle Name 必须匹配商店英文标题"
     assert "file send needs local network access" in plist, "默认局域网权限文案必须使用 file send"
 
     for language in ("en", "zh-Hans", "zh-Hant"):
         info = text(APP / "Resources" / f"{language}.lproj" / "InfoPlist.strings")
-        assert '"CFBundleDisplayName" = "file send";' in info, f"{language} 显示名必须为 file send"
+        assert '"CFBundleDisplayName" = "ios file send";' in info, f"{language} 显示名必须匹配英文标题"
+        assert '"CFBundleName" = "ios file send";' in info, f"{language} Bundle Name 必须匹配英文标题"
 
     visible_files = [
         APP / "Features" / "TransferView.swift",

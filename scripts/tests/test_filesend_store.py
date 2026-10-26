@@ -31,8 +31,10 @@ class FileSendStoreTests(unittest.TestCase):
 
     def test_store_labels_fit_apple_limits(self):
         self.assertEqual(set(LABELS), {"en-US", "zh-Hans", "zh-Hant"})
+        self.assertEqual(LABELS["en-US"]["name"], "ios file send")
         for value in LABELS.values():
-            self.assertEqual(value["name"], "file send")
+            self.assertTrue(value["name"])
+            self.assertLessEqual(len(value["name"]), 30)
             self.assertLessEqual(len(value["subtitle"]), 30)
 
     def test_draft_creation_requires_explicit_authorized_version(self):

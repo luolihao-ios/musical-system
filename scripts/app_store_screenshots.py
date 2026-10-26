@@ -111,7 +111,60 @@ def validate_image(path):
     return data
 
 
-def upload_library(api):
+def select_upload_locales(locales, required):
+    mapped = {item["attributes"]["locale"]: item for item in locales}
+    missing = [name for name in required if name not in mapped]
+    if missing:
+        raise ValueError("产品页缺少请求的语言：" + ", ".join(missing))
+    return [mapped[name] for name in required]
+
+
+def place_library_images(api, locale, selected):
+    placements = list_placements(api, locale["id"])
+    expected = []
+    for entry, identity in selected:
+        requests = [("APP_SCREENSHOT", screenshot_group(entry["file"]))] if entry.get("category") != "CREATIVE_ASSETS" else [
+            (entry["placementType"], "DEFAULT_PROFILE")]
+        for kind, group in requests:
+            expected.append((kind, group, identity))
+            in_group = [p for p in placements if p["attributes"]["placementType"] == kind and p["attributes"]["placementGroup"] == group]
+            if any(image_identity(p) == identity for p in in_group):
+                continue
+            if len(in_group) >= (10 if kind == "APP_SCREENSHOT" else 1):
+                print("保留已有素材，位置已满：", kind, group, flush=True)
+                continue
+            placed = api.call("appAssetLibraryPlacements", "POST", {"data": {"type": "appAssetLibraryPlacements",
+                "attributes": {"placementType": kind, "placementGroup": group}, "relationships": {
+                    "image": {"data": {"type": "appAssetLibraryImages", "id": identity}},
+                    "appStoreVersionLocalization": {"data": {"type": "appStoreVersionLocalizations", "id": locale["id"]}}}}})["data"]
+            placements.append(placed)
+            print("已设置展示位置：", kind, group, entry["file"], flush=True)
+    # 新宣传图优先展示，旧素材仍保留在后面；不移除已有预览视频。
+    order_expected = {}
+    for group in dict.fromkeys(group for kind, group, _ in expected if kind == "APP_SCREENSHOT"):
+        in_group = list_placements(api, locale["id"], group)
+        new_images = [identity for kind, target, identity in expected if kind == "APP_SCREENSHOT" and target == group]
+        new_placements = [p for identity in new_images for p in in_group if image_identity(p) == identity]
+        old_placements = [p for p in in_group if image_identity(p) not in new_images]
+        ordered = new_placements + old_placements
+        order_expected[group] = [p["id"] for p in ordered]
+        api.call("appAssetLibraryPlacementOrderingRequests", "POST", {"data": {
+            "type": "appAssetLibraryPlacementOrderingRequests", "attributes": {"placementGroup": group},
+            "relationships": {"orderedPlacements": {"data": [{"type": "appAssetLibraryPlacements", "id": p["id"]} for p in ordered]},
+                "appStoreVersionLocalization": {"data": {"type": "appStoreVersionLocalizations", "id": locale["id"]}}}}})
+    confirmed = list_placements(api, locale["id"])
+    actual = {(p["attributes"]["placementType"], p["attributes"]["placementGroup"], image_identity(p)) for p in confirmed}
+    missing = [item for item in expected if item not in actual]
+    order_verified = {}
+    for group, ordered in order_expected.items():
+        actual_order = list_placements(api, locale["id"], group)
+        order_verified[group] = [p["id"] for p in actual_order] == ordered
+    return {"locale": locale["attributes"]["locale"], "localizationId": locale["id"],
+        "placementsVerified": len(expected) - len(missing), "missingPlacements": missing,
+        "orderVerified": order_verified}
+
+
+def upload_library(api, target_locales=("zh-Hans",)):
     library = api.call(f"apps/{APP}/assetLibrary")["data"]["id"]
     specs = api.call("appAssetLibraryRefData")["data"][0]["attributes"]["imageSpecs"]
     folder = ROOT / CAMPAIGN_FOLDER
@@ -163,55 +216,17 @@ def upload_library(api):
     if len(editable) != 1:
         raise RuntimeError("素材库上传成功；没有唯一可编辑版本，未设置展示位置")
     locales = api.call(f"appStoreVersions/{editable[0]['id']}/appStoreVersionLocalizations?limit=50")["data"]
-    locale = next(v for v in locales if v["attributes"]["locale"] == "zh-Hans")
-    placements = list_placements(api, locale["id"])
-    expected = []
-    for entry, identity in selected:
-        requests = [("APP_SCREENSHOT", screenshot_group(entry["file"]))] if entry.get("category") != "CREATIVE_ASSETS" else [
-            (entry["placementType"], "DEFAULT_PROFILE")]
-        for kind, group in requests:
-            expected.append((kind, group, identity))
-            in_group = [p for p in placements if p["attributes"]["placementType"] == kind and p["attributes"]["placementGroup"] == group]
-            if any(image_identity(p) == identity for p in in_group):
-                continue
-            if len(in_group) >= (10 if kind == "APP_SCREENSHOT" else 1):
-                print("保留已有素材，位置已满：", kind, group, flush=True)
-                continue
-            placed = api.call("appAssetLibraryPlacements", "POST", {"data": {"type": "appAssetLibraryPlacements",
-                "attributes": {"placementType": kind, "placementGroup": group}, "relationships": {
-                    "image": {"data": {"type": "appAssetLibraryImages", "id": identity}},
-                    "appStoreVersionLocalization": {"data": {"type": "appStoreVersionLocalizations", "id": locale["id"]}}}}})["data"]
-            placements.append(placed)
-            print("已设置展示位置：", kind, group, entry["file"], flush=True)
-    # 新宣传图优先展示，旧素材仍保留在后面；不移除已有预览视频。
-    order_expected = {}
-    for group in dict.fromkeys(group for kind, group, _ in expected if kind == "APP_SCREENSHOT"):
-        in_group = list_placements(api, locale["id"], group)
-        new_images = [identity for kind, target, identity in expected if kind == "APP_SCREENSHOT" and target == group]
-        new_placements = [p for identity in new_images for p in in_group if image_identity(p) == identity]
-        old_placements = [p for p in in_group if image_identity(p) not in new_images]
-        ordered = new_placements + old_placements
-        order_expected[group] = [p["id"] for p in ordered]
-        api.call("appAssetLibraryPlacementOrderingRequests", "POST", {"data": {
-            "type": "appAssetLibraryPlacementOrderingRequests", "attributes": {"placementGroup": group},
-            "relationships": {"orderedPlacements": {"data": [{"type": "appAssetLibraryPlacements", "id": p["id"]} for p in ordered]},
-                "appStoreVersionLocalization": {"data": {"type": "appStoreVersionLocalizations", "id": locale["id"]}}}}})
-    confirmed = list_placements(api, locale["id"])
-    actual = {(p["attributes"]["placementType"], p["attributes"]["placementGroup"], image_identity(p)) for p in confirmed}
-    missing = [item for item in expected if item not in actual]
-    order_verified = {}
-    for group, ordered in order_expected.items():
-        actual_order = list_placements(api, locale["id"], group)
-        order_verified[group] = [p["id"] for p in actual_order] == ordered
-    report = {"app": APP, "version": editable[0]["attributes"]["versionString"], "locale": "zh-Hans",
-        "libraryImagesVerified": len(selected), "placementsVerified": len(expected) - len(missing),
-        "missingPlacements": missing, "orderVerified": order_verified, "submittedForReview": False}
+    reports = [place_library_images(api, locale, selected) for locale in select_upload_locales(locales, target_locales)]
+    report = {"app": APP, "version": editable[0]["attributes"]["versionString"],
+        "libraryImagesVerified": len(selected), "localizations": reports,
+        "placementsVerified": sum(item["placementsVerified"] for item in reports),
+        "submittedForReview": False}
     target = ROOT / ".api-inspection"
     target.mkdir(exist_ok=True)
     (target / "upload-verification.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print("回读验收：", json.dumps(report, ensure_ascii=False), flush=True)
-    if missing or not all(order_verified.values()):
-        raise RuntimeError("素材已在库中，但部分展示位置未设置；保留原素材，没有提交审核")
+    if any(item["missingPlacements"] or not all(item["orderVerified"].values()) for item in reports):
+        raise RuntimeError("素材已在库中，但部分语言的展示位置未设置；没有提交审核")
 
 
 def main(mode):

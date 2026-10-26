@@ -1,2 +1,3 @@
-"CFBundleDisplayName" = "file send";
+"CFBundleDisplayName" = "ios file send";
+"CFBundleName" = "ios file send";
 "NSLocalNetworkUsageDescription" = "file send needs local network access to discover and connect to nearby devices you choose.";
