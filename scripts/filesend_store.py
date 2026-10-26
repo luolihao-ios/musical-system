@@ -109,6 +109,17 @@ def main():
             stream.write(f"FILE_SEND_BUILD={version}\n")
         print(f"本次构建号：{version}", flush=True)
     elif args.operation == "upload-library":
+        targets = [item for item in state["versions"] if item["attributes"]["appStoreState"] in EDITABLE]
+        if len(targets) != 1 or targets[0]["attributes"]["versionString"] != "1.0.2":
+            raise ValueError("仅授权上传到 file send 的 1.0.2 可编辑草稿")
+        campaign = Path("marketing/file-send-2026-10-26")
+        entries = json.loads((campaign / "文件验收清单.json").read_text(encoding="utf-8"))
+        groups = {group: sum(item["file"].startswith(group + "/") for item in entries)
+                  for group in ("iphone-medium", "iphone-duo", "ipad-13", "creative")}
+        if len(entries) != 15 or groups != {"iphone-medium": 5, "iphone-duo": 4, "ipad-13": 4, "creative": 2}:
+            raise ValueError("全套必须有五张 iPhone、四张 Duo、四张 iPad 和两张独立宣传图")
+        if not all(item.get("actualScreenshotPixelVerified") for item in entries):
+            raise ValueError("存在未通过实际界面像素验收的素材")
         import app_store_screenshots as assets
         assets.APP = state["app"]["id"]
         assets.CAMPAIGN_FOLDER = Path("marketing/file-send-2026-10-26")

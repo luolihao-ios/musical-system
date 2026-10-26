@@ -1,0 +1,202 @@
+[
+  {
+    "file": "iphone-medium/01-filesend-20261026-connect.png",
+    "page": "connect",
+    "width": 1206,
+    "height": 2622,
+    "sha256": "7df642e0d5e96aecb532243b65c1edcc98202d6d60602e07f47db3a854621cf2",
+    "sourceScreenshotSha256": "7ca53c120deedf830d752b4ca97a5247ad2da290c6209686dcc9f739e8feb078",
+    "actualScreenshotPixelVerified": true,
+    "screenBounds": {
+      "left": 181,
+      "top": 721,
+      "width": 844,
+      "height": 1835
+    },
+    "title": "手机电脑，轻松互传"
+  },
+  {
+    "file": "iphone-medium/02-filesend-20261026-receive.png",
+    "page": "receive",
+    "width": 1206,
+    "height": 2622,
+    "sha256": "d8d875c558769ca4a034e5f74bbbd705babbd3a429c10d6f0272129fa9d43955",
+    "sourceScreenshotSha256": "6045abb3c2f10d7a8ce5eb67813503a8ad539821c395f43dac6e09a19971ba6c",
+    "actualScreenshotPixelVerified": true,
+    "screenBounds": {
+      "left": 181,
+      "top": 721,
+      "width": 844,
+      "height": 1835
+    },
+    "title": "批量接收，进度清晰"
+  },
+  {
+    "file": "iphone-medium/03-filesend-20261026-send.png",
+    "page": "send",
+    "width": 1206,
+    "height": 2622,
+    "sha256": "ae08ed972d68e21ae9ce9b07545f6739a352586c49c2b50f6d5e6e2f7618c5ff",
+    "sourceScreenshotSha256": "cc5ed2d20050274b62dd2eb63276b6fc1998ad3c22d9afc857182aed1018de90",
+    "actualScreenshotPixelVerified": true,
+    "screenBounds": {
+      "left": 181,
+      "top": 721,
+      "width": 844,
+      "height": 1835
+    },
+    "title": "手机文件，发送到电脑"
+  },
+  {
+    "file": "iphone-medium/04-filesend-20261026-edit.png",
+    "page": "edit",
+    "width": 1206,
+    "height": 2622,
+    "sha256": "f17d74155f0ee5d7a61653f461080377f7a5d6501cc6e1a6a124120db544d63b",
+    "sourceScreenshotSha256": "e695dc9cf464fd512e1ba0b8ebb1dd1415cf739fbd15a1255256f3faced56571",
+    "actualScreenshotPixelVerified": true,
+    "screenBounds": {
+      "left": 181,
+      "top": 721,
+      "width": 844,
+      "height": 1835
+    },
+    "title": "发送前，随时整理"
+  },
+  {
+    "file": "iphone-medium/05-filesend-20261026-completed.png",
+    "page": "completed",
+    "width": 1206,
+    "height": 2622,
+    "sha256": "352aa95ee411dbb7ccee1be0a427dd06b84612bbaad79119c5ff59c2e43c5eab",
+    "sourceScreenshotSha256": "02e3e62cc9b2ee41437843e5f57e51b46e68d37ce07e65d73bb1eb727af45160",
+    "actualScreenshotPixelVerified": true,
+    "screenBounds": {
+      "left": 181,
+      "top": 721,
+      "width": 844,
+      "height": 1835
+    },
+    "title": "传输完成，有序保存"
+  },
+  {
+    "file": "ipad-13/01-filesend-20261027-connect.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "手机电脑，轻松互传",
+    "sha256": "626efa1503310db1a2f661687034fabccd8dcc4dd39f939c4db6a552822ce7d2",
+    "actualScreenshotPixelVerified": true,
+    "sourceScreenshot": "sources/actual/ipad/connect.png",
+    "sourceScreenshotSha256": "b8bd9c05e6418d3639b60662d1817ae68e1751655f0985f596f2766044d51479"
+  },
+  {
+    "file": "ipad-13/02-filesend-20261027-receive.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "批量接收，进度清晰",
+    "sha256": "5137168201963fd50b1c55924cd7481331782f61db7e7128d288814341a20460",
+    "actualScreenshotPixelVerified": true,
+    "sourceScreenshot": "sources/actual/ipad/receive.png",
+    "sourceScreenshotSha256": "e5d6e8b94049ffd2b1dd117f0e6fce27805db625ed1c6bc84b681def88c33f66"
+  },
+  {
+    "file": "ipad-13/03-filesend-20261027-send.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "手机文件，发送到电脑",
+    "sha256": "7be49530d7465f8206ed8c1f25f0c2c80b3c67189f816540c61c82f82ce13486",
+    "actualScreenshotPixelVerified": true,
+    "sourceScreenshot": "sources/actual/ipad/send.png",
+    "sourceScreenshotSha256": "1d5cf4f558e4db98c4185cde709b3e4a9cead0f38533fb1e93aa118fcd852360"
+  },
+  {
+    "file": "ipad-13/04-filesend-20261027-edit.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "发送前，随时整理",
+    "sha256": "47593176daf270c5f176320a37e2c6f11cac8064cabc451f1f83cad9b7a98aba",
+    "actualScreenshotPixelVerified": true,
+    "sourceScreenshot": "sources/actual/ipad/edit.png",
+    "sourceScreenshotSha256": "12ffec7dae20134f495641b974c5260558c50deb49e0811ea61718846ab3b7af"
+  },
+  {
+    "file": "iphone-duo/01-filesend-20261027-connect.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "手机电脑，轻松互传",
+    "sha256": "b517e7b0774d6d4ff026066481e55aeee1bbfa5b47c008ef3dbdc0db2f1a8516",
+    "actualScreenshotPixelVerified": true,
+    "sourceScreenshot": "sources/actual/duo/connect.png",
+    "sourceScreenshotSha256": "f21c5ed2fd51c9f2a3195fa4d62a450d6509557de1f14f6fd01102c5d8aecfba"
+  },
+  {
+    "file": "iphone-duo/02-filesend-20261027-receive.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "批量接收，进度清晰",
+    "sha256": "2f82e2fadb112d154755267b981094d62ce484b219a1be20c02c5c68d2c6b53c",
+    "actualScreenshotPixelVerified": true,
+    "sourceScreenshot": "sources/actual/duo/receive.png",
+    "sourceScreenshotSha256": "313a01c3b904ce9a7e9d8e2503f0a37aee1e6904211b23281d13ecd0c5e2cc04"
+  },
+  {
+    "file": "iphone-duo/03-filesend-20261027-send.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "手机文件，发送到电脑",
+    "sha256": "eeb29c44edbe571a7b3894f001fe461e75c4da92ae6173b9f1e275bb044342d4",
+    "actualScreenshotPixelVerified": true,
+    "sourceScreenshot": "sources/actual/duo/send.png",
+    "sourceScreenshotSha256": "9ee18e14f266054750ef827bc96499d851ce2eb3bbe2845761ff112e037ec7a7"
+  },
+  {
+    "file": "iphone-duo/04-filesend-20261027-edit.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "发送前，随时整理",
+    "sha256": "da72ee6a75a18b40c92df8ff3767958eb02ca3667460c6730f777cbfb7d3d69a",
+    "actualScreenshotPixelVerified": true,
+    "sourceScreenshot": "sources/actual/duo/edit.png",
+    "sourceScreenshotSha256": "ffae4d55e1a8b5da0ef8a9e2c1bc7246cdf042e168f485d0ea99c3b17f062c1f"
+  },
+  {
+    "file": "creative/filesend-20261027-header.png",
+    "width": 5244,
+    "height": 2950,
+    "title": "产品页页首图",
+    "category": "CREATIVE_ASSETS",
+    "placementType": "PRODUCT_PAGE_HEADER_ASSET",
+    "sha256": "c225d4d989fe53c70f2971c29e4be01ded8504eaa97f3c0e90df094f897d153f",
+    "actualScreenshotPixelVerified": true,
+    "sourceScreenshots": [
+      {
+        "file": "sources/actual/ipad/receive.png",
+        "sha256": "e5d6e8b94049ffd2b1dd117f0e6fce27805db625ed1c6bc84b681def88c33f66"
+      },
+      {
+        "file": "sources/actual/iphone/send.png",
+        "sha256": "cc5ed2d20050274b62dd2eb63276b6fc1998ad3c22d9afc857182aed1018de90"
+      }
+    ]
+  },
+  {
+    "file": "creative/filesend-20261027-search.png",
+    "width": 5244,
+    "height": 2950,
+    "title": "搜索结果图",
+    "category": "CREATIVE_ASSETS",
+    "placementType": "APP_STORE_SEARCH_RESULTS_ASSET",
+    "sha256": "1f1c27ce33f9e696e83d796aea3ba72d6f4b15d24c8b0701e4c438dcbbd560cf",
+    "actualScreenshotPixelVerified": true,
+    "sourceScreenshots": [
+      {
+        "file": "sources/actual/iphone/edit.png",
+        "sha256": "e695dc9cf464fd512e1ba0b8ebb1dd1415cf739fbd15a1255256f3faced56571"
+      },
+      {
+        "file": "sources/actual/iphone/receive.png",
+        "sha256": "6045abb3c2f10d7a8ce5eb67813503a8ad539821c395f43dac6e09a19971ba6c"
+      }
+    ]
+  }
+]

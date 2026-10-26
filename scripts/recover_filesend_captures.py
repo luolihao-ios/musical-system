@@ -32,7 +32,10 @@ def recover(source, destination, run_id, devices=("iphone", "ipad", "duo")):
             records.append({"device": device, "page": page, "file": str(target.relative_to(destination)),
                             "width": width, "height": height, "sourceRun": run_id,
                             "sha256": hashlib.sha256(data).hexdigest()})
-    (destination / "原图证据.json").write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+    evidence = destination / "原图证据.json"
+    prior = json.loads(evidence.read_text(encoding="utf-8")) if evidence.exists() else []
+    combined = [item for item in prior if item["device"] not in devices] + records
+    evidence.write_text(json.dumps(combined, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(records, ensure_ascii=False, indent=2))
 
 
