@@ -70,9 +70,30 @@ class FileSendStoreTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "fr-FR"):
             store.update_whats_new(API(), state, {"en-US": "Updates"})
 
+    def test_keywords_update_all_languages_and_preserve_other_version_fields(self):
+        class API:
+            def __init__(self):
+                self.patches = []
+                self.locales = [{"id": lang, "attributes": {"locale": lang, "description": "keep description", "whatsNew": "keep notes", "keywords": "old"}} for lang in ("en-US", "zh-Hans", "zh-Hant")]
+            def call(self, path, method="GET", payload=None):
+                if method == "GET":
+                    return {"data": deepcopy(self.locales)}
+                self.patches.append(payload)
+                item = next(item for item in self.locales if item["id"] == payload["data"]["id"])
+                item["attributes"].update(payload["data"]["attributes"])
+                return {"data": deepcopy(item)}
+        api = API()
+        state = {"versions": [{"id": "draft", "attributes": {"versionString": "1.0.2", "appStoreState": "PREPARE_FOR_SUBMISSION"}}]}
+        report = store.update_keywords(api, state)
+        self.assertEqual(report, store.KEYWORDS)
+        self.assertTrue(all(set(item["data"]["attributes"]) == {"keywords"} for item in api.patches))
+        self.assertTrue(all(item["attributes"]["whatsNew"] == "keep notes" for item in api.locales))
+        for keywords in report.values():
+            self.assertLessEqual(len(keywords.encode("utf-8")), 100)
+
     def test_store_labels_fit_apple_limits(self):
         self.assertEqual(set(LABELS), {"en-US", "zh-Hans", "zh-Hant"})
-        self.assertEqual(LABELS["en-US"]["name"], "ios file send")
+        self.assertEqual(LABELS["en-US"]["name"], "iYue File Transfer")
         for value in LABELS.values():
             self.assertTrue(value["name"])
             self.assertLessEqual(len(value["name"]), 30)

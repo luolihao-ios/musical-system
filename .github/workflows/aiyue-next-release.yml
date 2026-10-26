@@ -218,12 +218,27 @@ jobs:
           unzip -q transfer-ios-next/build/export/AiYueTransfer.ipa -d "$CHECK_DIR"
           APP_PATH=$(find "$CHECK_DIR/Payload" -maxdepth 1 -name '*.app' -print -quit)
           codesign -d --entitlements :- "$APP_PATH" > "$CHECK_DIR/entitlements.plist"
-          python3 - "$CHECK_DIR/entitlements.plist" <<'PY'
-          import plistlib, sys
+          python3 - "$CHECK_DIR/entitlements.plist" "$APP_PATH" <<'PY'
+          import plistlib, sys, subprocess
+          from pathlib import Path
+          sys.path.insert(0, "scripts")
+          from filesend_store import LABELS, BUNDLE
           with open(sys.argv[1], 'rb') as stream:
               entitlements = plistlib.load(stream)
           assert 'group.com.luolihao.aiyuetransfer' in entitlements.get('com.apple.security.application-groups', []), '成品包缺少 App Group 签名权限，停止上传'
-          print('成品包 App Group 签名权限验证通过')
+          app = Path(sys.argv[2])
+          with (app / 'Info.plist').open('rb') as stream:
+              info = plistlib.load(stream)
+          expected_name = LABELS['en-US']['name']
+          assert info['CFBundleIdentifier'] == BUNDLE, '成品包 Bundle ID 不匹配'
+          assert info['CFBundleDisplayName'] == expected_name, '成品包安装显示名与英文商店标题不一致'
+          assert info['CFBundleName'] == expected_name, '成品包 Bundle Name 不匹配'
+          assert info['ITSAppUsesNonExemptEncryption'] is False, '成品包出口合规声明不匹配'
+          for language in ('en', 'zh-Hans', 'zh-Hant'):
+              data = subprocess.check_output(['plutil', '-convert', 'xml1', '-o', '-', str(app / (language + '.lproj') / 'InfoPlist.strings')])
+              localized = plistlib.loads(data)
+              assert localized['CFBundleDisplayName'] == expected_name, '成品包本地化安装名不匹配：' + language
+          print('成品包 App Group、Bundle ID、三语言安装名及加密声明验证通过：', expected_name)
           PY
       - uses: actions/upload-artifact@v7
         if: always()

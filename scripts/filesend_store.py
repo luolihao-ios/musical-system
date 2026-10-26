@@ -9,17 +9,22 @@ from app_store_screenshots import AppleAPI, EDITABLE
 BUNDLE = "com.luolihao.aiyuetransfer"
 LABELS = {
     "en-US": {
-        "name": "ios file send",
-        "subtitle": "WiFi file transfer&ios deliver"
-    },
-    "zh-Hant": {
-        "name": "ios 文件傳輸助手",
-        "subtitle": "手機電腦雙向互傳，區域網路輕鬆傳檔"
+        "name": "iYue File Transfer",
+        "subtitle": "WiFi Sharing for iPhone & PC"
     },
     "zh-Hans": {
-        "name": "ios文件传输助手",
+        "name": "iOS文件传输助手",
         "subtitle": "手机电脑双向互传，局域网轻松传文件"
+    },
+    "zh-Hant": {
+        "name": "iOS 文件傳輸助手",
+        "subtitle": "手機電腦雙向互傳，區域網路傳檔"
     }
+}
+KEYWORDS = {
+    "en-US": "browser,LAN,wireless,offline,local,computer,upload,download,web,QR,bulk,photos,video,send",
+    "zh-Hans": "无线,网页,浏览器,免数据线,批量,共享,接收,发送,上传,下载,Windows,WiFi,离线",
+    "zh-Hant": "無線,瀏覽器,免傳輸線,批次,分享,接收,發送,上傳,下載,Windows,WiFi,離線"
 }
 
 
@@ -67,6 +72,30 @@ def update_metadata(api, before):
         if any(mapped.get(locale, {}).get(key) != value for key, value in labels.items()):
             raise RuntimeError(f"名称/副标题回读不匹配：{locale}")
     return {locale: {key: mapped[locale][key] for key in labels} for locale, labels in LABELS.items()}
+
+
+def update_keywords(api, state):
+    targets = [item for item in state["versions"] if item["attributes"]["appStoreState"] in EDITABLE]
+    if len(targets) != 1 or targets[0]["attributes"]["versionString"] != "1.0.2":
+        raise ValueError("仅授权更新 1.0.2 草稿关键词")
+    if any(not text or len(text.encode("utf-8")) > 100 for text in KEYWORDS.values()):
+        raise ValueError("关键词为空或超过 100 字节")
+    path = f"appStoreVersions/{targets[0]['id']}/appStoreVersionLocalizations?limit=50"
+    before = api.call(path)["data"]
+    mapped = {item["attributes"]["locale"]: item for item in before}
+    if not set(KEYWORDS).issubset(mapped):
+        raise ValueError("草稿缺少指定语言的版本信息")
+    for language, keywords in KEYWORDS.items():
+        identity = mapped[language]["id"]
+        api.call(f"appStoreVersionLocalizations/{identity}", "PATCH", {"data": {
+            "type": "appStoreVersionLocalizations", "id": identity, "attributes": {"keywords": keywords}}})
+    after = {item["attributes"]["locale"]: item["attributes"] for item in api.call(path)["data"]}
+    for language, keywords in KEYWORDS.items():
+        if after.get(language, {}).get("keywords") != keywords:
+            raise RuntimeError("关键词回读不匹配：" + language)
+        if any(after[language].get(key) != value for key, value in mapped[language]["attributes"].items() if key != "keywords"):
+            raise RuntimeError("关键词之外的版本信息发生变化：" + language)
+    return {language: after[language]["keywords"] for language in KEYWORDS}
 
 
 def ensure_draft(api, state, version):
@@ -140,8 +169,11 @@ def main():
             ensure_draft(api, state, args.draft_version)
             state = read_state(api)
         updated = update_metadata(api, state)
+        keywords = update_keywords(api, state)
+        for language in updated:
+            updated[language]["keywords"] = keywords[language]
         (report / "metadata-verified.json").write_text(json.dumps(updated, ensure_ascii=False, indent=2), encoding="utf-8")
-        print("三语言名称与副标题回读通过：", json.dumps(updated, ensure_ascii=False), flush=True)
+        print("三语言名称、副标题与关键词回读通过：", json.dumps(updated, ensure_ascii=False), flush=True)
     elif args.operation == "update-whats-new":
         campaign = json.loads(Path("marketing/file-send-2026-10-26/localizations/1.0.2.json").read_text(encoding="utf-8"))
         if campaign["version"] != "1.0.2":

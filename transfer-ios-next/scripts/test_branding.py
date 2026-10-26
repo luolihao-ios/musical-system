@@ -14,14 +14,14 @@ def text(path: Path) -> str:
 def main() -> None:
     plist = text(APP / "Info.plist")
     metadata = plistlib.loads(plist.encode("utf-8"))
-    assert metadata["CFBundleDisplayName"] == "ios file send", "默认显示名必须匹配商店英文标题"
-    assert metadata["CFBundleName"] == "ios file send", "Bundle Name 必须匹配商店英文标题"
+    assert metadata["CFBundleDisplayName"] == "iYue File Transfer", "默认显示名必须匹配商店英文标题"
+    assert metadata["CFBundleName"] == "iYue File Transfer", "Bundle Name 必须匹配商店英文标题"
     assert "file send needs local network access" in plist, "默认局域网权限文案必须使用 file send"
 
     for language in ("en", "zh-Hans", "zh-Hant"):
         info = text(APP / "Resources" / f"{language}.lproj" / "InfoPlist.strings")
-        assert '"CFBundleDisplayName" = "ios file send";' in info, f"{language} 显示名必须匹配英文标题"
-        assert '"CFBundleName" = "ios file send";' in info, f"{language} Bundle Name 必须匹配英文标题"
+        assert '"CFBundleDisplayName" = "iYue File Transfer";' in info, f"{language} 显示名必须匹配英文标题"
+        assert '"CFBundleName" = "iYue File Transfer";' in info, f"{language} Bundle Name 必须匹配英文标题"
 
     visible_files = [
         APP / "Features" / "TransferView.swift",
