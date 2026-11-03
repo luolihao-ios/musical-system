@@ -14,8 +14,8 @@ class ReleaseMetadataTests(unittest.TestCase):
 
         self.assertEqual(info["CFBundleDisplayName"], "爱乐之城")
         self.assertFalse(info["ITSAppUsesNonExemptEncryption"])
-        self.assertIn('MARKETING_VERSION: "0.2.1"', project)
-        self.assertIn('CURRENT_PROJECT_VERSION: "46"', project)
+        self.assertIn('MARKETING_VERSION: "0.2.2"', project)
+        self.assertIn('CURRENT_PROJECT_VERSION: "47"', project)
 
     def test_upload_version_exceeds_last_apple_approved_version(self) -> None:
         project = (IOS_ROOT / "project.yml").read_text(encoding="utf-8")
@@ -24,7 +24,7 @@ class ReleaseMetadataTests(unittest.TestCase):
         parts = tuple(int(part) for part in version.group(1).split("."))
         normalized = parts + (0,) * (3 - len(parts))
         # Apple 在运行 39633763573 返回 90062：已批准版本为 0.2。
-        self.assertGreater(normalized, (0, 2, 0), "已批准版本不能继续接收构建，须提高营销版本")
+        self.assertGreater(normalized, (0, 2, 1), "已批准版本不能继续接收构建，须提高营销版本")
 
     def test_app_store_workflow_uses_macos_base64_decode_syntax(self) -> None:
         workflow = (IOS_ROOT.parent / ".github" / "workflows" / "ios-app-store.yml").read_text(
