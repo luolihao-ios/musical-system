@@ -28,9 +28,9 @@ final class DiscoveryModelTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
         let cn = DiscoveryMarket(locale: Locale(identifier: "zh_CN"))
         let expected = song("online-pick")
-        let initial = DiscoveryModel(market: cn, defaults: defaults) { _ in [expected] }
+        let initial = DiscoveryModel(market: cn, defaults: defaults, loader: { _ in [expected] })
         await initial.loadIfNeeded()
-        let offline = DiscoveryModel(market: cn, defaults: defaults) { _ in throw URLError(.notConnectedToInternet) }
+        let offline = DiscoveryModel(market: cn, defaults: defaults, loader: { _ in throw URLError(.notConnectedToInternet) })
         XCTAssertEqual(offline.tracks, [expected])
         await offline.refresh()
         XCTAssertEqual(offline.tracks, [expected])
@@ -44,7 +44,7 @@ final class DiscoveryModelTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let recommendation = song("online-pick")
-        let home = DiscoveryModel(defaults: defaults) { _ in [recommendation] }
+        let home = DiscoveryModel(defaults: defaults, loader: { _ in [recommendation] })
         await home.loadIfNeeded()
 
         let temporary = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
