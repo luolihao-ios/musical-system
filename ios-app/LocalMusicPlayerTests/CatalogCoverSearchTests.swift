@@ -14,7 +14,7 @@ final class CatalogCoverSearchTests: XCTestCase {
 
     func testChineseImportsQueryDomesticSourcesFirstUsingOnlyCatalogHosts() async throws {
         let fixture = CoverHTTPFixtures(image: imageData())
-        let service = CatalogCoverSearch(transport: fixture)
+        let service = CatalogCoverSearch(transport: fixture, jamendoClientID: { "fixture-client" })
         let result = try await service.findCover(MusicResourceQuery(title: "无匹配中文歌", artist: "", album: "", duration: 0))
         XCTAssertNil(result)
         let requests = await fixture.requests
@@ -25,7 +25,7 @@ final class CatalogCoverSearchTests: XCTestCase {
 
     func testEnglishImportsQueryForeignSourcesFirstAndStillCrossFallback() async throws {
         let fixture = CoverHTTPFixtures(image: imageData())
-        let service = CatalogCoverSearch(transport: fixture)
+        let service = CatalogCoverSearch(transport: fixture, jamendoClientID: { "fixture-client" })
         _ = try await service.findCover(MusicResourceQuery(title: "Unknown English Song", artist: "周深", album: "", duration: 0))
         let requests = await fixture.requests
         XCTAssertEqual(Set(requests.prefix(3).compactMap { $0.url?.host }), ["itunes.apple.com", "musicbrainz.org", "api.jamendo.com"])
@@ -98,11 +98,21 @@ final class CatalogCoverSearchTests: XCTestCase {
     func testOtherProvidersParseTheirOwnCoverResponses() async throws {
         for provider in [CoverProvider.qq, .kugou, .musicbrainz, .jamendo, .archive] {
             let fixture = CoverHTTPFixtures(mode: .otherProviders, image: imageData())
-            let service = CatalogCoverSearch(transport: fixture, providers: [provider])
+            let service = CatalogCoverSearch(transport: fixture, providers: [provider], jamendoClientID: { "fixture-client" })
             let result = try await service.findCover(MusicResourceQuery(title: "Example Song", artist: "Artist", album: "Album", duration: 999))
             XCTAssertEqual(result?.provider, provider.rawValue, "\(provider) 必须解析自身响应中的封面")
             XCTAssertNotNil(result.flatMap { UIImage(data: $0.data) })
         }
+    }
+
+    func testUnconfiguredJamendoMakesNoRequestAndDoesNotBlockArchive() async throws {
+        let fixture = CoverHTTPFixtures(mode: .otherProviders, image: imageData())
+        let service = CatalogCoverSearch(transport: fixture, providers: [.jamendo, .archive], jamendoClientID: { nil })
+        let result = try await service.findCover(MusicResourceQuery(title: "Example Song", artist: "Artist", album: "Album", duration: 0))
+        XCTAssertEqual(result?.provider, "archive")
+        XCTAssertNotNil(result.flatMap { UIImage(data: $0.data) })
+        let requests = await fixture.requests
+        XCTAssertFalse(requests.contains { $0.url?.host == "api.jamendo.com" })
     }
 
     func testSlowLookupIsCancelledWithinOverallBudget() async throws {

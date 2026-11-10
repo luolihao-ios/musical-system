@@ -74,14 +74,19 @@ actor CatalogCoverSearch: CoverArtSearching {
     private let transport: any CoverHTTPTransport
     private let selectedProviders: [CoverProvider]?
     private let searchWindow: TimeInterval
+    private let jamendoClientID: @Sendable () -> String?
     private var musicBrainzSlot = Date.distantPast
     private var cooldown: [CoverProvider: Date] = [:]
 
     init(transport: any CoverHTTPTransport = LimitedCoverHTTPTransport(),
-         providers: [CoverProvider]? = nil, searchWindow: TimeInterval = 5) {
+         providers: [CoverProvider]? = nil, searchWindow: TimeInterval = 5,
+         jamendoClientID: @escaping @Sendable () -> String? = {
+             UserDefaults.standard.string(forKey: "jamendoClientID")
+         }) {
         self.transport = transport
         self.selectedProviders = providers
         self.searchWindow = searchWindow
+        self.jamendoClientID = jamendoClientID
     }
 
     func isAvailable() -> Bool { true }
@@ -301,8 +306,7 @@ actor CatalogCoverSearch: CoverArtSearching {
                 }
             }
         case .jamendo:
-            let key = UserDefaults.standard.string(forKey: "jamendoClientID") ?? ""
-            guard !key.isEmpty else { return [] }
+            guard let key = jamendoClientID(), !key.isEmpty else { return [] }
             let root = try await json("https://api.jamendo.com/v3.0/tracks/", ["client_id": key, "format": "json", "limit": "10", fallback ? "artist_name" : "namesearch": term], deadline: deadline)
             if let headers = root["headers"] as? [String: Any], headers["status"] as? String == "failed" { throw CoverSearchError.authentication }
             rows = root["results"] as? [[String: Any]] ?? []
