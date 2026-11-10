@@ -113,6 +113,8 @@ final class LibraryModel {
     private var coverRetryTask: Task<Void, Never>?
     private let catalog: any CatalogDownloading
     private var catalogPreviewGeneration = UUID()
+    private var catalogQueueMetadata: [String: CatalogTrack] = [:]
+    private var queuedArtworkTask: Task<Void, Never>?
     private var catalogDownloadGenerations: [String: UUID] = [:]
 
     init(
@@ -132,14 +134,14 @@ final class LibraryModel {
         self.coverSearch = coverSearch
         self.catalog = catalog
         playbackObserverID = playback.observeState { [weak self] state in
-            self?.currentTrackID = state.currentTrack?.id
-            self?.isCurrentTrackPlaying = state.isPlaying
+            self?.observePlayback(state)
         }
     }
 
     isolated deinit {
         coverTask?.cancel()
         coverRetryTask?.cancel()
+        queuedArtworkTask?.cancel()
         if let playbackObserverID {
             playback.removeStateObserver(playbackObserverID)
         }
@@ -209,7 +211,7 @@ final class LibraryModel {
         }
     }
 
-    func toggleCatalogPreview(_ track: CatalogTrack) async throws {
+    func toggleCatalogPreview(_ track: CatalogTrack, in catalogQueue: [CatalogTrack] = []) async throws {
         guard let snapshot = track.previewSnapshot() else { return }
         if playback.state.currentTrack?.id == snapshot.id {
             if playback.state.isPlaying || catalogPreviewLoadingID == track.id {
@@ -221,35 +223,72 @@ final class LibraryModel {
             }
             return
         }
+        try await startCatalogPlayback(track, in: catalogQueue)
+    }
+
+    func playCatalogGroup(_ tracks: [CatalogTrack]) async throws {
+        guard let first = tracks.first(where: { $0.previewURL != nil }) else { return }
+        try await startCatalogPlayback(first, in: tracks)
+    }
+
+    private func startCatalogPlayback(_ track: CatalogTrack, in catalogQueue: [CatalogTrack]) async throws {
+        guard let snapshot = track.previewSnapshot() else { return }
         let generation = UUID()
         catalogPreviewGeneration = generation
         catalogPreviewLoadingID = track.id
         defer {
             if catalogPreviewGeneration == generation { catalogPreviewLoadingID = nil }
         }
-        do { try await playback.playTrack(snapshot, in: [snapshot]) }
+        catalogQueueMetadata.removeAll(keepingCapacity: true)
+        let queue = catalogQueue.compactMap { candidate -> TrackSnapshot? in
+            guard let item = candidate.previewSnapshot(), catalogQueueMetadata[item.id] == nil else { return nil }
+            catalogQueueMetadata[item.id] = candidate
+            return item
+        }
+        do { try await playback.playTrack(snapshot, in: queue.contains(where: { $0.id == snapshot.id }) ? queue : [snapshot]) }
         catch {
             guard catalogPreviewGeneration == generation else { return }
             throw error
         }
         guard playback.state.currentTrack?.id == snapshot.id else { return }
         if catalogPreviewGeneration == generation { catalogPreviewLoadingID = nil }
+        await fillCatalogArtwork(track, expectedID: snapshot.id)
+    }
+
+    private func observePlayback(_ state: PlaybackState) {
+        let previousID = currentTrackID
+        currentTrackID = state.currentTrack?.id
+        isCurrentTrackPlaying = state.isPlaying
+        guard previousID != currentTrackID else { return }
+        queuedArtworkTask?.cancel()
+        guard let current = state.currentTrack, current.artworkReference == nil,
+              let metadata = catalogQueueMetadata[current.id],
+              catalogPreviewLoadingID != metadata.id else { return }
+        queuedArtworkTask = Task { [weak self] in
+            await self?.fillCatalogArtwork(metadata, expectedID: current.id)
+        }
+    }
+
+    private func fillCatalogArtwork(_ track: CatalogTrack, expectedID: String) async {
         // 封面晚到只更新仍在播放的同一首歌，不重新加载音频。
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("AiYueCatalogPreviews").appendingPathComponent(UUID().uuidString)
         if let artwork = try? await catalog.downloadArtwork(track, to: directory),
-           let active = playback.state.currentTrack, active.id == snapshot.id {
+           !Task.isCancelled, let active = playback.state.currentTrack, active.id == expectedID,
+           active.artworkReference == nil {
             let updated = TrackSnapshot(id: active.id, title: active.title, artist: active.artist,
                 album: active.album, duration: active.duration, sourceKind: active.sourceKind,
                 sourceReference: active.sourceReference, artworkReference: artwork.path,
                 lyricsReference: active.lyricsReference, isLiked: active.isLiked,
                 isAvailable: active.isAvailable, lastPlayedAt: active.lastPlayedAt)
             playback.refreshTrackMetadata(updated)
+        } else {
+            try? FileManager.default.removeItem(at: directory)
         }
     }
 
     func downloadCatalogTrack(_ track: CatalogTrack) async {
-        guard track.license.allowsDownload,
+        guard track.allowsDownload,
               catalogDownloads[track.id]?.isBusy != true,
               catalogDownloads[track.id] != .completed else { return }
         catalogDownloads[track.id] = .downloading(nil)
@@ -330,6 +369,9 @@ final class LibraryModel {
     func toggleLike(_ track: TrackSnapshot) throws {
         try store.setLiked(trackID: track.id, isLiked: !track.isLiked)
         try reload()
+        if let updated = tracks.first(where: { $0.id == track.id }) {
+            playback.refreshTrackMetadata(updated)
+        }
     }
 
     func clearError() {

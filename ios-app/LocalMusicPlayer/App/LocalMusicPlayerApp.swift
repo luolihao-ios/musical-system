@@ -3,13 +3,14 @@ import SwiftUI
 @main
 @MainActor
 struct LocalMusicPlayerApp: App {
+    @AppStorage("player.appearance") private var appearance = PlayerAppearance.gradient
     @State private var bootstrap = AppBootstrap()
 
     var body: some Scene {
         WindowGroup {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--adaptive-store-assets") {
-                AdaptiveStoreAssetHarness().preferredColorScheme(.dark)
+                AdaptiveStoreAssetHarness().preferredColorScheme(.light)
             } else if ProcessInfo.processInfo.arguments.contains("--player-interaction-tests") {
                 PlayerInteractionTestHarness().preferredColorScheme(.dark)
             } else {
@@ -23,7 +24,7 @@ struct LocalMusicPlayerApp: App {
 
     private var applicationContent: some View {
             BootstrapView(bootstrap: bootstrap)
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(appearance.colorScheme)
                 .onOpenURL { url in Task {
                     bootstrap.start()
                     do {

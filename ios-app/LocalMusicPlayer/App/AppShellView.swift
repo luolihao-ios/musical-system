@@ -2,15 +2,25 @@ import SwiftUI
 import StoreKit
 import UIKit
 
+@MainActor
 struct AppShellView: View {
     let container: AppContainer
-    var initialOnlineResults: [CatalogTrack] = []
+    let initialOnlineResults: [CatalogTrack]
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var storeUpdate: AppStoreUpdate?
     @State private var didCheckStore = false
     @State private var selectedTab = 0
-    @State private var onlineTab = false
+    @State private var discovery: DiscoveryModel
+
+    init(container: AppContainer, initialOnlineResults: [CatalogTrack] = []) {
+        self.container = container
+        self.initialOnlineResults = initialOnlineResults
+        _discovery = State(initialValue: DiscoveryModel(
+            fixtureTracks: initialOnlineResults.isEmpty ? nil : initialOnlineResults,
+            feedLoader: { market in await OnlineCatalog.shared.discoveryFeed(for: market) }
+        ))
+    }
 
     private var currentVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1"
@@ -24,6 +34,7 @@ struct AppShellView: View {
         ) { tabs }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { try? container.playback.persistCurrentState() }
+            else { container.nowPlayingModel.expireSleepTimer() }
         }
         .onChange(of: container.nowPlayingModel.state.currentTrack?.id) { _, _ in
             PlayerInteractionDiagnostics.log("shell show reason=track-change")
@@ -31,40 +42,71 @@ struct AppShellView: View {
         .onReceive(NotificationCenter.default.publisher(for: .showMiniPlayer)) { _ in
             PlayerInteractionDiagnostics.log("shell show reason=notification")
         }
+        .onReceive(NotificationCenter.default.publisher(for: .libraryFavoritesChanged)) { _ in
+            try? container.libraryModel.reload()
+        }
     }
 
     private var tabs: some View {
         TabView(selection: $selectedTab) {
             NavigationStack {
-                VStack(spacing: 0) {
-                    Picker("音乐来源", selection: $onlineTab) {
-                        Text("本地音乐").tag(false)
-                        Text("在线音乐").tag(true)
-                    }
-                    .pickerStyle(.segmented).padding(.horizontal)
-                    if onlineTab { OnlineCatalogSearchView(model: container.libraryModel, initialResults: initialOnlineResults) }
-                    else { LibraryView(model: container.libraryModel) }
-                }
+                DiscoveryView(recommendations: discovery, library: container.libraryModel) { selectedTab = 2 }
             }
             .tabItem {
                 Label("首页", systemImage: "house")
             }
             .tag(0)
 
-            NavigationStack { LibraryView(model: container.libraryModel, categoriesOnly: true) }
-                .tabItem { Label("音乐库", systemImage: "music.note.house") }.tag(1)
-
             NavigationStack {
-                FavoritesView(model: container.libraryModel)
-                    .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
+                LibraryView(model: container.libraryModel, personalLibrary: true, title: "我的音乐")
             }
-            .tabItem {
-                Label("收藏", systemImage: "heart.fill")
-            }
-            .tag(2)
+            .tabItem { Label("音乐库", systemImage: "music.note.list") }.tag(1)
+
+            OnlineCatalogSearchView(model: container.libraryModel, initialResults: initialOnlineResults)
+                .tabItem { Label("搜索", systemImage: "magnifyingglass") }.tag(2)
 
             NavigationStack {
                 List {
+                    NavigationLink {
+                        LibraryView(model: container.libraryModel, personalLibrary: true, title: "我的音乐")
+                    } label: {
+                        Label("我的音乐", systemImage: "music.note.list")
+                    }
+                    NavigationLink {
+                        FavoritesView(model: container.libraryModel)
+                    } label: {
+                        Label("收藏", systemImage: "heart.fill")
+                    }
+                    NavigationLink {
+                        LibraryTracksView(title: String(localized: "最近播放"),
+                                          tracks: container.libraryModel.recentlyPlayed, model: container.libraryModel)
+                    } label: {
+                        Label("最近播放", systemImage: "clock.arrow.circlepath")
+                    }
+                    NavigationLink {
+                        PlayerPersonalizationView()
+                    } label: {
+                        Label("主题与个性化", systemImage: "paintpalette")
+                    }
+                    NavigationLink {
+                        settings
+                    } label: {
+                        Label("设置", systemImage: "gearshape")
+                    }
+                    .accessibilityIdentifier("personal.settings")
+                }
+                .navigationTitle("我的")
+                .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
+            }
+            .tabItem { Label("我的", systemImage: "person.crop.circle") }
+            .tag(3)
+        }
+        .tint(PlayerTheme.accent)
+        .modifier(AdaptiveTabNavigation())
+    }
+
+    private var settings: some View {
+        List {
                     Section("播放") {
                         LabeledContent("来源", value: String(localized: "本地文件与开放许可音乐"))
                         LabeledContent("后台播放", value: String(localized: "已启用"))
@@ -115,13 +157,5 @@ struct AppShellView: View {
                     didCheckStore = true
                     storeUpdate = await AppStoreUpdate.lookup(bundleIdentifier: AppIdentity.bundleIdentifier)
                 }
-            }
-            .tabItem {
-                Label("设置", systemImage: "gearshape")
-            }
-            .tag(3)
-        }
-        .tint(PlayerTheme.accent)
-        .modifier(AdaptiveTabNavigation())
     }
 }

@@ -9,6 +9,7 @@ on:
         default: build
         options:
           - build
+          - testflight
           - inspect-screenshots
           - inspect-library
           - capture-ipad
@@ -104,7 +105,7 @@ jobs:
           path: .api-inspection/upload-verification.json
           if-no-files-found: warn
   archive-and-upload:
-    if: inputs.operation == 'build' || inputs.operation == ''
+    if: inputs.operation == 'build' || inputs.operation == 'testflight' || inputs.operation == ''
     runs-on: xcode-27
     timeout-minutes: 60
     concurrency:
@@ -122,13 +123,16 @@ jobs:
           python-version: '3.12'
       - name: Verify release automation and unused build number
         env:
+          OPERATION: ${{ inputs.operation }}
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
         run: |
           python -m pip install 'PyJWT[crypto]==2.10.1'
           python -m unittest discover -s scripts/tests -p 'test_music_release.py' -v
-          python scripts/music_release.py preflight --output .api-inspection/music-release-preflight.json
+          CHECK=preflight
+          if [ "$OPERATION" = "testflight" ]; then CHECK=testflight-preflight; fi
+          python scripts/music_release.py "$CHECK" --output .api-inspection/music-release-preflight.json
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Run iOS simulator tests

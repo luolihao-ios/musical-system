@@ -17,7 +17,8 @@ struct ImportMenu: View {
                 Label("授权音乐文件夹", systemImage: "checkmark.shield")
             }
         } label: {
-            Label("导入", systemImage: "plus.circle.fill")
+            Label("导入音乐", systemImage: "square.and.arrow.down")
+                .labelStyle(.titleAndIcon)
         }
     }
 }

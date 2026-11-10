@@ -48,11 +48,15 @@ def configured_release():
     return version.group(1), build.group(1)
 
 
-def target_version(api, version):
-    number(version)
+def verify_app_identity(api):
     app = api.call(f'apps/{APP}')['data']
     if app['id'] != APP or app['attributes']['bundleId'] != BUNDLE:
         raise ValueError('不是授权的音乐播放器，停止')
+
+
+def target_version(api, version):
+    number(version)
+    verify_app_identity(api)
     versions = api.list_all(f'apps/{APP}/appStoreVersions?filter[platform]=IOS&filter[versionString]={version}&limit=200')
     matches = [v for v in versions if v['attributes']['versionString'] == version and v['attributes']['platform'] == 'IOS']
     if len(matches) != 1 or matches[0]['attributes']['appStoreState'] not in {'PREPARE_FOR_SUBMISSION', 'READY_FOR_REVIEW'}:
@@ -61,18 +65,30 @@ def target_version(api, version):
 
 
 def preflight(api, version, build):
-    number(build)
     target = target_version(api, version)
     if target['attributes']['appStoreState'] != 'PREPARE_FOR_SUBMISSION':
         raise ValueError('目标已添加以供审核，不重复上传；请只执行关联恢复操作')
+    verify_unused_upload_numbers(api, version, build)
+    return {'app': APP, 'version': version, 'build': build, 'versionId': target['id'], 'stage': 'PREFLIGHT_PASSED'}
+
+
+def verify_unused_upload_numbers(api, version, build):
+    number(version)
+    number(build)
     builds = api.list_all(f'builds?filter[app]={APP}&limit=200')
     if builds and number(build) <= max(number(b['attributes']['version']) for b in builds):
         raise ValueError('构建号已经使用或不高于已有构建；不得重传同一构建号')
     versions = api.list_all(f'apps/{APP}/appStoreVersions?filter[platform]=IOS&limit=200')
-    approved = [v['attributes']['versionString'] for v in versions if v['attributes']['appStoreState'] == 'READY_FOR_SALE']
+    approved = [v['attributes']['versionString'] for v in versions if v['attributes']['appStoreState'] in {'READY_FOR_SALE', 'READY_FOR_DISTRIBUTION'}]
     if approved and number(version) <= max(number(v) for v in approved):
         raise ValueError('营销版本不高于已发布版本，停止上传')
-    return {'app': APP, 'version': version, 'build': build, 'versionId': target['id'], 'stage': 'PREFLIGHT_PASSED'}
+
+
+def testflight_preflight(api, version, build):
+    # TestFlight 可以独立上传，不创建或修改面向 App Store 审核的版本草稿。
+    verify_app_identity(api)
+    verify_unused_upload_numbers(api, version, build)
+    return {'app': APP, 'version': version, 'build': build, 'stage': 'TESTFLIGHT_PREFLIGHT_PASSED'}
 
 
 def wait_for_build(api, version, build, timeout=900, clock=time.monotonic, sleep=time.sleep):
@@ -163,7 +179,7 @@ def verify_ipa(file, version, build):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=['preflight', 'add-for-review', 'verify-ipa'])
+    parser.add_argument('operation', choices=['preflight', 'testflight-preflight', 'add-for-review', 'verify-ipa'])
     parser.add_argument('--ipa', type=Path)
     parser.add_argument('--timeout', type=int, default=900)
     parser.add_argument('--output', default='.api-inspection/music-release.json')
@@ -175,7 +191,12 @@ def main():
         result = verify_ipa(args.ipa, version, build)
     else:
         api = MusicAPI()
-        result = preflight(api, version, build) if args.operation == 'preflight' else add_for_review(api, version, build, args.timeout)
+        if args.operation == 'preflight':
+            result = preflight(api, version, build)
+        elif args.operation == 'testflight-preflight':
+            result = testflight_preflight(api, version, build)
+        else:
+            result = add_for_review(api, version, build, args.timeout)
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')

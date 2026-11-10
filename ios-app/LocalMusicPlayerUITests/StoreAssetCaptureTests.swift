@@ -8,6 +8,10 @@ final class StoreAssetCaptureTests: XCTestCase {
         app.launchArguments = ["--adaptive-store-assets", "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
         app.launch()
         XCTAssertTrue(app.buttons["player.compact.open"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["discovery.track.demo-online-0"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["personal.import"].exists)
+        app.buttons["音乐库"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["personal.import"].waitForExistence(timeout: 10))
         save(app, name: "adaptive-01-local")
         app.buttons["player.compact.open"].tap()
         XCTAssertTrue(app.buttons["player.detail.playPause"].waitForExistence(timeout: 10))
@@ -16,8 +20,8 @@ final class StoreAssetCaptureTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["player.lyrics.line.0"].firstMatch.waitForExistence(timeout: 10))
         save(app, name: "adaptive-03-lyrics")
         app.buttons["player.detail.close"].tap()
-        XCTAssertTrue(app.buttons["在线音乐"].waitForExistence(timeout: 10))
-        app.buttons["在线音乐"].tap()
+        XCTAssertTrue(app.buttons["搜索"].firstMatch.waitForExistence(timeout: 10))
+        app.buttons["搜索"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["演示搜索结果 · License unknown"].firstMatch.waitForExistence(timeout: 10))
         save(app, name: "adaptive-04-online")
     }

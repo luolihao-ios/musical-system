@@ -83,6 +83,21 @@ class MusicReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             release.preflight(self.api, '0.2.2', '47')
 
+    def test_testflight_allows_new_version_without_creating_a_store_draft(self):
+        self.api.version['attributes']['appStoreState'] = 'READY_FOR_SALE'
+        result = release.testflight_preflight(self.api, '0.2.3', '48')
+        self.assertEqual(result['version'], '0.2.3')
+        self.assertEqual(result['build'], '48')
+        self.assertNotIn('versionId', result)
+        self.assertEqual(self.api.writes, [])
+
+    def test_testflight_still_rejects_reused_build_and_published_version(self):
+        self.api.version['attributes']['appStoreState'] = 'READY_FOR_SALE'
+        for version, build in [('0.2.3', '47'), ('0.2.2', '48')]:
+            with self.subTest(version=version, build=build), self.assertRaises(ValueError):
+                release.testflight_preflight(self.api, version, build)
+        self.assertEqual(self.api.writes, [])
+
     def test_wrong_app_is_rejected_before_writes(self):
         self.api.bundle = 'com.luolihao.aiyuetransfer'
         with self.assertRaises(ValueError):

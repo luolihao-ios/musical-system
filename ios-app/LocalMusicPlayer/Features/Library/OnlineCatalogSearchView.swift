@@ -1,47 +1,113 @@
 import SwiftUI
 
+@MainActor
 struct OnlineCatalogSearchView: View {
+    private enum Scope: Hashable { case online, local }
     @Bindable var model: LibraryModel
     var initialResults: [CatalogTrack] = []
     @State private var query = ""
     @State private var results: [CatalogTrack] = []
     @State private var loading = false
+    @State private var searchFailed = false
+    @State private var submittedQuery: String?
+    @State private var searchTask: Task<Void, Never>?
     @State private var message = ""
     @State private var searchGeneration = UUID()
+    @State private var scope: Scope = .online
+
+    private var localResults: [TrackSnapshot] {
+        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { return model.tracks }
+        return model.tracks.filter {
+            [$0.title, $0.artist, $0.album].contains { $0.localizedStandardContains(term) }
+        }
+    }
 
     var body: some View {
         NavigationStack {
-            List(results) { track in
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 12) {
-                        metadata(track).frame(minWidth: 160, maxWidth: .infinity, alignment: .leading)
-                        actions(track)
+            List {
+                Picker("音乐来源", selection: $scope) {
+                    Text("在线音乐").tag(Scope.online)
+                    Text("本地音乐").tag(Scope.local)
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+                if scope == .local {
+                    ForEach(localResults) { track in
+                        TrackRow(track: track, isCurrent: model.currentTrackID == track.id,
+                                 isPlaying: model.isCurrentTrackPlaying) {
+                            Task { try? await model.play(track, in: localResults) }
+                        } toggleLike: {
+                            try? model.toggleLike(track)
+                        } delete: {
+                            try? model.delete(track)
+                        }
                     }
-                    VStack(alignment: .leading, spacing: 8) {
-                        metadata(track)
-                        actions(track)
+                    if localResults.isEmpty { Text("没有匹配的本地音乐").foregroundStyle(.secondary) }
+                } else {
+                    if query.isEmpty && results.isEmpty {
+                        Section("推荐搜索") {
+                            ForEach(["piano", "jazz", "acoustic", "electronic"], id: \.self) { term in
+                                Button(term) { query = term; startSearch() }
+                            }
+                        }
+                    }
+                    if loading { ProgressView("正在搜索…") }
+                    if submittedQuery != nil && !loading && results.isEmpty {
+                        Text(searchFailed ? LocalizedStringKey("在线搜索暂不可用，请重试") : LocalizedStringKey("暂无在线搜索结果"))
+                            .foregroundStyle(.secondary)
+                    } else if !loading && !results.isEmpty && results.allSatisfy({ $0.previewURL == nil }) {
+                        Text("找到曲目信息，暂无可试听音源").foregroundStyle(.secondary)
+                    }
+                    ForEach(results) { track in
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 12) {
+                                metadata(track).frame(minWidth: 160, maxWidth: .infinity, alignment: .leading)
+                                actions(track)
+                            }
+                            VStack(alignment: .leading, spacing: 8) {
+                                metadata(track)
+                                actions(track)
+                            }
+                        }
+                        .padding(.vertical, 4)
                     }
                 }
-                .padding(.vertical, 4)
             }
+            .scrollContentBackground(.hidden)
+            .background(RefreshBackdrop())
             .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
-            .overlay { if loading { ProgressView() } else if results.isEmpty { ContentUnavailableView("搜索公开音乐", systemImage: "globe", description: Text("搜索 Jamendo 等开放许可音乐")) } }
-            .searchable(text: $query, prompt: "搜索歌曲、艺术家或歌词关键词")
-            .onSubmit(of: .search) { Task { await search() } }
+            .searchable(text: $query, prompt: "搜索歌曲、歌手或专辑")
+            .onSubmit(of: .search) { if scope == .online { startSearch() } }
+            .onChange(of: query) { _, value in
+                if value.trimmingCharacters(in: .whitespacesAndNewlines) != submittedQuery { cancelSearch() }
+            }
             .task { if results.isEmpty { results = initialResults } }
-            .navigationTitle("在线音乐")
+            .navigationTitle("搜索")
             .alert("提示", isPresented: Binding(get: { !message.isEmpty }, set: { if !$0 { message = "" } })) { Button("好") { message = "" } } message: { Text(message) }
         }
     }
 
     private func metadata(_ track: CatalogTrack) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(track.title).lineLimit(2)
-            Text(track.artist).font(.caption).foregroundStyle(.secondary)
-            Text([track.provider, track.license.displayName].filter { !$0.isEmpty }.joined(separator: " · "))
-                .font(.caption2).foregroundStyle(.secondary).lineLimit(2)
-            if case .failed(let reason) = model.catalogDownloads[track.id] {
-                Text(String(format: NSLocalizedString("下载失败：%@", comment: ""), reason)).font(.caption2).foregroundStyle(.red).lineLimit(2)
+        HStack(spacing: 10) {
+            Color.accentColor.opacity(0.12).frame(width: 48, height: 48)
+                .overlay {
+                    AsyncImage(url: track.artworkURL) { phase in
+                        if let image = phase.image { image.resizable().scaledToFill() }
+                        else { Image(systemName: "music.note").foregroundStyle(.secondary) }
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 9))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(track.title).lineLimit(2)
+                Text(track.artist).font(.caption).foregroundStyle(.secondary)
+                Text([track.provider, track.previewURL == nil && !track.allowsDownload ? String(localized: "仅曲目信息") : track.license.displayName]
+                    .filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+                if case .failed(let reason) = model.catalogDownloads[track.id] {
+                    Text(String(format: NSLocalizedString("下载失败：%@", comment: ""), reason)).font(.caption2).foregroundStyle(.red).lineLimit(2)
+                }
             }
         }
     }
@@ -64,24 +130,43 @@ struct OnlineCatalogSearchView: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel(String(format: NSLocalizedString(selected && (model.isCurrentTrackPlaying || pending) ? "暂停试听 %@" : "试听 %@", comment: ""), track.title))
                     }
-                    if track.license.allowsDownload { downloadButton(track) }
+                    if track.allowsDownload { downloadButton(track) }
         }
     }
 
-    private func search() async {
+    private func cancelSearch() {
+        searchTask?.cancel()
+        searchTask = nil
+        searchGeneration = UUID()
+        submittedQuery = nil
+        loading = false
+        searchFailed = false
+        results = []
+    }
+
+    private func startSearch() {
+        let keyword = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        cancelSearch()
+        guard !keyword.isEmpty else { return }
         let generation = UUID()
         searchGeneration = generation
-        let submittedQuery = query
-        loading = true; defer { if searchGeneration == generation { loading = false } }
-        do {
-            let found = try await OnlineCatalog.shared.search(query: submittedQuery)
-            guard searchGeneration == generation else { return }
-            results = found
-        }
-        catch {
-            guard searchGeneration == generation else { return }
-            // 搜索服务不可用时保持空结果，不把网络或供应商错误暴露给用户。
-            results = []
+        submittedQuery = keyword
+        loading = true
+        searchTask = Task { @MainActor in
+            defer {
+                if searchGeneration == generation { loading = false; searchTask = nil }
+            }
+            do {
+                let found = try await OnlineCatalog.shared.search(query: keyword, onUpdate: { visible in
+                    guard searchGeneration == generation, !Task.isCancelled else { return }
+                    results = visible
+                })
+                guard searchGeneration == generation, !Task.isCancelled else { return }
+                results = found
+            } catch {
+                guard searchGeneration == generation, !Task.isCancelled else { return }
+                searchFailed = true
+            }
         }
     }
 

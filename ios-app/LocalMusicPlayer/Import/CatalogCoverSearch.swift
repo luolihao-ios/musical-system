@@ -301,7 +301,7 @@ actor CatalogCoverSearch: CoverArtSearching {
                 }
             }
         case .jamendo:
-            let key = UserDefaults.standard.string(forKey: "jamendoClientID") ?? "709fa152"
+            let key = UserDefaults.standard.string(forKey: "jamendoClientID") ?? ""
             guard !key.isEmpty else { return [] }
             let root = try await json("https://api.jamendo.com/v3.0/tracks/", ["client_id": key, "format": "json", "limit": "10", fallback ? "artist_name" : "namesearch": term], deadline: deadline)
             if let headers = root["headers"] as? [String: Any], headers["status"] as? String == "failed" { throw CoverSearchError.authentication }

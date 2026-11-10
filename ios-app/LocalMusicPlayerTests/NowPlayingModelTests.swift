@@ -5,6 +5,22 @@ import SwiftData
 
 @MainActor
 final class NowPlayingModelTests: XCTestCase {
+    func testSleepTimerCancellationAndExpiry() throws {
+        let playback = FakeNowPlayingController(state: PlaybackState(isPlaying: true))
+        let model = NowPlayingModel(playback: playback)
+        let now = Date(timeIntervalSince1970: 1_000)
+        model.scheduleSleepTimer(minutes: 5, now: now)
+        XCTAssertEqual(model.sleepDeadline, now.addingTimeInterval(300))
+        model.expireSleepTimer(now: now.addingTimeInterval(299))
+        XCTAssertNotNil(model.sleepDeadline)
+        model.scheduleSleepTimer(minutes: nil, now: now)
+        model.expireSleepTimer(now: now.addingTimeInterval(300))
+        XCTAssertEqual(playback.pauseCount, 0)
+        model.scheduleSleepTimer(minutes: 5, now: now)
+        model.expireSleepTimer(now: now.addingTimeInterval(300))
+        XCTAssertNil(model.sleepDeadline)
+        XCTAssertEqual(playback.pauseCount, 1)
+    }
     func testDownloadedLyricsArePublishedBeforeReturningWithoutReadingSavedFileAgain() async throws {
         let container = try ModelContainerFactory.make(inMemory: true)
         let store = try MusicStore(context: container.mainContext)
@@ -301,7 +317,8 @@ private final class FakeNowPlayingController: PlaybackControlling {
     }
 
     func play() async throws {}
-    func pause() throws {}
+    private(set) var pauseCount = 0
+    func pause() throws { pauseCount += 1 }
     func next() async throws {}
     func previous() async throws {}
 

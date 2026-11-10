@@ -1,6 +1,10 @@
 import Foundation
 import Observation
 
+extension Notification.Name {
+    static let libraryFavoritesChanged = Self("libraryFavoritesChanged")
+}
+
 protocol LyricsReading: Sendable {
     func read(path: String) async throws -> String?
 }
@@ -31,6 +35,7 @@ final class NowPlayingModel {
     private(set) var lyricTrackID: String?
     private(set) var isSearchingLyrics = false
     private(set) var lyricsSearchMessage = ""
+    private(set) var sleepDeadline: Date?
     var reduceMotion: Bool
 
     private let playback: any PlaybackControlling
@@ -41,6 +46,7 @@ final class NowPlayingModel {
     private var requestedLyricTrackID: String?
     private var lyricsTask: Task<Void, Never>?
     private var observerID: UUID?
+    private var sleepTask: Task<Void, Never>?
 
     init(
         playback: any PlaybackControlling,
@@ -62,6 +68,7 @@ final class NowPlayingModel {
 
     isolated deinit {
         lyricsTask?.cancel()
+        sleepTask?.cancel()
         if let observerID {
             playback.removeStateObserver(observerID)
         }
@@ -106,6 +113,47 @@ final class NowPlayingModel {
 
     func setVolume(_ volume: Double) {
         try? playback.setVolume(volume)
+    }
+
+    var canFavoriteCurrentTrack: Bool {
+        guard let track = state.currentTrack, store != nil else { return false }
+        return track.sourceKind != .onlinePreview
+    }
+
+    func toggleCurrentFavorite() {
+        guard let track = state.currentTrack, let store, canFavoriteCurrentTrack else { return }
+        do {
+            try store.setLiked(trackID: track.id, isLiked: !track.isLiked)
+            if let updated = try store.track(id: track.id) {
+                playback.refreshTrackMetadata(TrackSnapshot(updated))
+                NotificationCenter.default.post(name: .libraryFavoritesChanged, object: nil)
+            }
+        } catch {
+            PlaybackDiagnostics.log("更新收藏失败 error=\(error)")
+        }
+    }
+
+    func scheduleSleepTimer(minutes: Int?, now: Date = .now) {
+        sleepTask?.cancel()
+        sleepTask = nil
+        sleepDeadline = nil
+        guard let minutes, (1...120).contains(minutes) else { return }
+        let deadline = now.addingTimeInterval(Double(minutes * 60))
+        sleepDeadline = deadline
+        sleepTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSinceNow))) }
+            catch { return }
+            guard self?.sleepDeadline == deadline else { return }
+            self?.expireSleepTimer(now: max(.now, deadline))
+        }
+    }
+
+    func expireSleepTimer(now: Date = .now) {
+        guard let sleepDeadline, now >= sleepDeadline else { return }
+        self.sleepDeadline = nil
+        sleepTask?.cancel()
+        sleepTask = nil
+        try? playback.pause()
     }
 
     func cycleMode() {

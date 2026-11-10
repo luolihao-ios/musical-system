@@ -6,6 +6,40 @@ import XCTest
 final class LibraryModelTests: XCTestCase {
     private var modelContainers: [ModelContainer] = []
 
+    func testPlayingGroupReplacesQueueEvenIfFirstSongIsAlreadyPlaying() async throws {
+        let playback = PreviewPlaybackFixture()
+        let model = LibraryModel(store: try makeStore(), fileImporter: FakeFileImporter(),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: playback, catalog: BlockingCatalogFixture())
+        let address = URL(string: "https://example.org/preview.mp3")!
+        let first = CatalogTrack(id: "first", title: "First", artist: "Artist",
+                                 audioURL: address, license: .publicDomain, previewURL: address)
+        let second = CatalogTrack(id: "second", title: "Second", artist: "Artist",
+                                  audioURL: address, license: .publicDomain, previewURL: address)
+        try await model.toggleCatalogPreview(first)
+        try await model.playCatalogGroup([first, second])
+        XCTAssertTrue(playback.state.isPlaying)
+        XCTAssertEqual(playback.state.queue.map(\.id), [first.previewID, second.previewID])
+    }
+
+    func testAdvancingOnlineQueueLoadsTheNextSongsArtwork() async throws {
+        let playback = PreviewPlaybackFixture()
+        let model = LibraryModel(store: try makeStore(), fileImporter: FakeFileImporter(),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: playback, catalog: QueueArtworkFixture())
+        let audio = URL(string: "https://example.org/preview.mp3")!
+        let songs = ["first", "second"].map {
+            CatalogTrack(id: $0, title: $0, artist: "Artist", audioURL: audio, license: .publicDomain, previewURL: audio)
+        }
+        try await model.playCatalogGroup(songs)
+        playback.state.currentIndex = 1
+        for _ in 0..<200 {
+            if playback.state.currentTrack?.artworkReference != nil { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertEqual(playback.state.currentTrack?.artworkReference, "/second.jpg")
+        XCTAssertEqual(playback.state.queue.count, 2)
+        XCTAssertTrue(playback.state.isPlaying)
+    }
+
     func testPreviewArtworkArrivingDuringPauseKeepsLyricsAndDoesNotResumeAudio() async throws {
         let provider = DelayedPreviewArtworkFixture()
         let playback = PreviewPlaybackFixture()
@@ -509,15 +543,31 @@ private actor DelayedPreviewArtworkFixture: CatalogDownloading {
 
 @MainActor
 private final class PreviewPlaybackFixture: LibraryPlaybackControlling {
-    var state = PlaybackState()
+    var state = PlaybackState() { didSet { observer?(state) } }
+    private var observer: ((PlaybackState) -> Void)?
     func pause() throws { state.isPlaying = false }
     func play() async throws { state.isPlaying = true }
     func playTrack(_ track: TrackSnapshot, in queue: [TrackSnapshot]) async throws {
-        state = PlaybackState(queue: queue, currentIndex: 0, isPlaying: true)
+        state = PlaybackState(queue: queue, currentIndex: queue.firstIndex { $0.id == track.id }, isPlaying: true)
     }
-    func refreshTrackMetadata(_ track: TrackSnapshot) { state.queue = [track] }
-    func observeState(_ observer: @escaping (PlaybackState) -> Void) -> UUID { observer(state); return UUID() }
-    func removeStateObserver(_ id: UUID) {}
+    func refreshTrackMetadata(_ track: TrackSnapshot) {
+        if let index = state.queue.firstIndex(where: { $0.id == track.id }) { state.queue[index] = track }
+    }
+    func observeState(_ observer: @escaping (PlaybackState) -> Void) -> UUID {
+        self.observer = observer
+        observer(state)
+        return UUID()
+    }
+    func removeStateObserver(_ id: UUID) { observer = nil }
+}
+
+private actor QueueArtworkFixture: CatalogDownloading {
+    func download(_ track: CatalogTrack, to directory: URL, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
+        throw URLError(.unsupportedURL)
+    }
+    func downloadArtwork(_ track: CatalogTrack, to directory: URL) async throws -> URL? {
+        URL(fileURLWithPath: "/\(track.id).jpg")
+    }
 }
 
 private actor ControlledCoverProvider: CoverArtSearching {

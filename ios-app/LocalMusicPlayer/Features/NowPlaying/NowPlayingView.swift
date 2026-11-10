@@ -29,6 +29,9 @@ struct NowPlayingView: View {
     @State private var showQueue = false
     @State private var contentMode: NowPlayingContentMode = .artwork
     @State private var artworkTheme = NowPlayingArtworkTheme.fallback
+    @AppStorage("player.visualMode") private var visualMode = PlayerVisualMode.cover
+    @State private var showSleepTimer = false
+    @State private var showAudioControls = false
 
     private struct ArtworkRequest: Equatable, Sendable {
         let trackID: String?
@@ -53,6 +56,7 @@ struct NowPlayingView: View {
 
                 VStack(spacing: 0) {
                     header
+                    visualSelector
                     GeometryReader { geometry in
                         let layout = AdaptivePlayerLayout.resolve(size: geometry.size)
                         if #available(iOS 27.1, *), !geometry.reservedRegions(kind: .division, options: .includeInactive).isEmpty {
@@ -120,6 +124,42 @@ struct NowPlayingView: View {
             }
         }
         .sheet(isPresented: $showQueue) { queueSheet }
+        .confirmationDialog("定时暂停", isPresented: $showSleepTimer, titleVisibility: .visible) {
+            ForEach([15, 30, 45, 60], id: \.self) { minutes in
+                Button {
+                    model.scheduleSleepTimer(minutes: minutes)
+                } label: {
+                    Text(String(format: NSLocalizedString("%lld 分钟", comment: ""), Int64(minutes)))
+                }
+            }
+            if model.sleepDeadline != nil {
+                Button("关闭定时暂停", role: .destructive) { model.scheduleSleepTimer(minutes: nil) }
+            }
+        }
+        .sheet(isPresented: $showAudioControls) {
+            NavigationStack {
+                Form {
+                    Slider(value: Binding(get: { model.state.volume }, set: { model.setVolume($0) }), in: 0...1) {
+                        Text("播放音量")
+                    }
+                }
+                .navigationTitle("播放音量")
+            }
+            .presentationDetents([.medium])
+        }
+    }
+
+    private var visualSelector: some View {
+        Picker("播放外观", selection: $visualMode) {
+            ForEach(PlayerVisualMode.allCases) { mode in
+                Text(mode.title).tag(mode)
+            }
+        }
+        .pickerStyle(.segmented)
+        .frame(maxWidth: 360)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 6)
+        .accessibilityIdentifier("player.appearance.mode")
     }
 
     private var header: some View {
@@ -142,7 +182,13 @@ struct NowPlayingView: View {
             .padding(4)
             .background(foreground.opacity(0.09), in: Capsule())
             Spacer(minLength: 0)
-            Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
+            Button { model.toggleCurrentFavorite() } label: {
+                Image(systemName: model.state.currentTrack?.isLiked == true ? "heart.fill" : "heart")
+                    .font(.title3.weight(.semibold)).frame(width: 44, height: 44)
+            }
+            .disabled(!model.canFavoriteCurrentTrack)
+            .accessibilityLabel(model.state.currentTrack?.isLiked == true ? String(localized: "取消收藏") : String(localized: "收藏"))
+            .accessibilityHint(model.canFavoriteCurrentTrack ? "" : String(localized: "仅本地歌曲可收藏"))
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 12)
@@ -196,15 +242,41 @@ struct NowPlayingView: View {
         VStack(spacing: 12) {
             progressControls
             transportControls
+            HStack {
+                Button {
+                    switchContent(to: contentMode == .lyrics ? .artwork : .lyrics)
+                } label: { Label("歌词", systemImage: "text.alignleft") }
+                Spacer()
+                Button { showAudioControls = true } label: { Label("音量", systemImage: "slider.vertical.3") }
+                Spacer()
+                Button { showSleepTimer = true } label: {
+                    Label("定时", systemImage: model.sleepDeadline == nil ? "timer" : "timer.circle.fill")
+                }
+                .accessibilityIdentifier("player.sleepTimer")
+            }
+            .font(.caption)
+            .buttonStyle(.plain)
+            .padding(.horizontal, 8)
         }
     }
 
     private func artwork(side: CGFloat) -> some View {
         Group {
-            if model.state.currentTrack?.artworkReference != nil {
-                ArtworkView(path: model.state.currentTrack?.artworkReference, cornerRadius: 24)
-            } else {
+            switch visualMode {
+            case .cover:
+                if model.state.currentTrack?.artworkReference != nil {
+                    ArtworkView(path: model.state.currentTrack?.artworkReference, cornerRadius: 24)
+                } else {
+                    RecordVisual(model: model)
+                }
+            case .vinyl:
                 RecordVisual(model: model)
+                    .overlay(alignment: .topTrailing) {
+                        VinylTonearm().frame(width: side * 0.34, height: side * 0.57)
+                            .allowsHitTesting(false).accessibilityHidden(true)
+                    }
+            case .classic:
+                ClassicPlayerVisual(model: model, showQueue: { showQueue = true })
             }
         }
         .frame(width: side, height: side)
@@ -212,8 +284,8 @@ struct NowPlayingView: View {
         .shadow(color: .black.opacity(0.22), radius: 20, y: 10)
         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .highPriorityGesture(panelDrag)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("歌曲封面")
+        .accessibilityElement(children: visualMode == .classic ? .contain : .ignore)
+        .accessibilityLabel(Text(visualMode.title))
         .accessibilityIdentifier("player.artwork")
     }
 
@@ -408,8 +480,8 @@ struct NowPlayingView: View {
                 Image(systemName: model.state.isPlaying ? "pause.fill" : "play.fill")
                     .font(.title2)
                     .frame(width: 64, height: 64)
-                    .background(foreground, in: Circle())
-                    .foregroundStyle(artworkTheme.top.color)
+                    .background(PlayerTheme.accent, in: Circle())
+                    .foregroundStyle(.white)
             }
             .accessibilityLabel(model.state.isPlaying ? String(localized: "暂停") : String(localized: "播放"))
             .accessibilityIdentifier("player.detail.playPause")
