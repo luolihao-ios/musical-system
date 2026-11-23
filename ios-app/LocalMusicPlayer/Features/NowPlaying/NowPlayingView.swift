@@ -48,39 +48,36 @@ struct NowPlayingView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                immersiveBackdrop
+            VStack(spacing: 0) {
+                Capsule()
+                    .fill(.white.opacity(0.32))
+                    .frame(width: 38, height: 5)
+                    .padding(.top, 10)
+                    .padding(.bottom, 2)
 
-                VStack(spacing: 0) {
-                    Capsule()
-                        .fill(.white.opacity(0.32))
-                        .frame(width: 38, height: 5)
-                        .padding(.top, 10)
-                        .padding(.bottom, 2)
+                header
 
-                    header
-
-                    GeometryReader { geometry in
-                        let layout = AdaptivePlayerLayout.resolve(size: geometry.size)
-                        if #available(iOS 27.1, *), !geometry.reservedRegions(kind: .division, options: .includeInactive).isEmpty {
-                            duoPlayer
-                        } else if layout.isWide {
-                            widePlayer(layout: layout)
-                        } else if visualMode == .classic && contentMode == .artwork {
-                            ClassicPlayerVisual(model: model, showQueue: { showQueue = true })
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .padding(.bottom, 16)
-                                .accessibilityIdentifier("player.artwork")
-                                .accessibilityElement(children: .contain)
-                                .accessibilityIdentifier("player.layout.compact")
-                        } else {
-                            compactPlayer(in: geometry.size, artworkSide: layout.artworkSide)
-                        }
+                GeometryReader { geometry in
+                    let layout = AdaptivePlayerLayout.resolve(size: geometry.size)
+                    if #available(iOS 27.1, *), !geometry.reservedRegions(kind: .division, options: .includeInactive).isEmpty {
+                        duoPlayer
+                    } else if layout.isWide {
+                        widePlayer(layout: layout)
+                    } else if visualMode == .classic && contentMode == .artwork {
+                        ClassicPlayerVisual(model: model, showQueue: { showQueue = true })
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(.bottom, 16)
+                            .accessibilityIdentifier("player.artwork")
+                            .accessibilityElement(children: .contain)
+                            .accessibilityIdentifier("player.layout.compact")
+                    } else {
+                        compactPlayer(in: geometry.size, artworkSide: layout.artworkSide)
                     }
                 }
-                .foregroundStyle(foreground)
-                .tint(foreground)
             }
+            .foregroundStyle(foreground)
+            .tint(foreground)
+            .background { immersiveBackdrop }
             .toolbar(.hidden, for: .navigationBar)
         }
         .onAppear {
@@ -130,33 +127,38 @@ struct NowPlayingView: View {
     }
 
     private var immersiveBackdrop: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.10, green: 0.14, blue: 0.24),
-                    Color(red: 0.06, green: 0.08, blue: 0.14)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            if let backdropImage {
-                Image(uiImage: backdropImage)
-                    .resizable()
-                    .scaledToFill()
-                    .scaleEffect(1.35)
-                    .blur(radius: 64)
-                    .saturation(1.25)
-                    .opacity(0.75)
+        GeometryReader { geo in
+            ZStack {
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.10, green: 0.14, blue: 0.24),
+                        Color(red: 0.06, green: 0.08, blue: 0.14)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                if let backdropImage {
+                    Image(uiImage: backdropImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .scaleEffect(1.35)
+                        .blur(radius: 64)
+                        .saturation(1.25)
+                        .opacity(0.75)
+                }
+                LinearGradient(
+                    colors: [
+                        .black.opacity(0.26),
+                        .black.opacity(0.42),
+                        .black.opacity(0.70)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
             }
-            LinearGradient(
-                colors: [
-                    .black.opacity(0.26),
-                    .black.opacity(0.42),
-                    .black.opacity(0.70)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)
