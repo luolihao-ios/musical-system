@@ -2,8 +2,8 @@ import SwiftUI
 
 struct RecordVisual: View {
     @Bindable var model: NowPlayingModel
-    @State private var angle: Double = 0
-    @State private var lastDate: Date?
+    @State private var baseAngle: Double = 0
+    @State private var spinStartDate: Date?
 
     var body: some View {
         TimelineView(
@@ -12,7 +12,9 @@ struct RecordVisual: View {
                 paused: !model.isRecordRotating
             )
         ) { context in
-            let displayedAngle = currentAngle(at: context.date)
+            let elapsed = (model.isRecordRotating ? spinStartDate : nil)
+                .map { max(0, context.date.timeIntervalSince($0)) } ?? 0
+            let displayedAngle = (baseAngle + elapsed * 20).truncatingRemainder(dividingBy: 360)
             ZStack {
                 Circle()
                     .fill(PlayerTheme.accent.opacity(0.28))
@@ -62,32 +64,24 @@ struct RecordVisual: View {
                     .rotationEffect(.degrees(displayedAngle))
                     .shadow(color: .black.opacity(0.32), radius: 18, y: 10)
             }
-            .onChange(of: context.date) { _, now in
-                guard model.isRecordRotating else {
-                    lastDate = nil
-                    return
-                }
-                if let previous = lastDate {
-                    let delta = max(0, min(now.timeIntervalSince(previous), 0.25))
-                    angle = (angle + delta * 20).truncatingRemainder(dividingBy: 360)
-                }
-                lastDate = now
+        }
+        .onAppear {
+            if model.isRecordRotating && spinStartDate == nil {
+                spinStartDate = .now
             }
         }
         .onChange(of: model.isRecordRotating) { _, rotating in
-            if !rotating {
-                lastDate = nil
+            if rotating {
+                spinStartDate = .now
             } else {
-                lastDate = .now
+                if let start = spinStartDate {
+                    baseAngle = (baseAngle + max(0, Date().timeIntervalSince(start)) * 20)
+                        .truncatingRemainder(dividingBy: 360)
+                }
+                spinStartDate = nil
             }
         }
         .aspectRatio(1, contentMode: .fit)
         .accessibilityHidden(true)
-    }
-
-    private func currentAngle(at date: Date) -> Double {
-        guard model.isRecordRotating, let previous = lastDate else { return angle }
-        let delta = max(0, min(date.timeIntervalSince(previous), 0.25))
-        return (angle + delta * 20).truncatingRemainder(dividingBy: 360)
     }
 }
