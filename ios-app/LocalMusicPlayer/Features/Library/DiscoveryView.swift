@@ -56,19 +56,22 @@ struct DiscoveryView: View {
         } message: {
             Text(previewError ?? "")
         }
-        .sheet(item: $selectedShelf) { shelf in
-            NavigationStack {
-                List(shelf.groups) { group in
-                    NavigationLink {
-                        groupTracks(group)
-                    } label: {
-                        Label(group.title, systemImage: shelf.id == "radio" ? "dot.radiowaves.left.and.right" : "music.note.list")
-                    }
+        .navigationDestination(item: $selectedShelf) { shelf in
+            List(shelf.groups) { group in
+                NavigationLink {
+                    groupTracks(group)
+                } label: {
+                    Label(group.title, systemImage: shelf.id == "radio" ? "dot.radiowaves.left.and.right" : "music.note.list")
                 }
-                .navigationTitle(LocalizedStringKey(shelf.title))
             }
+            .scrollContentBackground(.hidden)
+            .background(RefreshBackdrop())
+            .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
+            .navigationTitle(LocalizedStringKey(shelf.title))
         }
-        .sheet(item: $selectedGroup) { group in NavigationStack { groupTracks(group) } }
+        .navigationDestination(item: $selectedGroup) { group in
+            groupTracks(group)
+        }
     }
 
     private var header: some View {
@@ -198,8 +201,6 @@ struct DiscoveryView: View {
         return List {
             if !group.tracks.isEmpty {
                 Button {
-                    selectedGroup = nil
-                    selectedShelf = nil
                     Task {
                         do { try await library.playCatalogGroup(isRadio ? group.tracks.shuffled() : group.tracks) }
                         catch { previewError = error.localizedDescription }
@@ -207,39 +208,73 @@ struct DiscoveryView: View {
                 } label: {
                     Label(isRadio ? String(localized: "开始电台") : String(localized: "播放全部"),
                           systemImage: isRadio ? "dot.radiowaves.left.and.right" : "play.fill")
+                        .font(.headline)
+                        .foregroundStyle(PlayerTheme.accent)
                 }
             }
             ForEach(group.tracks) { track in
-                Button { play(track, in: group.tracks) } label: {
-                    HStack {
+                Button { preview(track, in: group.tracks) } label: {
+                    HStack(spacing: 12) {
                         cover(track, tint: mint).frame(width: 46)
-                        VStack(alignment: .leading) {
+                        VStack(alignment: .leading, spacing: 3) {
                             Text(track.title)
-                            Text(track.artist).font(.caption).foregroundStyle(.secondary)
+                                .foregroundStyle(library.currentTrackID == track.previewID ? PlayerTheme.accent : Color.primary)
+                                .lineLimit(1)
+                            Text(track.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Spacer()
-                        previewLabel(track)
+                        if library.catalogPreviewLoadingID == track.id {
+                            ProgressView().controlSize(.small)
+                        } else if library.currentTrackID == track.previewID && library.isCurrentTrackPlaying {
+                            Image(systemName: "pause.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(PlayerTheme.accent)
+                        } else {
+                            Image(systemName: "play.circle")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                        }
                     }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(RefreshBackdrop())
+        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .navigationTitle(LocalizedStringKey(group.title))
     }
 
-    private func play(_ track: CatalogTrack, in queue: [CatalogTrack]) {
-        selectedGroup = nil
-        selectedShelf = nil
-        preview(track, in: queue)
-    }
-
     private func trackCard(_ track: CatalogTrack) -> some View {
-        Button { preview(track) } label: {
+        let isCurrent = library.currentTrackID == track.previewID
+        let isLoading = library.catalogPreviewLoadingID == track.id
+        let isPlaying = isCurrent && library.isCurrentTrackPlaying
+        return Button { preview(track, in: recommendations.tracks) } label: {
             VStack(alignment: .leading, spacing: 8) {
                 cover(track, tint: mint)
-                Text(track.title).font(.headline).lineLimit(1)
+                    .overlay(alignment: .bottomTrailing) {
+                        Group {
+                            if isLoading {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(isPlaying ? .white : PlayerTheme.accent)
+                            }
+                        }
+                        .frame(width: 32, height: 32)
+                        .background(
+                            isPlaying ? AnyShapeStyle(PlayerTheme.accent) : AnyShapeStyle(.regularMaterial),
+                            in: Circle()
+                        )
+                        .padding(8)
+                    }
+                Text(track.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(isCurrent ? PlayerTheme.accent : Color.primary)
+                    .lineLimit(1)
                 Text(track.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                previewLabel(track).font(.caption.weight(.semibold))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(10)

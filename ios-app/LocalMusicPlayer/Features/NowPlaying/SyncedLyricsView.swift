@@ -14,26 +14,33 @@ struct SyncedLyricsView: View {
                         Array(model.lyricLines.enumerated()),
                         id: \.element.id
                     ) { entry in
-                        Text(
-                            entry.element.text.isEmpty
-                                ? " "
-                                : entry.element.text
-                        )
-                        .font(
-                            entry.offset == model.currentLyricIndex
-                                ? .title3.weight(.semibold)
-                                : .body
-                        )
-                        .foregroundStyle(foreground)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
+                        let isActive = entry.offset == model.currentLyricIndex
+                        Button {
+                            try? model.seek(to: entry.element)
+                            isUserBrowsing = false
+                            scroll(to: entry.offset, proxy: proxy)
+                        } label: {
+                            Text(
+                                entry.element.text.isEmpty
+                                    ? " "
+                                    : entry.element.text
+                            )
+                            .font(
+                                isActive
+                                    ? .title3.weight(.bold)
+                                    : .body
+                            )
+                            .foregroundStyle(foreground.opacity(isActive ? 1.0 : 0.42))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 2)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                         .id(entry.offset)
+                        .animation(.easeInOut(duration: 0.2), value: model.currentLyricIndex)
                         .accessibilityIdentifier("player.lyrics.line.\(entry.offset)")
-                        .accessibilityAddTraits(
-                            entry.offset == model.currentLyricIndex
-                                ? .isSelected
-                                : []
-                        )
+                        .accessibilityAddTraits(isActive ? .isSelected : [])
+                        .accessibilityHint("轻点跳转到这句歌词")
                     }
                 }
                 .padding(.vertical, 100)

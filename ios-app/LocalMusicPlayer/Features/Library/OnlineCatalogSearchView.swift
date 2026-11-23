@@ -5,6 +5,7 @@ struct OnlineCatalogSearchView: View {
     private enum Scope: Hashable { case online, local }
     @Bindable var model: LibraryModel
     var initialResults: [CatalogTrack] = []
+    @AppStorage("search.recentQueries") private var recentQueriesRaw = ""
     @State private var query = ""
     @State private var results: [CatalogTrack] = []
     @State private var loading = false
@@ -14,6 +15,37 @@ struct OnlineCatalogSearchView: View {
     @State private var message = ""
     @State private var searchGeneration = UUID()
     @State private var scope: Scope = .online
+    @State private var playableOnly = true
+
+    private var recentQueries: [String] {
+        recentQueriesRaw
+            .split(separator: "\n")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+    }
+
+    private var recommendedTerms: [String] {
+        let lang = Locale.current.language.languageCode?.identifier ?? ""
+        if lang.hasPrefix("zh") {
+            return ["轻音乐", "钢琴曲", "民谣", "爵士", "纯音乐", "华语流行"]
+        }
+        return ["piano", "jazz", "acoustic", "electronic"]
+    }
+
+    private var playableResults: [CatalogTrack] {
+        results.filter { $0.previewURL != nil }
+    }
+
+    private var hasMetadataOnlyResults: Bool {
+        results.contains { $0.previewURL == nil }
+    }
+
+    private var displayedOnlineResults: [CatalogTrack] {
+        if playableOnly && !playableResults.isEmpty {
+            return playableResults
+        }
+        return results
+    }
 
     private var localResults: [TrackSnapshot] {
         let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -32,10 +64,14 @@ struct OnlineCatalogSearchView: View {
                 }
                 .pickerStyle(.segmented)
                 .listRowBackground(Color.clear)
+
                 if scope == .local {
                     ForEach(localResults) { track in
-                        TrackRow(track: track, isCurrent: model.currentTrackID == track.id,
-                                 isPlaying: model.isCurrentTrackPlaying) {
+                        TrackRow(
+                            track: track,
+                            isCurrent: model.currentTrackID == track.id,
+                            isPlaying: model.isCurrentTrackPlaying
+                        ) {
                             Task { try? await model.play(track, in: localResults) }
                         } toggleLike: {
                             try? model.toggleLike(track)
@@ -43,11 +79,33 @@ struct OnlineCatalogSearchView: View {
                             try? model.delete(track)
                         }
                     }
-                    if localResults.isEmpty { Text("没有匹配的本地音乐").foregroundStyle(.secondary) }
+                    if localResults.isEmpty {
+                        Text("没有匹配的本地音乐").foregroundStyle(.secondary)
+                    }
                 } else {
                     if query.isEmpty && results.isEmpty {
+                        if !recentQueries.isEmpty {
+                            Section {
+                                ForEach(recentQueries, id: \.self) { term in
+                                    Button {
+                                        query = term
+                                        startSearch()
+                                    } label: {
+                                        Label(term, systemImage: "clock.arrow.circlepath")
+                                    }
+                                    .foregroundStyle(.primary)
+                                }
+                            } header: {
+                                HStack {
+                                    Text("最近搜索")
+                                    Spacer()
+                                    Button("清空") { recentQueriesRaw = "" }
+                                        .font(.caption)
+                                }
+                            }
+                        }
                         Section("推荐搜索") {
-                            ForEach(["piano", "jazz", "acoustic", "electronic"], id: \.self) { term in
+                            ForEach(recommendedTerms, id: \.self) { term in
                                 Button(term) { query = term; startSearch() }
                             }
                         }
@@ -59,14 +117,32 @@ struct OnlineCatalogSearchView: View {
                     } else if !loading && !results.isEmpty && results.allSatisfy({ $0.previewURL == nil }) {
                         Text("找到曲目信息，暂无可试听音源").foregroundStyle(.secondary)
                     }
-                    ForEach(results) { track in
+                    if !playableResults.isEmpty && hasMetadataOnlyResults {
+                        HStack {
+                            Text(playableOnly ? String(localized: "仅显示可试听曲目") : String(localized: "显示全部结果"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button(playableOnly ? String(localized: "显示全部") : String(localized: "仅看可播")) {
+                                playableOnly.toggle()
+                            }
+                            .font(.caption.weight(.semibold))
+                        }
+                        .listRowBackground(Color.clear)
+                    }
+                    ForEach(displayedOnlineResults) { track in
                         ViewThatFits(in: .horizontal) {
                             HStack(spacing: 12) {
-                                metadata(track).frame(minWidth: 160, maxWidth: .infinity, alignment: .leading)
+                                metadata(track)
+                                    .frame(minWidth: 160, maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { playOnline(track) }
                                 actions(track)
                             }
                             VStack(alignment: .leading, spacing: 8) {
                                 metadata(track)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { playOnline(track) }
                                 actions(track)
                             }
                         }
@@ -80,16 +156,32 @@ struct OnlineCatalogSearchView: View {
             .searchable(text: $query, prompt: "搜索歌曲、歌手或专辑")
             .onSubmit(of: .search) { if scope == .online { startSearch() } }
             .onChange(of: query) { _, value in
-                if value.trimmingCharacters(in: .whitespacesAndNewlines) != submittedQuery { cancelSearch() }
+                if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    cancelSearch()
+                }
             }
             .task { if results.isEmpty { results = initialResults } }
             .navigationTitle("搜索")
-            .alert("提示", isPresented: Binding(get: { !message.isEmpty }, set: { if !$0 { message = "" } })) { Button("好") { message = "" } } message: { Text(message) }
+            .alert("提示", isPresented: Binding(get: { !message.isEmpty }, set: { if !$0 { message = "" } })) {
+                Button("好") { message = "" }
+            } message: {
+                Text(message)
+            }
+        }
+    }
+
+    private func playOnline(_ track: CatalogTrack) {
+        guard track.previewURL != nil else { return }
+        let queue = playableResults
+        Task {
+            do { try await model.toggleCatalogPreview(track, in: queue) }
+            catch { message = String(format: NSLocalizedString("试听失败：%@", comment: ""), error.localizedDescription) }
         }
     }
 
     private func metadata(_ track: CatalogTrack) -> some View {
-        HStack(spacing: 10) {
+        let isCurrent = model.currentTrackID == track.previewID
+        return HStack(spacing: 10) {
             Color.accentColor.opacity(0.12).frame(width: 48, height: 48)
                 .overlay {
                     AsyncImage(url: track.artworkURL) { phase in
@@ -100,7 +192,10 @@ struct OnlineCatalogSearchView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 9))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
-                Text(track.title).lineLimit(2)
+                Text(track.title)
+                    .foregroundStyle(isCurrent ? PlayerTheme.accent : Color.primary)
+                    .fontWeight(isCurrent ? .semibold : .regular)
+                    .lineLimit(2)
                 Text(track.artist).font(.caption).foregroundStyle(.secondary)
                 Text([track.provider, track.previewURL == nil && !track.allowsDownload ? String(localized: "仅曲目信息") : track.license.displayName]
                     .filter { !$0.isEmpty }.joined(separator: " · "))
@@ -114,24 +209,34 @@ struct OnlineCatalogSearchView: View {
 
     private func actions(_ track: CatalogTrack) -> some View {
         HStack(spacing: 8) {
-                    if track.previewURL != nil {
-                        let selected = model.currentTrackID == track.previewID
-                        let pending = model.catalogPreviewLoadingID == track.id
-                        Button {
-                            Task {
-                                do { try await model.toggleCatalogPreview(track) }
-                                catch { message = String(format: NSLocalizedString("试听失败：%@", comment: ""), error.localizedDescription) }
-                            }
-                        } label: {
-                            Image(systemName: selected && (model.isCurrentTrackPlaying || pending) ? "pause.fill" : "play.fill")
-                                .font(.body.weight(.semibold)).frame(width: 44, height: 44)
-                                .background(Color.accentColor.opacity(0.1), in: Circle())
+            if track.previewURL != nil {
+                let selected = model.currentTrackID == track.previewID
+                let pending = model.catalogPreviewLoadingID == track.id
+                Button {
+                    playOnline(track)
+                } label: {
+                    Group {
+                        if pending {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: selected && model.isCurrentTrackPlaying ? "pause.fill" : "play.fill")
+                                .font(.body.weight(.semibold))
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(String(format: NSLocalizedString(selected && (model.isCurrentTrackPlaying || pending) ? "暂停试听 %@" : "试听 %@", comment: ""), track.title))
                     }
-                    if track.allowsDownload { downloadButton(track) }
+                    .frame(width: 44, height: 44)
+                    .background(Color.accentColor.opacity(0.1), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(format: NSLocalizedString(selected && (model.isCurrentTrackPlaying || pending) ? "暂停试听 %@" : "试听 %@", comment: ""), track.title))
+            }
+            if track.allowsDownload { downloadButton(track) }
         }
+    }
+
+    private func saveRecentQuery(_ keyword: String) {
+        var list = recentQueries.filter { $0.caseInsensitiveCompare(keyword) != .orderedSame }
+        list.insert(keyword, at: 0)
+        recentQueriesRaw = list.prefix(8).joined(separator: "\n")
     }
 
     private func cancelSearch() {
@@ -148,6 +253,7 @@ struct OnlineCatalogSearchView: View {
         let keyword = query.trimmingCharacters(in: .whitespacesAndNewlines)
         cancelSearch()
         guard !keyword.isEmpty else { return }
+        saveRecentQuery(keyword)
         let generation = UUID()
         searchGeneration = generation
         submittedQuery = keyword

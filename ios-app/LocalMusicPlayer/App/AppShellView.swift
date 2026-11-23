@@ -78,6 +78,11 @@ struct AppShellView: View {
                         Label("收藏", systemImage: "heart.fill")
                     }
                     NavigationLink {
+                        PlaylistsView(model: container.playlistsModel)
+                    } label: {
+                        Label("歌单", systemImage: "text.badge.plus")
+                    }
+                    NavigationLink {
                         LibraryTracksView(title: String(localized: "最近播放"),
                                           tracks: container.libraryModel.recentlyPlayed, model: container.libraryModel)
                     } label: {

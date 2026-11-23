@@ -27,7 +27,7 @@ enum PlayerVisualMode: String, CaseIterable, Identifiable {
         switch self {
         case .cover: "封面"
         case .vinyl: "黑胶"
-        case .classic: "复古转盘"
+        case .classic: "iPod"
         }
     }
 }

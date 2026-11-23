@@ -34,6 +34,9 @@ struct PlaylistsView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(RefreshBackdrop())
+        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .overlay {
             if model.playlists.isEmpty {
                 ContentUnavailableView(
@@ -118,8 +121,11 @@ private struct PlaylistDetailView: View {
                         )
                     }
                 }
+                .scrollContentBackground(.hidden)
             }
         }
+        .background(RefreshBackdrop())
+        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .navigationTitle(playlist.name)
         .toolbar {
             if !playlist.isBuiltIn {

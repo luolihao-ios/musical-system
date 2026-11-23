@@ -36,8 +36,11 @@ struct FavoritesView: View {
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
+        .background(RefreshBackdrop())
+        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .navigationTitle("收藏")
     }
 }

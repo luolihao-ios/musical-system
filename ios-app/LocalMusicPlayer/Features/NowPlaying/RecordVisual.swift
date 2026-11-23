@@ -2,6 +2,8 @@ import SwiftUI
 
 struct RecordVisual: View {
     @Bindable var model: NowPlayingModel
+    @State private var angle: Double = 0
+    @State private var lastDate: Date?
 
     var body: some View {
         TimelineView(
@@ -10,13 +12,14 @@ struct RecordVisual: View {
                 paused: !model.isRecordRotating
             )
         ) { context in
-            let angle = context.date.timeIntervalSinceReferenceDate
-                .truncatingRemainder(dividingBy: 18) / 18 * 360
+            let displayedAngle = currentAngle(at: context.date)
             ZStack {
                 Circle()
-                    .fill(PlayerTheme.accent.opacity(0.32))
-                    .blur(radius: model.reduceMotion ? 18 : 30)
-                    .scaleEffect(model.reduceMotion ? 0.92 : 1.04)
+                    .fill(PlayerTheme.accent.opacity(0.28))
+                    .blur(radius: model.reduceMotion ? 16 : 28)
+                    .scaleEffect(model.isRecordRotating && !model.reduceMotion ? 1.03 : 0.94)
+                    .animation(.easeInOut(duration: 0.6), value: model.isRecordRotating)
+
                 Circle()
                     .fill(
                         RadialGradient(
@@ -33,7 +36,7 @@ struct RecordVisual: View {
                         ForEach(0..<9, id: \.self) { index in
                             Circle()
                                 .stroke(
-                                    Color.white.opacity(0.045),
+                                    Color.white.opacity(0.05),
                                     lineWidth: 1
                                 )
                                 .padding(CGFloat(index) * 10 + 12)
@@ -56,18 +59,35 @@ struct RecordVisual: View {
                             .fill(PlayerTheme.accent)
                             .frame(width: 15, height: 15)
                     }
-                    .rotationEffect(
-                        .degrees(model.isRecordRotating ? angle : 0)
-                    )
+                    .rotationEffect(.degrees(displayedAngle))
+                    .shadow(color: .black.opacity(0.32), radius: 18, y: 10)
             }
-            .animation(
-                model.reduceMotion
-                    ? nil
-                    : .easeInOut(duration: 2.2).repeatForever(autoreverses: true),
-                value: model.isRecordRotating
-            )
+            .onChange(of: context.date) { _, now in
+                guard model.isRecordRotating else {
+                    lastDate = nil
+                    return
+                }
+                if let previous = lastDate {
+                    let delta = max(0, min(now.timeIntervalSince(previous), 0.25))
+                    angle = (angle + delta * 20).truncatingRemainder(dividingBy: 360)
+                }
+                lastDate = now
+            }
+        }
+        .onChange(of: model.isRecordRotating) { _, rotating in
+            if !rotating {
+                lastDate = nil
+            } else {
+                lastDate = .now
+            }
         }
         .aspectRatio(1, contentMode: .fit)
         .accessibilityHidden(true)
+    }
+
+    private func currentAngle(at date: Date) -> Double {
+        guard model.isRecordRotating, let previous = lastDate else { return angle }
+        let delta = max(0, min(date.timeIntervalSince(previous), 0.25))
+        return (angle + delta * 20).truncatingRemainder(dividingBy: 360)
     }
 }

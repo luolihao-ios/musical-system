@@ -1,13 +1,13 @@
 import Foundation
 import Observation
 
-struct DiscoveryGroup: Identifiable, Codable, Sendable {
+struct DiscoveryGroup: Identifiable, Hashable, Codable, Sendable {
     let id: String
     let title: String
     let tracks: [CatalogTrack]
 }
 
-struct DiscoveryShelf: Identifiable, Codable, Sendable {
+struct DiscoveryShelf: Identifiable, Hashable, Codable, Sendable {
     let id: String
     let title: String
     let groups: [DiscoveryGroup]

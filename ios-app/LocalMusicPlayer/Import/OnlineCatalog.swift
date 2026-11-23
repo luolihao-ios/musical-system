@@ -2,7 +2,7 @@ import Foundation
 import ImageIO
 import StoreKit
 
-enum CatalogLicense: Sendable, Equatable, Codable {
+enum CatalogLicense: Sendable, Equatable, Hashable, Codable {
     case publicDomain
     case creativeCommons(attribution: String)
     case unknown
@@ -15,7 +15,7 @@ enum CatalogLicense: Sendable, Equatable, Codable {
     }
 }
 
-struct CatalogTrack: Identifiable, Sendable, Equatable, Codable {
+struct CatalogTrack: Identifiable, Sendable, Equatable, Hashable, Codable {
     let id: String
     let title: String
     let artist: String
@@ -127,7 +127,27 @@ actor OnlineCatalog: CatalogDownloading {
 
     nonisolated static func prioritizePlayable(_ tracks: [CatalogTrack]) -> [CatalogTrack] {
         let unique = tracks.removingDuplicates()
-        return unique.filter { $0.previewURL != nil } + unique.filter { $0.previewURL == nil }
+        var artworkByTitle: [String: URL] = [:]
+        for track in unique {
+            if let art = track.artworkURL {
+                let key = track.title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+                if !key.isEmpty && artworkByTitle[key] == nil {
+                    artworkByTitle[key] = art
+                }
+            }
+        }
+        let enriched = unique.map { track -> CatalogTrack in
+            guard track.artworkURL == nil else { return track }
+            let key = track.title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let art = artworkByTitle[key] else { return track }
+            return CatalogTrack(
+                id: track.id, title: track.title, artist: track.artist,
+                audioURL: track.audioURL, license: track.license, provider: track.provider,
+                previewURL: track.previewURL, artworkURL: art,
+                providerAllowsDownload: track.providerAllowsDownload
+            )
+        }
+        return enriched.filter { $0.previewURL != nil } + enriched.filter { $0.previewURL == nil }
     }
 
     nonisolated static func iTunesRegion(storefront: String?, locale: Locale) -> String {
@@ -241,27 +261,70 @@ actor OnlineCatalog: CatalogDownloading {
     }
 
     func discoveryFeed(for market: DiscoveryMarket) async -> DiscoveryFeed {
+        let isChineseMarket = ["CN", "TW", "HK", "MO"].contains(market.region.uppercased())
+        let clientID = UserDefaults.standard.string(forKey: "jamendoClientID") ?? ""
+
+        if isChineseMarket {
+            async let hot = try? searchNetEase(query: "热门华语")
+            async let calm = try? searchNetEase(query: market.regionalQuery)
+            async let folk = try? searchNetEase(query: "民谣")
+            async let piano = try? searchNetEase(query: "钢琴曲")
+            async let openFallback = try? archiveGroups(query: nil, order: .popular, limit: 5)
+            let (hotTracks, calmTracks, folkTracks, pianoTracks, archiveAlbums) = await (hot, calm, folk, piano, openFallback)
+
+            let chartTracks = DiscoveryModel.playableTracks(hotTracks ?? [])
+            let calmList = DiscoveryModel.playableTracks(calmTracks ?? [])
+            let folkList = DiscoveryModel.playableTracks(folkTracks ?? [])
+            let pianoList = DiscoveryModel.playableTracks(pianoTracks ?? [])
+            let albums = archiveAlbums ?? []
+
+            let mixes: [DiscoveryGroup] = [
+                .init(id: "calm", title: "轻松时刻", tracks: calmList),
+                .init(id: "folk", title: "民谣精选", tracks: folkList),
+                .init(id: "piano", title: "钢琴漫游", tracks: pianoList)
+            ]
+            let radios: [DiscoveryGroup] = [
+                .init(id: "radio-calm", title: "轻松时刻", tracks: calmList + pianoList),
+                .init(id: "radio-hot", title: "华语热播", tracks: chartTracks),
+                .init(id: "radio-folk", title: "民谣电台", tracks: folkList)
+            ]
+            let combinedRecs = DiscoveryModel.playableTracks(
+                Array(chartTracks.prefix(6)) + Array(calmList.prefix(4)) + Array(folkList.prefix(4)) + albums.compactMap { $0.tracks.first }
+            )
+            if !combinedRecs.isEmpty {
+                return DiscoveryFeed(recommendations: combinedRecs, shelves: [
+                    .init(id: "chart", title: "热门榜单", groups: [.init(id: "popular", title: "热门华语", tracks: chartTracks)]),
+                    .init(id: "mixes", title: "精选歌单", groups: mixes),
+                    .init(id: "radio", title: "风格电台", groups: radios),
+                    .init(id: "recent", title: "最近收录", groups: [.init(id: "newest", title: "轻音乐精选", tracks: pianoList)]),
+                    .init(id: "albums", title: "热门专辑", groups: albums)
+                ]).filtered()
+            }
+        }
+
+        async let jamendoOpen = try? searchJamendo(query: market.openQuery, clientID: clientID)
         async let popular = try? archiveGroups(query: nil, order: .popular, limit: 8)
         async let recent = try? archiveGroups(query: nil, order: .recent, limit: 5)
         async let gentle = try? archiveGroups(query: market.openQuery, order: .popular, limit: 4)
         async let electronic = try? archiveGroups(query: "electronic", order: .popular, limit: 4)
         async let jazz = try? archiveGroups(query: "jazz", order: .popular, limit: 4)
-        let (topResult, freshResult, calmResult, electroResult, swingResult) = await (popular, recent, gentle, electronic, jazz)
+        let (jamendoResult, topResult, freshResult, calmResult, electroResult, swingResult) = await (jamendoOpen, popular, recent, gentle, electronic, jazz)
+        let jamendo = DiscoveryModel.playableTracks(jamendoResult ?? [])
         let top = topResult ?? [], fresh = freshResult ?? [], calm = calmResult ?? []
         let electro = electroResult ?? [], swing = swingResult ?? []
         let chart = top.compactMap { $0.tracks.first }
         let newest = fresh.compactMap { $0.tracks.first }
         let mixes: [DiscoveryGroup] = [
-            .init(id: "calm", title: "轻松时刻", tracks: calm.compactMap { $0.tracks.first }),
+            .init(id: "calm", title: "轻松时刻", tracks: Array(jamendo.prefix(6)) + calm.compactMap { $0.tracks.first }),
             .init(id: "electronic", title: "电子节拍", tracks: electro.compactMap { $0.tracks.first }),
             .init(id: "jazz", title: "爵士漫游", tracks: swing.compactMap { $0.tracks.first })
         ]
         let radios: [DiscoveryGroup] = [
-            .init(id: "radio-calm", title: "轻松时刻", tracks: calm.flatMap(\.tracks)),
+            .init(id: "radio-calm", title: "轻松时刻", tracks: jamendo + calm.flatMap(\.tracks)),
             .init(id: "radio-electronic", title: "电子节拍", tracks: electro.flatMap(\.tracks)),
             .init(id: "radio-jazz", title: "爵士漫游", tracks: swing.flatMap(\.tracks))
         ]
-        return DiscoveryFeed(recommendations: Array(mixes.flatMap(\.tracks).prefix(8)) + chart + newest, shelves: [
+        return DiscoveryFeed(recommendations: Array(jamendo.prefix(6)) + Array(mixes.flatMap(\.tracks).prefix(8)) + chart + newest, shelves: [
             .init(id: "chart", title: "热门榜单", groups: [.init(id: "popular", title: "档案馆热门", tracks: chart)]),
             .init(id: "mixes", title: "精选歌单", groups: mixes),
             .init(id: "radio", title: "风格电台", groups: radios),

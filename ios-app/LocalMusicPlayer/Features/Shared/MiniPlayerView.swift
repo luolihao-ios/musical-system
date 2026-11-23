@@ -116,9 +116,19 @@ struct MiniPlayerView: View {
             .accessibilityLabel("打开正在播放")
             .accessibilityIdentifier("player.compact.open")
             .highPriorityGesture(
-                DragGesture(minimumDistance: 8, coordinateSpace: .global)
+                DragGesture(minimumDistance: 12, coordinateSpace: .global)
                     .onEnded { value in
-                        PlayerInteractionDiagnostics.log("compact swipe ignored translation=\(value.translation)")
+                        let dx = value.translation.width
+                        let dy = value.translation.height
+                        if dy <= -32 && abs(dy) > abs(dx) {
+                            expand()
+                        } else if dx <= -48 && abs(dx) > abs(dy) {
+                            Task { await model.next() }
+                        } else if dx >= 48 && abs(dx) > abs(dy) {
+                            Task { await model.previous() }
+                        } else {
+                            PlayerInteractionDiagnostics.log("compact swipe ignored translation=\(value.translation)")
+                        }
                     }
             )
             Button {

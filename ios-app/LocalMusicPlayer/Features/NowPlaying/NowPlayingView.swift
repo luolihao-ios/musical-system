@@ -32,6 +32,7 @@ struct NowPlayingView: View {
     @AppStorage("player.visualMode") private var visualMode = PlayerVisualMode.cover
     @State private var showSleepTimer = false
     @State private var showAudioControls = false
+    @State private var scrubbingProgress: Double?
 
     private struct ArtworkRequest: Equatable, Sendable {
         let trackID: String?
@@ -56,13 +57,26 @@ struct NowPlayingView: View {
 
                 VStack(spacing: 0) {
                     header
-                    visualSelector
+                    if contentMode == .artwork {
+                        visualSelector
+                    }
                     GeometryReader { geometry in
                         let layout = AdaptivePlayerLayout.resolve(size: geometry.size)
                         if #available(iOS 27.1, *), !geometry.reservedRegions(kind: .division, options: .includeInactive).isEmpty {
                             duoPlayer
                         } else if layout.isWide {
                             widePlayer(layout: layout)
+                        } else if visualMode == .classic && contentMode == .artwork {
+                            VStack(spacing: 8) {
+                                ClassicPlayerVisual(model: model, showQueue: { showQueue = true })
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .accessibilityIdentifier("player.artwork")
+                                utilityBar
+                                    .padding(.horizontal, 28)
+                                    .padding(.bottom, 14)
+                            }
+                            .accessibilityElement(children: .contain)
+                            .accessibilityIdentifier("player.layout.compact")
                         } else {
                             VStack(spacing: 0) {
                                 GeometryReader { viewport in
@@ -242,22 +256,32 @@ struct NowPlayingView: View {
         VStack(spacing: 12) {
             progressControls
             transportControls
-            HStack {
-                Button {
-                    switchContent(to: contentMode == .lyrics ? .artwork : .lyrics)
-                } label: { Label("歌词", systemImage: "text.alignleft") }
-                Spacer()
-                Button { showAudioControls = true } label: { Label("音量", systemImage: "slider.vertical.3") }
-                Spacer()
-                Button { showSleepTimer = true } label: {
-                    Label("定时", systemImage: model.sleepDeadline == nil ? "timer" : "timer.circle.fill")
-                }
-                .accessibilityIdentifier("player.sleepTimer")
-            }
-            .font(.caption)
-            .buttonStyle(.plain)
-            .padding(.horizontal, 8)
+            utilityBar
         }
+    }
+
+    private var utilityBar: some View {
+        HStack {
+            Button {
+                switchContent(to: contentMode == .lyrics ? .artwork : .lyrics)
+            } label: { Label("歌词", systemImage: "text.alignleft") }
+            Spacer()
+            Button { showAudioControls = true } label: { Label("音量", systemImage: "slider.vertical.3") }
+            Spacer()
+            Button { showSleepTimer = true } label: {
+                Label(sleepTimerLabel, systemImage: model.sleepDeadline == nil ? "timer" : "timer.circle.fill")
+            }
+            .accessibilityIdentifier("player.sleepTimer")
+        }
+        .font(.caption)
+        .buttonStyle(.plain)
+        .padding(.horizontal, 8)
+    }
+
+    private var sleepTimerLabel: String {
+        guard let deadline = model.sleepDeadline else { return String(localized: "定时") }
+        let minutes = max(1, Int(ceil(deadline.timeIntervalSinceNow / 60)))
+        return String(format: NSLocalizedString("%lld 分钟", comment: ""), Int64(minutes))
     }
 
     private func artwork(side: CGFloat) -> some View {
@@ -266,23 +290,26 @@ struct NowPlayingView: View {
             case .cover:
                 if model.state.currentTrack?.artworkReference != nil {
                     ArtworkView(path: model.state.currentTrack?.artworkReference, cornerRadius: 24)
+                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                        .shadow(color: .black.opacity(0.22), radius: 20, y: 10)
                 } else {
                     RecordVisual(model: model)
                 }
             case .vinyl:
                 RecordVisual(model: model)
+                    .padding(8)
                     .overlay(alignment: .topTrailing) {
-                        VinylTonearm().frame(width: side * 0.34, height: side * 0.57)
-                            .allowsHitTesting(false).accessibilityHidden(true)
+                        VinylTonearm(isPlaying: model.state.isPlaying)
+                            .frame(width: side * 0.34, height: side * 0.57)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
                     }
             case .classic:
                 ClassicPlayerVisual(model: model, showQueue: { showQueue = true })
             }
         }
         .frame(width: side, height: side)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: .black.opacity(0.22), radius: 20, y: 10)
-        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .contentShape(Rectangle())
         .highPriorityGesture(panelDrag)
         .accessibilityElement(children: visualMode == .classic ? .contain : .ignore)
         .accessibilityLabel(Text(visualMode.title))
@@ -418,6 +445,9 @@ struct NowPlayingView: View {
         } else {
             withAnimation(.easeInOut(duration: 0.25)) { contentMode = mode }
         }
+        if mode == .lyrics && !model.hasLyrics && !model.isSearchingLyrics {
+            Task { await model.findLyrics() }
+        }
     }
 
     private var trackIdentity: some View {
@@ -446,15 +476,26 @@ struct NowPlayingView: View {
     }
 
     private var progressControls: some View {
-        VStack(spacing: 4) {
+        let displayedProgress = scrubbingProgress ?? model.progress
+        let displayedPosition = scrubbingProgress.map { $0 * model.state.duration } ?? model.state.position
+        return VStack(spacing: 4) {
             Slider(
-                value: Binding(get: { model.progress }, set: { try? model.seek(fraction: $0) }),
-                in: 0...1
+                value: Binding(
+                    get: { displayedProgress },
+                    set: { scrubbingProgress = $0 }
+                ),
+                in: 0...1,
+                onEditingChanged: { editing in
+                    if !editing, let target = scrubbingProgress {
+                        scrubbingProgress = nil
+                        try? model.seek(fraction: target)
+                    }
+                }
             )
             .accessibilityLabel("播放进度")
             .accessibilityIdentifier("player.detail.progress")
             HStack {
-                Text(format(model.state.position))
+                Text(format(displayedPosition))
                 Spacer()
                 Text(format(model.state.duration))
             }
