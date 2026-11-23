@@ -34,3 +34,13 @@ class ReferenceRefreshTests(unittest.TestCase):
         self.assertIn("contentShape(", image)
         self.assertIn("discovery.search", discovery)
         self.assertIn(".contentShape(RoundedRectangle(cornerRadius: 24", discovery)
+
+    def test_recommendation_engine_and_taste_signals_are_wired(self):
+        catalog = (ROOT / "Import/OnlineCatalog.swift").read_text(encoding="utf-8")
+        playback = (ROOT / "Playback/PlaybackController.swift").read_text(encoding="utf-8")
+        container = (ROOT / "App/AppContainer.swift").read_text(encoding="utf-8")
+        self.assertIn("RecommendationEngine.rankAndDiversify", catalog)
+        self.assertIn("RecommendationEngine.recallPlan", catalog)
+        self.assertIn("RecommendationEngine.continuationQueries", catalog)
+        self.assertIn("onTrackSessionEnded", playback)
+        self.assertIn("TasteProfileStore.shared", container)

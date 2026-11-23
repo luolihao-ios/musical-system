@@ -36,6 +36,15 @@ final class AppContainer {
             playback.onAutoSkipNotice = { message in
                 ToastCenter.shared.show(message, systemImage: "forward.end.fill")
             }
+            playback.onTrackSessionEnded = { track, played, duration, wasManualSkip in
+                TasteProfileStore.shared.recordPlaybackOutcome(
+                    trackID: track.id,
+                    artist: track.artist,
+                    playedSeconds: played,
+                    duration: duration,
+                    wasManualSkip: wasManualSkip
+                )
+            }
         }
         CoverSearchDiagnostics.log("session version=\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") ?? "?") build=\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") ?? "?") provider=existing-catalogs")
         let playlistsModel = PlaylistsModel(
@@ -43,10 +52,18 @@ final class AppContainer {
             playback: playback
         )
         try libraryModel.reload()
+        if !inMemory {
+            TasteProfileStore.shared.seedFromLocalLibrary(libraryModel.tracks)
+        }
         try playlistsModel.reload()
         try playback.restoreQueueIfPossible(libraryModel.tracks)
         let bridge = NowPlayingBridge(controller: playback)
-        let nowPlayingModel = NowPlayingModel(playback: playback, online: OnlineMusicResources.shared, store: store)
+        let nowPlayingModel = NowPlayingModel(
+            playback: playback,
+            online: OnlineMusicResources.shared,
+            store: store,
+            tasteProfile: inMemory ? nil : TasteProfileStore.shared
+        )
 
         self.modelContainer = modelContainer
         self.store = store

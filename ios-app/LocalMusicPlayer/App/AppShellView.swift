@@ -18,7 +18,14 @@ struct AppShellView: View {
         self.initialOnlineResults = initialOnlineResults
         _discovery = State(initialValue: DiscoveryModel(
             fixtureTracks: initialOnlineResults.isEmpty ? nil : initialOnlineResults,
-            feedLoader: { market in await OnlineCatalog.shared.discoveryFeed(for: market) }
+            feedLoader: { market in
+                let taste = await MainActor.run { TasteProfileStore.shared.snapshotForFeedRefresh() }
+                let feed = await OnlineCatalog.shared.discoveryFeed(for: market, taste: taste)
+                await MainActor.run {
+                    TasteProfileStore.shared.recordHomeImpressions(feed.recommendations.prefix(6).map(\.id))
+                }
+                return feed
+            }
         ))
     }
 

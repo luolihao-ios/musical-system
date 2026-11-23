@@ -42,6 +42,7 @@ final class NowPlayingModel {
     private let lyricsReader: any LyricsReading
     private let online: (any MusicResourceSearching)?
     private let store: MusicStore?
+    private let tasteProfile: TasteProfileStore?
     private var requestedLyricsPath: String?
     private var requestedLyricTrackID: String?
     private var lyricsTask: Task<Void, Never>?
@@ -53,12 +54,14 @@ final class NowPlayingModel {
         lyricsReader: any LyricsReading = FileLyricsReader(),
         reduceMotion: Bool = false,
         online: (any MusicResourceSearching)? = nil,
-        store: MusicStore? = nil
+        store: MusicStore? = nil,
+        tasteProfile: TasteProfileStore? = nil
     ) {
         self.playback = playback
         self.lyricsReader = lyricsReader
         self.online = online
         self.store = store
+        self.tasteProfile = tasteProfile
         self.reduceMotion = reduceMotion
         state = playback.state
         observerID = playback.observeState { [weak self] state in
@@ -152,6 +155,7 @@ final class NowPlayingModel {
                 isLiked: liked, isAvailable: track.isAvailable, lastPlayedAt: track.lastPlayedAt
             )
             playback.refreshTrackMetadata(updated)
+            tasteProfile?.recordFavorite(artist: track.artist, trackID: track.id, isLiked: liked)
             NotificationCenter.default.post(name: .libraryFavoritesChanged, object: nil)
             ToastCenter.shared.show(
                 liked ? String(localized: "已收藏") : String(localized: "已取消收藏"),
@@ -165,6 +169,7 @@ final class NowPlayingModel {
             try store.setLiked(trackID: track.id, isLiked: nextLiked)
             if let updated = try store.track(id: track.id) {
                 playback.refreshTrackMetadata(TrackSnapshot(updated))
+                tasteProfile?.recordFavorite(artist: track.artist, trackID: track.id, isLiked: nextLiked)
                 NotificationCenter.default.post(name: .libraryFavoritesChanged, object: nil)
                 ToastCenter.shared.show(
                     nextLiked ? String(localized: "已收藏") : String(localized: "已取消收藏"),

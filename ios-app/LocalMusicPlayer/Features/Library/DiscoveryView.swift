@@ -55,7 +55,14 @@ struct DiscoveryView: View {
         .background(RefreshBackdrop())
         .accessibilityIdentifier("discovery.home")
         .toolbar(.hidden, for: .navigationBar)
-        .onAppear { Task { await recommendations.loadIfNeeded() } }
+        .onAppear {
+            Task {
+                await recommendations.loadIfNeeded()
+                if TasteProfileStore.shared.needsHomeRefresh {
+                    await recommendations.refresh()
+                }
+            }
+        }
         .refreshable { await recommendations.refresh() }
         .alert("提示", isPresented: Binding(
             get: { previewError != nil },

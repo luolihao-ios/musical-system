@@ -42,7 +42,9 @@ final class PlaybackController: PlaybackControlling {
     private var playbackGeneration = UUID()
     private var acceptsPositionUpdates = true
     private var preloadedTrackID: String?
+    private var lastReportedSessionGeneration: UUID?
     var onAutoSkipNotice: ((String) -> Void)?
+    var onTrackSessionEnded: ((TrackSnapshot, TimeInterval, TimeInterval, Bool) -> Void)?
 
     init(
         engine: any AudioEngine = AVPlayerEngine(),
@@ -154,6 +156,19 @@ final class PlaybackController: PlaybackControlling {
         try await playTrackInternal(track, in: queue, resetOnFailure: true)
     }
 
+    private func reportTrackSessionIfNeeded(
+        wasManualSkip: Bool,
+        overridePosition: TimeInterval? = nil
+    ) {
+        guard lastReportedSessionGeneration != playbackGeneration,
+              let current = state.currentTrack,
+              loadedTrackID == current.id else { return }
+        lastReportedSessionGeneration = playbackGeneration
+        let played = max(0, overridePosition ?? engine.position)
+        let total = max(engine.duration, state.duration, current.duration)
+        onTrackSessionEnded?(current, played, total, wasManualSkip)
+    }
+
     private func playTrackInternal(
         _ track: TrackSnapshot,
         in queue: [TrackSnapshot],
@@ -164,6 +179,9 @@ final class PlaybackController: PlaybackControlling {
             $0.id == track.id
         }) else {
             return
+        }
+        if state.currentTrack?.id != track.id {
+            reportTrackSessionIfNeeded(wasManualSkip: false)
         }
         let generation = UUID()
         playbackGeneration = generation
@@ -391,6 +409,7 @@ final class PlaybackController: PlaybackControlling {
     }
 
     func next() async throws {
+        reportTrackSessionIfNeeded(wasManualSkip: true)
         let snapshotQueue = state.queue
         guard !snapshotQueue.isEmpty else { return }
         var excluded = Set<Int>()
@@ -461,6 +480,10 @@ final class PlaybackController: PlaybackControlling {
     }
 
     private func handleCompletion() async throws {
+        reportTrackSessionIfNeeded(
+            wasManualSkip: false,
+            overridePosition: max(engine.position, state.duration)
+        )
         if state.mode == .repeatOne {
             engine.seek(to: 0)
             engine.play()

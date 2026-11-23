@@ -362,8 +362,9 @@ final class LibraryModel {
         autoContinuedForTrackID = current.id
         autoContinueTask?.cancel()
         let existingIDs = Set(state.queue.map(\.id))
+        let taste = TasteProfileStore.shared.snapshot()
         autoContinueTask = Task { [weak self] in
-            let similar = await OnlineCatalog.shared.similarTracks(to: current, excluding: existingIDs)
+            let similar = await OnlineCatalog.shared.similarTracks(to: current, excluding: existingIDs, taste: taste)
             guard !Task.isCancelled, let self, !similar.isEmpty else { return }
             var snapshots: [TrackSnapshot] = []
             for candidate in similar {
@@ -424,6 +425,9 @@ final class LibraryModel {
             try Task.checkCancellation()
             try await importCatalogTrack(track, audioURL: url, artworkURL: artwork)
             catalogDownloads[track.id] = .completed
+            if enablesAutoContinue {
+                TasteProfileStore.shared.recordDownload(artist: track.artist, trackID: track.id)
+            }
         } catch {
             catalogDownloads[track.id] = .failed(error.localizedDescription)
         }

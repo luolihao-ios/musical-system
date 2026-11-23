@@ -317,6 +317,7 @@ struct OnlineCatalogSearchView: View {
     private func playOnline(_ track: CatalogTrack) {
         guard track.previewURL != nil else { return }
         dismissKeyboard()
+        TasteProfileStore.shared.recordSearchPlay(artist: track.artist, trackID: track.id, searchQuery: submittedQuery)
         if model.currentTrackID != track.previewID {
             NotificationCenter.default.post(name: .openNowPlayingPanel, object: nil)
         }
@@ -434,6 +435,7 @@ struct OnlineCatalogSearchView: View {
         cancelSearch()
         guard !keyword.isEmpty else { return }
         saveRecentQuery(keyword)
+        TasteProfileStore.shared.recordSearchQuery(keyword)
         let generation = UUID()
         searchGeneration = generation
         submittedQuery = keyword

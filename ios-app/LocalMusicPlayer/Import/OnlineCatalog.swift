@@ -157,42 +157,48 @@ actor OnlineCatalog: CatalogDownloading {
         return Self.prioritizePlayable(sources.flatMap { completed[$0] ?? [] })
     }
 
-    func similarTracks(to track: TrackSnapshot, excluding existingIDs: Set<String>) async -> [CatalogTrack] {
-        let trimmedArtist = track.artist.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isGenericArtist = trimmedArtist.isEmpty || trimmedArtist == "爱乐之城" || trimmedArtist == "Internet Archive" || trimmedArtist == "酷狗音乐"
-        let hasCJK = (track.title + trimmedArtist).unicodeScalars.contains { $0.value >= 0x4E00 && $0.value <= 0x9FFF }
-        let primaryQuery = isGenericArtist ? (hasCJK ? "热门华语" : "acoustic") : trimmedArtist
-        let secondaryQuery = hasCJK ? "华语流行" : "piano"
+    func similarTracks(
+        to track: TrackSnapshot,
+        excluding existingIDs: Set<String>,
+        taste: TasteSnapshot? = nil
+    ) async -> [CatalogTrack] {
+        let effectiveTaste = taste ?? TasteSnapshot.neutral()
+        let queries = RecommendationEngine.continuationQueries(for: track, taste: effectiveTaste)
+        let primaryQuery = queries.first ?? "热门华语"
+        let secondaryQuery = queries.dropFirst().first
+        let isPivot = TasteProfileStore.isGenericArtist(track.artist)
+            || (effectiveTaste.artistAffinities[TasteProfileStore.normalizedKey(track.artist)] ?? 0) < -1.5
 
-        var candidates: [CatalogTrack] = []
-        if let firstBatch = try? await searchNetEase(query: primaryQuery) {
-            candidates.append(contentsOf: firstBatch)
+        async let primaryTask = try? searchNetEase(query: primaryQuery)
+        async let secondaryTask: [CatalogTrack]? = secondaryQuery != nil ? (try? searchNetEase(query: secondaryQuery!)) : nil
+        let (firstBatch, secondBatch) = await (primaryTask, secondaryTask)
+
+        var candidates: [RecallCandidate] = (firstBatch ?? []).map {
+            RecallCandidate(track: $0, channel: isPivot ? .coreArtist : .exploration)
         }
-        if candidates.filter({ $0.previewURL != nil && !existingIDs.contains($0.previewID) }).count < 5 {
-            if let secondBatch = try? await searchNetEase(query: secondaryQuery) {
-                candidates.append(contentsOf: secondBatch)
-            }
-        }
-        if candidates.filter({ $0.previewURL != nil && !existingIDs.contains($0.previewID) }).count < 4 {
+        candidates.append(contentsOf: (secondBatch ?? []).map {
+            RecallCandidate(track: $0, channel: .exploration)
+        })
+
+        let playableUnseen = candidates.filter { candidate in
+            candidate.track.previewURL != nil && !existingIDs.contains(candidate.track.previewID)
+        }.count
+
+        if playableUnseen < 5 {
             let clientID = UserDefaults.standard.string(forKey: "jamendoClientID") ?? ""
-            if let jamendo = try? await searchJamendo(query: primaryQuery, clientID: clientID) {
-                candidates.append(contentsOf: jamendo)
-            }
-            if let itunes = try? await searchITunes(query: primaryQuery) {
-                candidates.append(contentsOf: itunes)
-            }
+            async let jamendoTask = try? searchJamendo(query: primaryQuery, clientID: clientID)
+            async let itunesTask = try? searchITunes(query: primaryQuery)
+            let (jamendo, itunes) = await (jamendoTask, itunesTask)
+            candidates.append(contentsOf: (jamendo ?? []).map {
+                RecallCandidate(track: $0, channel: .exploration)
+            })
+            candidates.append(contentsOf: (itunes ?? []).map {
+                RecallCandidate(track: $0, channel: .dailyFresh)
+            })
         }
 
-        let unique = candidates.removingDuplicates().filter { candidate in
-            guard let url = candidate.previewURL,
-                  url.scheme?.lowercased() == "https",
-                  !(url.host ?? "").lowercased().hasSuffix(".invalid") else {
-                return false
-            }
-            return !existingIDs.contains(candidate.previewID)
-        }
-        let fullLengthFirst = unique.filter { !$0.isShortPreview } + unique.filter(\.isShortPreview)
-        return Array(fullLengthFirst.prefix(10))
+        let unseenCandidates = candidates.filter { !existingIDs.contains($0.track.previewID) }
+        return RecommendationEngine.rankAndDiversify(unseenCandidates, taste: effectiveTaste, limit: 10)
     }
 
     func resolveFreshPlayableTrack(title: String, artist: String) async -> CatalogTrack? {
@@ -392,25 +398,67 @@ actor OnlineCatalog: CatalogDownloading {
         return items
     }
 
-    func discoveryFeed(for market: DiscoveryMarket) async -> DiscoveryFeed {
+    private func fetchNetEaseBatch(_ queries: [String]) async -> [CatalogTrack] {
+        guard !queries.isEmpty else { return [] }
+        return await withTaskGroup(of: (Int, [CatalogTrack]).self) { group in
+            for (index, q) in queries.enumerated() {
+                group.addTask { (index, (try? await self.searchNetEase(query: q)) ?? []) }
+            }
+            var ordered: [(Int, [CatalogTrack])] = []
+            for await pair in group { ordered.append(pair) }
+            return ordered.sorted { $0.0 < $1.0 }.flatMap(\.1)
+        }
+    }
+
+    private func fetchNetEaseOptional(_ query: String?) async -> [CatalogTrack] {
+        guard let query, !query.isEmpty else { return [] }
+        return (try? await searchNetEase(query: query)) ?? []
+    }
+
+    func discoveryFeed(for market: DiscoveryMarket, taste: TasteSnapshot? = nil) async -> DiscoveryFeed {
+        let effectiveTaste = taste ?? TasteSnapshot.neutral()
+        let plan = RecommendationEngine.recallPlan(for: market, taste: effectiveTaste)
         let isChineseMarket = ["CN", "TW", "HK", "MO"].contains(market.region.uppercased())
         let clientID = UserDefaults.standard.string(forKey: "jamendoClientID") ?? ""
 
         if isChineseMarket {
-            async let hot = try? searchNetEase(query: "热门华语")
-            async let calm = try? searchNetEase(query: market.regionalQuery)
-            async let folk = try? searchNetEase(query: "民谣")
-            async let piano = try? searchNetEase(query: "钢琴曲")
-            async let itunesHits = try? searchITunes(query: "周杰伦")
+            async let coreResults = fetchNetEaseBatch(plan.coreQueries)
+            async let tagResults = fetchNetEaseOptional(plan.tagQuery)
+            async let contextResults = try? searchNetEase(query: plan.contextQuery)
+            async let fresh0Results = try? searchNetEase(query: plan.freshQueries.first ?? "热门华语")
+            async let fresh1Results = try? searchNetEase(query: plan.freshQueries.count > 1 ? plan.freshQueries[1] : "钢琴曲")
+            async let itunesResults = try? searchITunes(query: plan.itunesQuery)
             async let openFallback = try? archiveGroups(query: nil, order: .popular, limit: 5)
-            let (hotTracks, calmTracks, folkTracks, pianoTracks, itunesTracks, archiveAlbums) = await (hot, calm, folk, piano, itunesHits, openFallback)
 
-            let chartTracks = DiscoveryModel.playableTracks((hotTracks ?? []) + (itunesTracks ?? []))
-            let calmList = DiscoveryModel.playableTracks(calmTracks ?? [])
-            let folkList = DiscoveryModel.playableTracks(folkTracks ?? [])
-            let pianoList = DiscoveryModel.playableTracks(pianoTracks ?? [])
-            let itunesList = DiscoveryModel.playableTracks(itunesTracks ?? [])
+            let (coreTracks, tagTracks, contextTracksOpt, fresh0Opt, fresh1Opt, itunesOpt, archiveAlbums) =
+                await (coreResults, tagResults, contextResults, fresh0Results, fresh1Results, itunesResults, openFallback)
+
+            let contextTracks = contextTracksOpt ?? []
+            let fresh0Tracks = fresh0Opt ?? []
+            let fresh1Tracks = fresh1Opt ?? []
+            let itunesTracks = itunesOpt ?? []
             let albums = archiveAlbums ?? []
+
+            var candidates: [RecallCandidate] = []
+            candidates.append(contentsOf: coreTracks.map { RecallCandidate(track: $0, channel: .coreArtist) })
+            candidates.append(contentsOf: tagTracks.map { RecallCandidate(track: $0, channel: .searchOrTag) })
+            candidates.append(contentsOf: contextTracks.map { RecallCandidate(track: $0, channel: .timeContext) })
+            candidates.append(contentsOf: fresh0Tracks.map { RecallCandidate(track: $0, channel: .dailyFresh) })
+            candidates.append(contentsOf: fresh1Tracks.map { RecallCandidate(track: $0, channel: .exploration) })
+            let itunesChannel: RecallChannel = plan.coreQueries.isEmpty ? .dailyFresh : .coreArtist
+            candidates.append(contentsOf: itunesTracks.map { RecallCandidate(track: $0, channel: itunesChannel) })
+
+            let rankedRecs = RecommendationEngine.rankAndDiversify(candidates, taste: effectiveTaste, limit: 12)
+            let chartTracks = RecommendationEngine.rankAndDiversify(
+                fresh0Tracks.map { RecallCandidate(track: $0, channel: .dailyFresh) }
+                    + itunesTracks.map { RecallCandidate(track: $0, channel: .exploration) },
+                taste: effectiveTaste,
+                limit: 12
+            )
+            let calmList = DiscoveryModel.playableTracks(contextTracks)
+            let folkList = DiscoveryModel.playableTracks(fresh1Tracks)
+            let pianoList = DiscoveryModel.playableTracks(tagTracks.isEmpty ? fresh0Tracks : tagTracks)
+            let itunesList = DiscoveryModel.playableTracks(itunesTracks)
 
             let mixes: [DiscoveryGroup] = [
                 .init(id: "calm", title: "轻松时刻", tracks: calmList),
@@ -423,11 +471,8 @@ actor OnlineCatalog: CatalogDownloading {
                 .init(id: "radio-hot", title: "华语热播", tracks: chartTracks),
                 .init(id: "radio-folk", title: "民谣电台", tracks: folkList)
             ]
-            let combinedRecs = DiscoveryModel.playableTracks(
-                Array(itunesList.prefix(4)) + Array(chartTracks.prefix(6)) + Array(calmList.prefix(4)) + Array(folkList.prefix(4))
-            )
-            if !combinedRecs.isEmpty {
-                return DiscoveryFeed(recommendations: combinedRecs, shelves: [
+            if !rankedRecs.isEmpty {
+                return DiscoveryFeed(recommendations: rankedRecs, shelves: [
                     .init(id: "chart", title: "热门榜单", groups: [.init(id: "popular", title: "热门华语", tracks: chartTracks)]),
                     .init(id: "mixes", title: "精选歌单", groups: mixes),
                     .init(id: "radio", title: "风格电台", groups: radios),
@@ -437,14 +482,17 @@ actor OnlineCatalog: CatalogDownloading {
             }
         }
 
-        async let jamendoOpen = try? searchJamendo(query: market.openQuery, clientID: clientID)
+        async let jamendoOpen = try? searchJamendo(query: plan.freshQueries.first ?? market.openQuery, clientID: clientID)
+        async let itunesGlobal = try? searchITunes(query: plan.itunesQuery)
         async let popular = try? archiveGroups(query: nil, order: .popular, limit: 8)
         async let recent = try? archiveGroups(query: nil, order: .recent, limit: 5)
-        async let gentle = try? archiveGroups(query: market.openQuery, order: .popular, limit: 4)
+        async let gentle = try? archiveGroups(query: plan.contextQuery, order: .popular, limit: 4)
         async let electronic = try? archiveGroups(query: "electronic", order: .popular, limit: 4)
         async let jazz = try? archiveGroups(query: "jazz", order: .popular, limit: 4)
-        let (jamendoResult, topResult, freshResult, calmResult, electroResult, swingResult) = await (jamendoOpen, popular, recent, gentle, electronic, jazz)
+        let (jamendoResult, itunesGlobalResult, topResult, freshResult, calmResult, electroResult, swingResult) =
+            await (jamendoOpen, itunesGlobal, popular, recent, gentle, electronic, jazz)
         let jamendo = DiscoveryModel.playableTracks(jamendoResult ?? [])
+        let itunes = itunesGlobalResult ?? []
         let top = topResult ?? [], fresh = freshResult ?? [], calm = calmResult ?? []
         let electro = electroResult ?? [], swing = swingResult ?? []
         let chart = top.compactMap { $0.tracks.first }
@@ -459,7 +507,15 @@ actor OnlineCatalog: CatalogDownloading {
             .init(id: "radio-electronic", title: "电子节拍", tracks: electro.flatMap(\.tracks)),
             .init(id: "radio-jazz", title: "爵士漫游", tracks: swing.flatMap(\.tracks))
         ]
-        return DiscoveryFeed(recommendations: Array(jamendo.prefix(6)) + Array(mixes.flatMap(\.tracks).prefix(8)) + chart + newest, shelves: [
+        var globalCandidates: [RecallCandidate] = []
+        globalCandidates.append(contentsOf: itunes.map { RecallCandidate(track: $0, channel: plan.coreQueries.isEmpty ? .dailyFresh : .coreArtist) })
+        globalCandidates.append(contentsOf: jamendo.map { RecallCandidate(track: $0, channel: .dailyFresh) })
+        globalCandidates.append(contentsOf: calm.compactMap { $0.tracks.first }.map { RecallCandidate(track: $0, channel: .timeContext) })
+        globalCandidates.append(contentsOf: chart.map { RecallCandidate(track: $0, channel: .dailyFresh) })
+        globalCandidates.append(contentsOf: newest.map { RecallCandidate(track: $0, channel: .exploration) })
+        let rankedGlobal = RecommendationEngine.rankAndDiversify(globalCandidates, taste: effectiveTaste, limit: 12)
+        let finalGlobal = rankedGlobal.isEmpty ? (Array(jamendo.prefix(6)) + Array(mixes.flatMap(\.tracks).prefix(8)) + chart + newest) : rankedGlobal
+        return DiscoveryFeed(recommendations: finalGlobal, shelves: [
             .init(id: "chart", title: "热门榜单", groups: [.init(id: "popular", title: "档案馆热门", tracks: chart)]),
             .init(id: "mixes", title: "精选歌单", groups: mixes),
             .init(id: "radio", title: "风格电台", groups: radios),
