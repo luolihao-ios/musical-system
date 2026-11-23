@@ -60,8 +60,8 @@ final class TasteProfileStore {
 
     private(set) var needsHomeRefresh = false
 
-    private var payload = StoragePayload()
-    private var refreshNonce = 0
+    @ObservationIgnored private var payload = StoragePayload()
+    @ObservationIgnored private var refreshNonce = 0
     private let fileURL: URL
 
     init(fileURL: URL? = nil) {
@@ -135,14 +135,7 @@ final class TasteProfileStore {
         var terms = payload.recentSearchTerms.filter { $0.caseInsensitiveCompare(trimmed) != .orderedSame }
         terms.insert(trimmed, at: 0)
         payload.recentSearchTerms = Array(terms.prefix(8))
-        adjustScore(
-            in: &payload.tags,
-            displayNames: &payload.tagDisplayNames,
-            rawName: trimmed,
-            delta: 2.5,
-            maxCount: 80,
-            now: now
-        )
+        adjustAffinity(.tag, rawName: trimmed, delta: 2.5, now: now)
         save()
     }
 
@@ -151,14 +144,7 @@ final class TasteProfileStore {
         if let searchQuery {
             let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.count >= 2 {
-                adjustScore(
-                    in: &payload.tags,
-                    displayNames: &payload.tagDisplayNames,
-                    rawName: trimmed,
-                    delta: 3.5,
-                    maxCount: 80,
-                    now: now
-                )
+                adjustAffinity(.tag, rawName: trimmed, delta: 3.5, now: now)
             }
         }
         let canonical = Self.canonicalTrackID(trackID)
@@ -311,29 +297,25 @@ final class TasteProfileStore {
         return snapshot(now: now, refreshNonce: refreshNonce)
     }
 
-    private func adjustArtist(_ artist: String, delta: Double, now: Date) {
-        guard !Self.isGenericArtist(artist) else { return }
-        adjustScore(
-            in: &payload.artists,
-            displayNames: &payload.artistDisplayNames,
-            rawName: artist,
-            delta: delta,
-            maxCount: 120,
-            now: now
-        )
+    private enum AffinityKind {
+        case artist
+        case tag
     }
 
-    private func adjustScore(
-        in dict: inout [String: DecayedAffinity],
-        displayNames: inout [String: String],
-        rawName: String,
-        delta: Double,
-        maxCount: Int,
-        now: Date
-    ) {
+    private func adjustArtist(_ artist: String, delta: Double, now: Date) {
+        guard !Self.isGenericArtist(artist) else { return }
+        adjustAffinity(.artist, rawName: artist, delta: delta, now: now)
+    }
+
+    private func adjustAffinity(_ kind: AffinityKind, rawName: String, delta: Double, now: Date) {
         let trimmed = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let key = Self.normalizedKey(trimmed)
+
+        var dict = kind == .artist ? payload.artists : payload.tags
+        var displayNames = kind == .artist ? payload.artistDisplayNames : payload.tagDisplayNames
+        let maxCount = kind == .artist ? 120 : 80
+
         let current = dict[key].map { Self.decayed($0, at: now) } ?? 0
         let updated = min(60, max(-20, current + delta))
         dict[key] = DecayedAffinity(score: updated, updatedAt: now)
@@ -348,6 +330,15 @@ final class TasteProfileStore {
             let keepKeys = Set(kept.map(\.key))
             dict = dict.filter { keepKeys.contains($0.key) }
             displayNames = displayNames.filter { keepKeys.contains($0.key) }
+        }
+
+        switch kind {
+        case .artist:
+            payload.artists = dict
+            payload.artistDisplayNames = displayNames
+        case .tag:
+            payload.tags = dict
+            payload.tagDisplayNames = displayNames
         }
     }
 
