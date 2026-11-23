@@ -22,3 +22,11 @@ class ReferenceRefreshTests(unittest.TestCase):
         self.assertIn("case .vinyl:", view)
         self.assertIn("case .classic:", view)
         self.assertIn("model.scheduleSleepTimer", view)
+
+    def test_cached_remote_image_and_discovery_card_contain_hit_testing(self):
+        image = (ROOT / "Features/Shared/CachedRemoteImage.swift").read_text(encoding="utf-8")
+        discovery = (ROOT / "Features/Library/DiscoveryView.swift").read_text(encoding="utf-8")
+        self.assertIn("allowsHitTesting(false)", image)
+        self.assertIn("contentShape(", image)
+        self.assertIn("discovery.search", discovery)
+        self.assertIn(".contentShape(RoundedRectangle(cornerRadius: 24", discovery)

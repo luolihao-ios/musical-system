@@ -142,23 +142,28 @@ struct CachedRemoteImage: View {
     }
 
     var body: some View {
-        ZStack {
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .transition(.opacity)
-            } else {
-                placeholderTint
-                    .overlay {
-                        Image(systemName: "music.note")
-                            .font(.title3)
-                            .foregroundStyle(.secondary.opacity(0.75))
+        Color.clear
+            .overlay {
+                Group {
+                    if let image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .transition(.opacity)
+                    } else {
+                        placeholderTint
+                            .overlay {
+                                Image(systemName: "music.note")
+                                    .font(.title3)
+                                    .foregroundStyle(.secondary.opacity(0.75))
+                            }
                     }
+                }
+                .allowsHitTesting(false)
             }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .accessibilityHidden(true)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .accessibilityHidden(true)
         .task(id: url) {
             guard let url else {
                 image = nil

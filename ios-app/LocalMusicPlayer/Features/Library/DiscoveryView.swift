@@ -24,6 +24,7 @@ struct DiscoveryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 header
+                    .zIndex(2)
                 if let featured = recommendations.tracks.first {
                     featuredCard(featured)
                     if !recommendations.shelves.isEmpty {
@@ -115,7 +116,9 @@ struct DiscoveryView: View {
                     .background(.regularMaterial, in: Circle())
             }
             .buttonStyle(.plain)
+            .contentShape(Circle())
             .accessibilityLabel("搜索")
+            .accessibilityIdentifier("discovery.search")
         }
     }
 
@@ -199,6 +202,7 @@ struct DiscoveryView: View {
             }
             .frame(height: 196)
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .shadow(color: .black.opacity(0.14), radius: 14, y: 6)
         }
         .buttonStyle(.plain)

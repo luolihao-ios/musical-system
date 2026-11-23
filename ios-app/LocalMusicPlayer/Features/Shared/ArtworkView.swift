@@ -7,29 +7,34 @@ struct ArtworkView: View {
     @State private var loadedImage: UIImage?
 
     var body: some View {
-        Group {
-            if let image = loadedImage {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                ZStack {
-                    LinearGradient(
-                        colors: [
-                            PlayerTheme.panel,
-                            PlayerTheme.accent.opacity(0.42)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                    Image(systemName: "music.note")
-                        .font(.title2)
-                        .foregroundStyle(.white.opacity(0.8))
+        Color.clear
+            .overlay {
+                Group {
+                    if let image = loadedImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        ZStack {
+                            LinearGradient(
+                                colors: [
+                                    PlayerTheme.panel,
+                                    PlayerTheme.accent.opacity(0.42)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                            Image(systemName: "music.note")
+                                .font(.title2)
+                                .foregroundStyle(.white.opacity(0.8))
+                        }
+                    }
                 }
+                .allowsHitTesting(false)
             }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-        .accessibilityHidden(true)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .contentShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .accessibilityHidden(true)
         .task(id: path) {
             guard let path, !path.isEmpty else {
                 loadedImage = nil

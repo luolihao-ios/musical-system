@@ -216,6 +216,7 @@ struct OnlineCatalogSearchView: View {
         .task { if results.isEmpty { results = initialResults } }
         .navigationTitle("搜索")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(embeddedInNavigationStack ? .automatic : .visible, for: .navigationBar)
         .alert("提示", isPresented: Binding(get: { !message.isEmpty }, set: { if !$0 { message = "" } })) {
             Button("好") { message = "" }
         } message: {
