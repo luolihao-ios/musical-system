@@ -60,7 +60,7 @@ final class TrackRecord {
     }
 }
 
-struct TrackSnapshot: Identifiable, Equatable, Sendable {
+struct TrackSnapshot: Identifiable, Equatable, Codable, Sendable {
     let id: String
     let title: String
     let artist: String
@@ -73,6 +73,10 @@ struct TrackSnapshot: Identifiable, Equatable, Sendable {
     let isLiked: Bool
     let isAvailable: Bool
     let lastPlayedAt: Date?
+
+    var isShortPreview: Bool {
+        sourceKind == .onlinePreview && album.hasPrefix("iTunes")
+    }
 
     init(
         id: String,

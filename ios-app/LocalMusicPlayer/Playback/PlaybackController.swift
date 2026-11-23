@@ -41,6 +41,8 @@ final class PlaybackController: PlaybackControlling {
     private var restoredPositionApplied = false
     private var playbackGeneration = UUID()
     private var acceptsPositionUpdates = true
+    private var preloadedTrackID: String?
+    var onAutoSkipNotice: ((String) -> Void)?
 
     init(
         engine: any AudioEngine = AVPlayerEngine(),
@@ -59,6 +61,9 @@ final class PlaybackController: PlaybackControlling {
             updated.position = position
             if self.engine.duration > 0 { updated.duration = self.engine.duration }
             self.state = updated
+            if updated.isPlaying, updated.duration > 20, updated.duration - position <= 15 {
+                self.preloadNextTrackIfNeeded()
+            }
         }
     }
 
@@ -146,6 +151,14 @@ final class PlaybackController: PlaybackControlling {
         _ track: TrackSnapshot,
         in queue: [TrackSnapshot]
     ) async throws {
+        try await playTrackInternal(track, in: queue, resetOnFailure: true)
+    }
+
+    private func playTrackInternal(
+        _ track: TrackSnapshot,
+        in queue: [TrackSnapshot],
+        resetOnFailure: Bool
+    ) async throws {
         let availableQueue = queue.filter(\.isAvailable)
         guard let index = availableQueue.firstIndex(where: {
             $0.id == track.id
@@ -155,6 +168,7 @@ final class PlaybackController: PlaybackControlling {
         let generation = UUID()
         playbackGeneration = generation
         acceptsPositionUpdates = false
+        preloadedTrackID = nil
         engine.pause()
         loadedTrackID = nil
         PlaybackDiagnostics.log(
@@ -177,7 +191,9 @@ final class PlaybackController: PlaybackControlling {
             PlaybackDiagnostics.log(
                 "播放加载失败：id=\(track.id)，错误=\(error.localizedDescription)"
             )
-            resetAfterLoadFailure()
+            if resetOnFailure {
+                resetAfterLoadFailure()
+            }
             throw error
         }
         guard playbackGeneration == generation,
@@ -193,6 +209,16 @@ final class PlaybackController: PlaybackControlling {
         state = playingState
         PlaybackDiagnostics.log("开始播放成功：id=\(track.id)，时长=\(state.duration)")
         try savePreferences()
+    }
+
+    func appendQueue(_ tracks: [TrackSnapshot]) {
+        let available = tracks.filter(\.isAvailable)
+        let existingIDs = Set(state.queue.map(\.id))
+        let fresh = available.filter { !existingIDs.contains($0.id) }
+        guard !fresh.isEmpty else { return }
+        var updated = state
+        updated.queue.append(contentsOf: fresh)
+        state = updated
     }
 
     func removeTrack(id: String) throws {
@@ -365,8 +391,50 @@ final class PlaybackController: PlaybackControlling {
     }
 
     func next() async throws {
-        guard let index = nextAvailableIndex() else { return }
-        try await playTrack(state.queue[index], in: state.queue)
+        let snapshotQueue = state.queue
+        guard !snapshotQueue.isEmpty else { return }
+        var excluded = Set<Int>()
+        var attempts = 0
+        let maxAttempts = min(4, snapshotQueue.count)
+        while attempts < maxAttempts {
+            guard let index = nextAvailableIndex(excluding: excluded) else { break }
+            let candidate = snapshotQueue[index]
+            do {
+                try await playTrackInternal(candidate, in: snapshotQueue, resetOnFailure: false)
+                if attempts > 0 {
+                    onAutoSkipNotice?(String(localized: "当前音源暂不可播，已自动跳过"))
+                }
+                return
+            } catch {
+                guard candidate.sourceKind == .onlinePreview, snapshotQueue.count > 1 else {
+                    resetAfterLoadFailure()
+                    throw error
+                }
+                excluded.insert(index)
+                attempts += 1
+            }
+        }
+        resetAfterLoadFailure()
+        throw PlaybackError.invalidSource
+    }
+
+    private func preloadNextTrackIfNeeded() {
+        guard let index = nextAvailableIndex(),
+              state.queue.indices.contains(index) else { return }
+        let nextTrack = state.queue[index]
+        guard nextTrack.id != preloadedTrackID,
+              nextTrack.id != state.currentTrack?.id else { return }
+        preloadedTrackID = nextTrack.id
+        if let url = sourceURL(for: nextTrack) {
+            engine.preload(url: url)
+        }
+        if let art = nextTrack.artworkReference,
+           art.hasPrefix("https://"),
+           let artURL = URL(string: art) {
+            Task(priority: .utility) {
+                _ = await RemoteImageCache.shared.load(url: artURL, maxPixelSize: 600)
+            }
+        }
     }
 
     func previous() async throws {
@@ -477,14 +545,14 @@ final class PlaybackController: PlaybackControlling {
         return nil
     }
 
-    private func nextAvailableIndex() -> Int? {
+    private func nextAvailableIndex(excluding excluded: Set<Int> = []) -> Int? {
         guard !state.queue.isEmpty else { return nil }
         if state.mode == .shuffle {
             let candidates = state.queue.indices.filter {
-                state.queue[$0].isAvailable && $0 != state.currentIndex
+                state.queue[$0].isAvailable && $0 != state.currentIndex && !excluded.contains($0)
             }
             guard !candidates.isEmpty else {
-                return state.currentTrack?.isAvailable == true
+                return state.currentTrack?.isAvailable == true && !excluded.contains(state.currentIndex ?? -1)
                     ? state.currentIndex
                     : nil
             }
@@ -495,7 +563,7 @@ final class PlaybackController: PlaybackControlling {
         let current = state.currentIndex ?? -1
         for offset in 1...state.queue.count {
             let candidate = (current + offset) % state.queue.count
-            if state.queue[candidate].isAvailable {
+            if state.queue[candidate].isAvailable && !excluded.contains(candidate) {
                 return candidate
             }
         }

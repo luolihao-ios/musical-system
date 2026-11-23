@@ -29,8 +29,14 @@ final class AppContainer {
             systemImporter: SystemLibraryImporter(),
             playback: playback,
             scansAuthorizedFolders: !inMemory,
-            coverSearch: inMemory ? nil : CatalogCoverSearch.shared
+            coverSearch: inMemory ? nil : CatalogCoverSearch.shared,
+            enablesAutoContinue: !inMemory
         )
+        if !inMemory {
+            playback.onAutoSkipNotice = { message in
+                ToastCenter.shared.show(message, systemImage: "forward.end.fill")
+            }
+        }
         CoverSearchDiagnostics.log("session version=\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") ?? "?") build=\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") ?? "?") provider=existing-catalogs")
         let playlistsModel = PlaylistsModel(
             store: store,

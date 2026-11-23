@@ -184,3 +184,11 @@
 "定位播放到此句歌词" = "Seek playback to this lyric";
 "搜索联想" = "Suggestions";
 "搜索“%@”" = "Search “%@”";
+"已为你续播相似歌曲" = "Similar tracks queued for you";
+"当前音源暂不可播，已自动跳过" = "Track unavailable, skipped automatically";
+"网络或音源暂不可用，请稍后重试" = "Audio unavailable, please try again later";
+"已收藏" = "Added to Favorites";
+"已取消收藏" = "Removed from Favorites";
+"30秒试听" = "30s Preview";
+"在线" = "Online";
+"播放本地或在线歌曲时点击心形即可收藏" = "Tap the heart while playing local or online tracks to favorite";

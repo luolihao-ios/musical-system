@@ -17,6 +17,7 @@ protocol PlaybackControlling: AnyObject {
         _ track: TrackSnapshot,
         in queue: [TrackSnapshot]
     ) async throws
+    func appendQueue(_ tracks: [TrackSnapshot])
     func playQueueItem(at index: Int) async throws
     func moveQueue(fromOffsets: IndexSet, toOffset: Int) throws
     func removeQueueItems(atOffsets: IndexSet) async throws
@@ -31,6 +32,7 @@ protocol PlaybackControlling: AnyObject {
 
 extension PlaybackControlling {
     func refreshTrackMetadata(_ track: TrackSnapshot) {}
+    func appendQueue(_ tracks: [TrackSnapshot]) {}
 }
 
 struct SystemNowPlayingInfo: Equatable, Sendable {

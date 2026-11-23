@@ -26,6 +26,7 @@ struct CatalogTrack: Identifiable, Sendable, Equatable, Hashable, Codable {
     let artworkURL: URL?
     let providerAllowsDownload: Bool?
     var allowsDownload: Bool { license.allowsDownload && (providerAllowsDownload ?? (provider != "Jamendo")) }
+    var isShortPreview: Bool { provider.hasPrefix("iTunes") }
     init(id: String, title: String, artist: String, audioURL: URL, license: CatalogLicense, provider: String = "", previewURL: URL? = nil, artworkURL: URL? = nil, providerAllowsDownload: Bool? = nil) {
         self.id = id; self.title = title; self.artist = artist; self.audioURL = audioURL; self.license = license; self.provider = provider; self.previewURL = previewURL; self.artworkURL = artworkURL
         self.providerAllowsDownload = providerAllowsDownload
@@ -154,6 +155,61 @@ actor OnlineCatalog: CatalogDownloading {
         try Task.checkCancellation()
         guard !completed.isEmpty else { throw URLError(.cannotLoadFromNetwork) }
         return Self.prioritizePlayable(sources.flatMap { completed[$0] ?? [] })
+    }
+
+    func similarTracks(to track: TrackSnapshot, excluding existingIDs: Set<String>) async -> [CatalogTrack] {
+        let trimmedArtist = track.artist.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isGenericArtist = trimmedArtist.isEmpty || trimmedArtist == "爱乐之城" || trimmedArtist == "Internet Archive" || trimmedArtist == "酷狗音乐"
+        let hasCJK = (track.title + trimmedArtist).unicodeScalars.contains { $0.value >= 0x4E00 && $0.value <= 0x9FFF }
+        let primaryQuery = isGenericArtist ? (hasCJK ? "热门华语" : "acoustic") : trimmedArtist
+        let secondaryQuery = hasCJK ? "华语流行" : "piano"
+
+        var candidates: [CatalogTrack] = []
+        if let firstBatch = try? await searchNetEase(query: primaryQuery) {
+            candidates.append(contentsOf: firstBatch)
+        }
+        if candidates.filter({ $0.previewURL != nil && !existingIDs.contains($0.previewID) }).count < 5 {
+            if let secondBatch = try? await searchNetEase(query: secondaryQuery) {
+                candidates.append(contentsOf: secondBatch)
+            }
+        }
+        if candidates.filter({ $0.previewURL != nil && !existingIDs.contains($0.previewID) }).count < 4 {
+            let clientID = UserDefaults.standard.string(forKey: "jamendoClientID") ?? ""
+            if let jamendo = try? await searchJamendo(query: primaryQuery, clientID: clientID) {
+                candidates.append(contentsOf: jamendo)
+            }
+            if let itunes = try? await searchITunes(query: primaryQuery) {
+                candidates.append(contentsOf: itunes)
+            }
+        }
+
+        let unique = candidates.removingDuplicates().filter { candidate in
+            guard let url = candidate.previewURL,
+                  url.scheme?.lowercased() == "https",
+                  !(url.host ?? "").lowercased().hasSuffix(".invalid") else {
+                return false
+            }
+            return !existingIDs.contains(candidate.previewID)
+        }
+        let fullLengthFirst = unique.filter { !$0.isShortPreview } + unique.filter(\.isShortPreview)
+        return Array(fullLengthFirst.prefix(10))
+    }
+
+    func resolveFreshPlayableTrack(title: String, artist: String) async -> CatalogTrack? {
+        let keyword = [title, artist]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        guard !keyword.isEmpty else { return nil }
+        if let netease = try? await searchNetEase(query: keyword),
+           let first = netease.first(where: { $0.previewURL != nil }) {
+            return first
+        }
+        if let itunes = try? await searchITunes(query: keyword),
+           let first = itunes.first(where: { $0.previewURL != nil }) {
+            return first
+        }
+        return nil
     }
 
     private func searchSource(_ source: SearchSource, query: String, clientID: String) async -> [CatalogTrack]? {

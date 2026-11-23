@@ -31,8 +31,22 @@ struct ArtworkView: View {
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
         .accessibilityHidden(true)
         .task(id: path) {
-            // 路径变化才解码；面板每帧改变高度时复用已加载图片。
-            loadedImage = path.flatMap { ArtworkImageLoader.image(atPath: $0) }
+            guard let path, !path.isEmpty else {
+                loadedImage = nil
+                return
+            }
+            if (path.hasPrefix("https://") || path.hasPrefix("http://")), let url = URL(string: path) {
+                if let cached = RemoteImageCache.shared.cachedImage(for: url) {
+                    loadedImage = cached
+                } else {
+                    let fetched = await RemoteImageCache.shared.load(url: url, maxPixelSize: 600)
+                    guard !Task.isCancelled else { return }
+                    loadedImage = fetched
+                }
+            } else {
+                // 路径变化才解码；面板每帧改变高度时复用已加载图片。
+                loadedImage = ArtworkImageLoader.image(atPath: path)
+            }
         }
     }
 }

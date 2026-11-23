@@ -309,7 +309,9 @@ struct OnlineCatalogSearchView: View {
         let queue = playableResults
         Task {
             do { try await model.toggleCatalogPreview(track, in: queue) }
-            catch { message = String(format: NSLocalizedString("试听失败：%@", comment: ""), error.localizedDescription) }
+            catch {
+                ToastCenter.shared.show(String(localized: "网络或音源暂不可用，请稍后重试"), systemImage: "exclamationmark.triangle")
+            }
         }
     }
 
@@ -319,10 +321,20 @@ struct OnlineCatalogSearchView: View {
             CachedRemoteImage(url: track.artworkURL, cornerRadius: 9, maxPixelSize: 160)
                 .frame(width: 50, height: 50)
             VStack(alignment: .leading, spacing: 4) {
-                Text(track.title)
-                    .foregroundStyle(isCurrent ? PlayerTheme.accent : Color.primary)
-                    .fontWeight(isCurrent ? .semibold : .regular)
-                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    Text(track.title)
+                        .foregroundStyle(isCurrent ? PlayerTheme.accent : Color.primary)
+                        .fontWeight(isCurrent ? .semibold : .regular)
+                        .lineLimit(2)
+                    if track.isShortPreview {
+                        Text("30秒试听")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(PlayerTheme.accent)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(PlayerTheme.accent.opacity(0.12), in: Capsule())
+                    }
+                }
                 Text(track.artist).font(.caption).foregroundStyle(.secondary)
                 Text([track.provider, track.previewURL == nil && !track.allowsDownload ? String(localized: "仅曲目信息") : track.license.displayName]
                     .filter { !$0.isEmpty }.joined(separator: " · "))

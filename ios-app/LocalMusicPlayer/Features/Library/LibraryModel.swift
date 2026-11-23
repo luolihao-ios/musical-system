@@ -28,6 +28,7 @@ protocol LibraryPlaybackControlling: AnyObject {
         _ track: TrackSnapshot,
         in queue: [TrackSnapshot]
     ) async throws
+    func appendQueue(_ tracks: [TrackSnapshot])
     @discardableResult
     func observeState(
         _ observer: @escaping (PlaybackState) -> Void
@@ -41,6 +42,7 @@ extension PlaybackController: LibraryPlaybackControlling {
 extension LibraryPlaybackControlling {
     func removeTrack(id: String) throws {}
     func refreshTrackMetadata(_ track: TrackSnapshot) {}
+    func appendQueue(_ tracks: [TrackSnapshot]) {}
 }
 
 enum LibraryGroupKind: String, CaseIterable, Identifiable, Sendable {
@@ -112,9 +114,12 @@ final class LibraryModel {
     private var coverCache: [String: CoverArtMatch] = [:]
     private var coverRetryTask: Task<Void, Never>?
     private let catalog: any CatalogDownloading
+    private let enablesAutoContinue: Bool
     private var catalogPreviewGeneration = UUID()
     private var catalogQueueMetadata: [String: CatalogTrack] = [:]
     private var queuedArtworkTask: Task<Void, Never>?
+    private var autoContinueTask: Task<Void, Never>?
+    private var autoContinuedForTrackID: String?
     private var catalogDownloadGenerations: [String: UUID] = [:]
 
     init(
@@ -124,7 +129,8 @@ final class LibraryModel {
         playback: any LibraryPlaybackControlling,
         scansAuthorizedFolders: Bool = false,
         coverSearch: (any CoverArtSearching)? = nil,
-        catalog: any CatalogDownloading = OnlineCatalog.shared
+        catalog: any CatalogDownloading = OnlineCatalog.shared,
+        enablesAutoContinue: Bool = false
     ) {
         self.store = store
         self.fileImporter = fileImporter
@@ -133,6 +139,7 @@ final class LibraryModel {
         self.scansAuthorizedFolders = scansAuthorizedFolders
         self.coverSearch = coverSearch
         self.catalog = catalog
+        self.enablesAutoContinue = enablesAutoContinue
         playbackObserverID = playback.observeState { [weak self] state in
             self?.observePlayback(state)
         }
@@ -142,6 +149,7 @@ final class LibraryModel {
         coverTask?.cancel()
         coverRetryTask?.cancel()
         queuedArtworkTask?.cancel()
+        autoContinueTask?.cancel()
         if let playbackObserverID {
             playback.removeStateObserver(playbackObserverID)
         }
@@ -240,19 +248,88 @@ final class LibraryModel {
             if catalogPreviewGeneration == generation { catalogPreviewLoadingID = nil }
         }
         catalogQueueMetadata.removeAll(keepingCapacity: true)
+        autoContinuedForTrackID = nil
         let queue = catalogQueue.compactMap { candidate -> TrackSnapshot? in
             guard let item = candidate.previewSnapshot(), catalogQueueMetadata[item.id] == nil else { return nil }
             catalogQueueMetadata[item.id] = candidate
             return item
         }
-        do { try await playback.playTrack(snapshot, in: queue.contains(where: { $0.id == snapshot.id }) ? queue : [snapshot]) }
-        catch {
+        let effectiveQueue = queue.contains(where: { $0.id == snapshot.id }) ? queue : [snapshot]
+        let startIndex = effectiveQueue.firstIndex(where: { $0.id == snapshot.id }) ?? 0
+
+        var playedTrack = track
+        var playedSnapshot = snapshot
+        var didPlay = false
+
+        do {
+            try await playback.playTrack(snapshot, in: effectiveQueue)
+            didPlay = true
+        } catch {
             guard catalogPreviewGeneration == generation else { return }
-            throw error
+            guard enablesAutoContinue, effectiveQueue.count > 1 else { throw error }
+            var attempts = 1
+            while attempts < min(4, effectiveQueue.count) {
+                let candidateIndex = (startIndex + attempts) % effectiveQueue.count
+                let candidateSnapshot = effectiveQueue[candidateIndex]
+                do {
+                    try await playback.playTrack(candidateSnapshot, in: effectiveQueue)
+                    playedSnapshot = candidateSnapshot
+                    if let meta = catalogQueueMetadata[candidateSnapshot.id] {
+                        playedTrack = meta
+                    }
+                    didPlay = true
+                    ToastCenter.shared.show(String(localized: "当前音源暂不可播，已自动跳过"), systemImage: "forward.end.fill")
+                    break
+                } catch {
+                    guard catalogPreviewGeneration == generation else { return }
+                    attempts += 1
+                }
+            }
+            if !didPlay {
+                throw error
+            }
         }
-        guard playback.state.currentTrack?.id == snapshot.id else { return }
+
+        guard playback.state.currentTrack?.id == playedSnapshot.id else { return }
         if catalogPreviewGeneration == generation { catalogPreviewLoadingID = nil }
-        await fillCatalogArtwork(track, expectedID: snapshot.id)
+        if enablesAutoContinue {
+            OnlineHistoryStore.shared.recordPlayed(playedSnapshot, fallbackArtworkURL: playedTrack.artworkURL?.absoluteString)
+        }
+        await fillCatalogArtwork(playedTrack, expectedID: playedSnapshot.id)
+    }
+
+    func playOnlineHistoryTrack(_ track: TrackSnapshot, in queue: [TrackSnapshot]) async {
+        do {
+            try await playback.playTrack(track, in: queue)
+            if enablesAutoContinue {
+                OnlineHistoryStore.shared.recordPlayed(track)
+            }
+        } catch {
+            if let fresh = await OnlineCatalog.shared.resolveFreshPlayableTrack(title: track.title, artist: track.artist),
+               let freshURL = fresh.previewURL?.absoluteString {
+                let updated = TrackSnapshot(
+                    id: track.id, title: track.title, artist: track.artist, album: fresh.provider,
+                    duration: track.duration, sourceKind: .onlinePreview, sourceReference: freshURL,
+                    artworkReference: track.artworkReference ?? fresh.artworkURL?.absoluteString,
+                    lyricsReference: track.lyricsReference, isLiked: OnlineHistoryStore.shared.isFavorite(track.id),
+                    isAvailable: true, lastPlayedAt: .now
+                )
+                let updatedQueue = queue.map { $0.id == track.id ? updated : $0 }
+                do {
+                    try await playback.playTrack(updated, in: updatedQueue)
+                    if enablesAutoContinue {
+                        OnlineHistoryStore.shared.updateSourceReference(
+                            trackID: track.id,
+                            sourceReference: freshURL,
+                            artworkReference: updated.artworkReference
+                        )
+                        OnlineHistoryStore.shared.recordPlayed(updated)
+                    }
+                    return
+                } catch {}
+            }
+            ToastCenter.shared.show(String(localized: "网络或音源暂不可用，请稍后重试"), systemImage: "exclamationmark.triangle")
+        }
     }
 
     private func observePlayback(_ state: PlaybackState) {
@@ -261,11 +338,43 @@ final class LibraryModel {
         isCurrentTrackPlaying = state.isPlaying
         guard previousID != currentTrackID else { return }
         queuedArtworkTask?.cancel()
+        if enablesAutoContinue, let current = state.currentTrack, current.sourceKind == .onlinePreview {
+            OnlineHistoryStore.shared.recordPlayed(
+                current,
+                fallbackArtworkURL: catalogQueueMetadata[current.id]?.artworkURL?.absoluteString
+            )
+            scheduleAutoContinuationIfNeeded(state: state, current: current)
+        }
         guard let current = state.currentTrack, current.artworkReference == nil,
               let metadata = catalogQueueMetadata[current.id],
               catalogPreviewLoadingID != metadata.id else { return }
         queuedArtworkTask = Task { [weak self] in
             await self?.fillCatalogArtwork(metadata, expectedID: current.id)
+        }
+    }
+
+    private func scheduleAutoContinuationIfNeeded(state: PlaybackState, current: TrackSnapshot) {
+        guard enablesAutoContinue,
+              state.mode != .repeatOne,
+              let index = state.currentIndex,
+              state.queue.count - 1 - index <= 1,
+              autoContinuedForTrackID != current.id else { return }
+        autoContinuedForTrackID = current.id
+        autoContinueTask?.cancel()
+        let existingIDs = Set(state.queue.map(\.id))
+        autoContinueTask = Task { [weak self] in
+            let similar = await OnlineCatalog.shared.similarTracks(to: current, excluding: existingIDs)
+            guard !Task.isCancelled, let self, !similar.isEmpty else { return }
+            var snapshots: [TrackSnapshot] = []
+            for candidate in similar {
+                if let snap = candidate.previewSnapshot(artworkPath: candidate.artworkURL?.absoluteString) {
+                    self.catalogQueueMetadata[snap.id] = candidate
+                    snapshots.append(snap)
+                }
+            }
+            guard !snapshots.isEmpty else { return }
+            self.playback.appendQueue(snapshots)
+            ToastCenter.shared.show(String(localized: "已为你续播相似歌曲"), systemImage: "sparkles")
         }
     }
 
@@ -282,6 +391,9 @@ final class LibraryModel {
                 lyricsReference: active.lyricsReference, isLiked: active.isLiked,
                 isAvailable: active.isAvailable, lastPlayedAt: active.lastPlayedAt)
             playback.refreshTrackMetadata(updated)
+            if enablesAutoContinue {
+                OnlineHistoryStore.shared.updateArtwork(trackID: expectedID, artworkReference: artwork.path)
+            }
         } else {
             try? FileManager.default.removeItem(at: directory)
         }

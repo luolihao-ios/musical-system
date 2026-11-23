@@ -83,8 +83,10 @@ struct AppShellView: View {
                         Label("歌单", systemImage: "text.badge.plus")
                     }
                     NavigationLink {
+                        let recent = (container.libraryModel.recentlyPlayed + OnlineHistoryStore.shared.recentlyPlayed)
+                            .sorted { ($0.lastPlayedAt ?? .distantPast) > ($1.lastPlayedAt ?? .distantPast) }
                         LibraryTracksView(title: String(localized: "最近播放"),
-                                          tracks: container.libraryModel.recentlyPlayed, model: container.libraryModel)
+                                          tracks: recent, model: container.libraryModel)
                     } label: {
                         Label("最近播放", systemImage: "clock.arrow.circlepath")
                     }

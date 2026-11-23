@@ -10,8 +10,13 @@ protocol AudioEngine: AnyObject {
     var isPlaying: Bool { get }
 
     func load(url: URL) async throws
+    func preload(url: URL)
     func play()
     func pause()
     func seek(to position: TimeInterval)
     func unload()
+}
+
+extension AudioEngine {
+    func preload(url: URL) {}
 }

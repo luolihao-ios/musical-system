@@ -29,6 +29,10 @@ struct PlayerDockContainer<Content: View>: View {
                             }
                         }
                         .frame(width: dock.size.width, height: dock.size.height, alignment: .bottom)
+                        .overlay(alignment: .top) {
+                            ToastOverlayView()
+                                .padding(.top, safeArea.safeAreaInsets.top + 8)
+                        }
                         .background(PlayerWindowMetricsProbe(clearance: $menuClearance).allowsHitTesting(false))
                         .onAppear {
                             PlayerInteractionDiagnostics.beginSession()

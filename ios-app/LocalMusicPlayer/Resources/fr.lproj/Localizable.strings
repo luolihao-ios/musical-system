@@ -245,3 +245,11 @@
 "定位播放到此句歌词" = "Lire à partir de ces paroles";
 "搜索联想" = "Suggestions";
 "搜索“%@”" = "Rechercher « %@ »";
+"已为你续播相似歌曲" = "Titres similaires ajoutés à la file";
+"当前音源暂不可播，已自动跳过" = "Source indisponible, passage au titre suivant";
+"网络或音源暂不可用，请稍后重试" = "Audio indisponible, réessayez plus tard";
+"已收藏" = "Ajouté aux favoris";
+"已取消收藏" = "Retiré des favoris";
+"30秒试听" = "Extrait 30s";
+"在线" = "En ligne";
+"播放本地或在线歌曲时点击心形即可收藏" = "Touchez le cœur pendant la lecture pour ajouter aux favoris";

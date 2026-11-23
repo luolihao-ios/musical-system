@@ -277,10 +277,20 @@ struct DiscoveryView: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(isCurrent ? PlayerTheme.accent : Color.primary)
                         .lineLimit(1)
-                    Text([track.artist, track.provider].filter { !$0.isEmpty }.joined(separator: " · "))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        Text([track.artist, track.provider].filter { !$0.isEmpty }.joined(separator: " · "))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        if track.isShortPreview {
+                            Text("30秒试听")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(PlayerTheme.accent)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(PlayerTheme.accent.opacity(0.12), in: Capsule())
+                        }
+                    }
                 }
                 Spacer(minLength: 0)
                 if isLoading {
@@ -416,7 +426,9 @@ struct DiscoveryView: View {
         }
         Task {
             do { try await library.toggleCatalogPreview(track, in: queue) }
-            catch { previewError = error.localizedDescription }
+            catch {
+                ToastCenter.shared.show(String(localized: "网络或音源暂不可用，请稍后重试"), systemImage: "exclamationmark.triangle")
+            }
         }
     }
 }

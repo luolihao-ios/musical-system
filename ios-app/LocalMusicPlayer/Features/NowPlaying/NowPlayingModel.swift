@@ -116,17 +116,47 @@ final class NowPlayingModel {
     }
 
     var canFavoriteCurrentTrack: Bool {
-        guard let track = state.currentTrack, store != nil else { return false }
-        return track.sourceKind != .onlinePreview
+        guard let track = state.currentTrack else { return false }
+        return track.sourceKind == .onlinePreview || store != nil
+    }
+
+    var isCurrentTrackLiked: Bool {
+        guard let track = state.currentTrack else { return false }
+        if track.sourceKind == .onlinePreview {
+            return OnlineHistoryStore.shared.isFavorite(track.id) || track.isLiked
+        }
+        return track.isLiked
     }
 
     func toggleCurrentFavorite() {
-        guard let track = state.currentTrack, let store, canFavoriteCurrentTrack else { return }
+        guard let track = state.currentTrack, canFavoriteCurrentTrack else { return }
+        if track.sourceKind == .onlinePreview {
+            let liked = OnlineHistoryStore.shared.toggleFavorite(track)
+            let updated = TrackSnapshot(
+                id: track.id, title: track.title, artist: track.artist, album: track.album,
+                duration: track.duration, sourceKind: track.sourceKind, sourceReference: track.sourceReference,
+                artworkReference: track.artworkReference, lyricsReference: track.lyricsReference,
+                isLiked: liked, isAvailable: track.isAvailable, lastPlayedAt: track.lastPlayedAt
+            )
+            playback.refreshTrackMetadata(updated)
+            NotificationCenter.default.post(name: .libraryFavoritesChanged, object: nil)
+            ToastCenter.shared.show(
+                liked ? String(localized: "已收藏") : String(localized: "已取消收藏"),
+                systemImage: liked ? "heart.fill" : "heart"
+            )
+            return
+        }
+        guard let store else { return }
         do {
-            try store.setLiked(trackID: track.id, isLiked: !track.isLiked)
+            let nextLiked = !track.isLiked
+            try store.setLiked(trackID: track.id, isLiked: nextLiked)
             if let updated = try store.track(id: track.id) {
                 playback.refreshTrackMetadata(TrackSnapshot(updated))
                 NotificationCenter.default.post(name: .libraryFavoritesChanged, object: nil)
+                ToastCenter.shared.show(
+                    nextLiked ? String(localized: "已收藏") : String(localized: "已取消收藏"),
+                    systemImage: nextLiked ? "heart.fill" : "heart"
+                )
             }
         } catch {
             PlaybackDiagnostics.log("更新收藏失败 error=\(error)")

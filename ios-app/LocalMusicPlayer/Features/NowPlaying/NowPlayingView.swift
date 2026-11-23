@@ -276,6 +276,13 @@ struct NowPlayingView: View {
                         .font(.subheadline)
                         .foregroundStyle(foreground.opacity(0.72))
                         .lineLimit(1)
+                    if model.state.currentTrack?.isShortPreview == true {
+                        Text("30秒试听")
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(foreground.opacity(0.16), in: Capsule())
+                    }
                     if let deadline = model.sleepDeadline {
                         let minutes = max(1, Int(ceil(deadline.timeIntervalSinceNow / 60)))
                         Label("\(minutes)m", systemImage: "timer")
@@ -288,13 +295,13 @@ struct NowPlayingView: View {
             }
             Spacer(minLength: 0)
             Button { model.toggleCurrentFavorite() } label: {
-                Image(systemName: model.state.currentTrack?.isLiked == true ? "heart.fill" : "heart")
+                Image(systemName: model.isCurrentTrackLiked ? "heart.fill" : "heart")
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(model.state.currentTrack?.isLiked == true ? Color.pink : foreground.opacity(model.canFavoriteCurrentTrack ? 0.92 : 0.35))
+                    .foregroundStyle(model.isCurrentTrackLiked ? Color.pink : foreground.opacity(model.canFavoriteCurrentTrack ? 0.92 : 0.35))
                     .frame(width: 40, height: 40)
             }
             .disabled(!model.canFavoriteCurrentTrack)
-            .accessibilityLabel(model.state.currentTrack?.isLiked == true ? String(localized: "取消收藏") : String(localized: "收藏"))
+            .accessibilityLabel(model.isCurrentTrackLiked ? String(localized: "取消收藏") : String(localized: "收藏"))
 
             Menu {
                 Button {

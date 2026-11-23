@@ -326,11 +326,25 @@ struct LibraryTracksView: View {
                 isPlaying: model.isCurrentTrackPlaying
             ) {
                 NotificationCenter.default.post(name: .showMiniPlayer, object: nil)
-                Task { try? await model.play(track, in: tracks) }
+                if track.sourceKind == .onlinePreview {
+                    NotificationCenter.default.post(name: .openNowPlayingPanel, object: nil)
+                    Task { await model.playOnlineHistoryTrack(track, in: tracks) }
+                } else {
+                    Task { try? await model.play(track, in: tracks) }
+                }
             } toggleLike: {
-                try? model.toggleLike(track)
+                if track.sourceKind == .onlinePreview {
+                    let liked = OnlineHistoryStore.shared.toggleFavorite(track)
+                    ToastCenter.shared.show(liked ? String(localized: "已收藏") : String(localized: "已取消收藏"), systemImage: liked ? "heart.fill" : "heart")
+                } else {
+                    try? model.toggleLike(track)
+                }
             } delete: {
-                try? model.delete(track)
+                if track.sourceKind == .onlinePreview {
+                    OnlineHistoryStore.shared.removeFavorite(track.id)
+                } else {
+                    try? model.delete(track)
+                }
             }
         }
         .navigationTitle(title)
@@ -388,6 +402,14 @@ struct TrackRow: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        if track.sourceKind == .onlinePreview {
+                            Text(track.isShortPreview ? String(localized: "30秒试听") : String(localized: "在线"))
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(PlayerTheme.accent)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 1)
+                                .background(PlayerTheme.accent.opacity(0.12), in: Capsule())
+                        }
                     }
                     Spacer(minLength: 0)
                 }

@@ -9,6 +9,8 @@ final class AVPlayerEngine: AudioEngine {
     private let player = AVPlayer()
     private var periodicObserver: Any?
     private var completionObserver: NSObjectProtocol?
+    private var preloadedURL: URL?
+    private var preloadedAsset: AVURLAsset?
 
     init() {
         let session = AVAudioSession.sharedInstance()
@@ -52,6 +54,16 @@ final class AVPlayerEngine: AudioEngine {
         player.timeControlStatus == .playing
     }
 
+    func preload(url: URL) {
+        guard !url.isFileURL, preloadedURL != url else { return }
+        let asset = AVURLAsset(url: url)
+        preloadedURL = url
+        preloadedAsset = asset
+        Task(priority: .utility) {
+            _ = try? await asset.load(.isPlayable)
+        }
+    }
+
     func load(url: URL) async throws {
         guard !url.isFileURL || FileManager.default.fileExists(atPath: url.path) else {
             PlaybackDiagnostics.log("AVPlayer 找不到音频资源：\(url.path)")
@@ -61,7 +73,14 @@ final class AVPlayerEngine: AudioEngine {
         if let completionObserver {
             NotificationCenter.default.removeObserver(completionObserver)
         }
-        let item = AVPlayerItem(url: url)
+        let item: AVPlayerItem
+        if preloadedURL == url, let cachedAsset = preloadedAsset {
+            item = AVPlayerItem(asset: cachedAsset)
+            preloadedURL = nil
+            preloadedAsset = nil
+        } else {
+            item = AVPlayerItem(url: url)
+        }
         player.replaceCurrentItem(with: item)
         completionObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
@@ -107,6 +126,8 @@ final class AVPlayerEngine: AudioEngine {
 
     func unload() {
         player.pause()
+        preloadedURL = nil
+        preloadedAsset = nil
         if let completionObserver {
             NotificationCenter.default.removeObserver(completionObserver)
             self.completionObserver = nil
