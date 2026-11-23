@@ -120,9 +120,7 @@ struct MiniPlayerView: View {
                     .onEnded { value in
                         let dx = value.translation.width
                         let dy = value.translation.height
-                        if dy <= -32 && abs(dy) > abs(dx) {
-                            expand()
-                        } else if dx <= -48 && abs(dx) > abs(dy) {
+                        if dx <= -48 && abs(dx) > abs(dy) {
                             Task { await model.next() }
                         } else if dx >= 48 && abs(dx) > abs(dy) {
                             Task { await model.previous() }
