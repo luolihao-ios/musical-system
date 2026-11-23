@@ -46,12 +46,13 @@ struct MiniPlayerView: View {
             NowPlayingView(
                 model: model,
                 queueRequest: queueRequest,
+                bottomSafeInset: bottomInset,
                 closePanel: close,
                 panelDragChanged: dragChanged,
                 panelDragEnded: dragEnded,
                 panelGestureFinished: { panel.finishGestureSession() }
             )
-            .frame(height: max(1, fullHeight - bottomInset))
+            .frame(height: max(1, fullHeight))
             .opacity(progress)
             .allowsHitTesting(panel.phase == .expanded)
             .accessibilityHidden(panel.phase != .expanded)
@@ -65,7 +66,7 @@ struct MiniPlayerView: View {
         .frame(maxWidth: .infinity)
         .frame(height: height, alignment: .top)
         .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 30 - 8 * progress))
+        .clipShape(RoundedRectangle(cornerRadius: panel.phase == .expanded ? 0 : 30 * (1 - progress)))
         .contentShape(Rectangle())
         .background {
             GeometryReader { geometry in
@@ -85,6 +86,9 @@ struct MiniPlayerView: View {
         .padding(.bottom, menuClearance * (1 - progress))
         .onAppear {
             PlayerInteractionDiagnostics.log("panel appear compact=\(compactHeight) full=\(fullHeight) bottomInset=\(bottomInset)")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openNowPlayingPanel)) { _ in
+            expand()
         }
         .onDisappear { PlayerInteractionDiagnostics.log("panel disappear frame=\(actualFrame)") }
         .onChange(of: maximumHeight) { _, _ in
@@ -199,7 +203,7 @@ struct MiniPlayerView: View {
             return
         }
         PlayerInteractionDiagnostics.log("detail release translation=\(value.translation) phase=\(panel.phase.rawValue)")
-        if value.translation.height < -80 && abs(value.translation.height) > abs(value.translation.width) {
+        if value.translation.height < -55 && abs(value.translation.height) > abs(value.translation.width) {
             panel.release(compact: compactHeight, expanded: fullHeight)
             Task {
                 PlayerInteractionDiagnostics.log("detail swipe next begin")

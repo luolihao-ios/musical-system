@@ -9,4 +9,5 @@ struct MiniPlayerVisibility: Sendable {
 
 extension Notification.Name {
     static let showMiniPlayer = Notification.Name("LocalMusicPlayer.showMiniPlayer")
+    static let openNowPlayingPanel = Notification.Name("LocalMusicPlayer.openNowPlayingPanel")
 }

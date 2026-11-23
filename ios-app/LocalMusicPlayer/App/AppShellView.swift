@@ -30,7 +30,7 @@ struct AppShellView: View {
         PlayerDockContainer(
             model: container.nowPlayingModel,
             isVisible: container.nowPlayingModel.state.currentTrack != nil,
-            dismiss: { selectedTab = 0 }
+            dismiss: {}
         ) { tabs }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { try? container.playback.persistCurrentState() }

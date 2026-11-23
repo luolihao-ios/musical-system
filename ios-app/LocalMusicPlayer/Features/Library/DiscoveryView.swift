@@ -224,6 +224,7 @@ struct DiscoveryView: View {
                 Spacer()
                 Button {
                     Task {
+                        NotificationCenter.default.post(name: .openNowPlayingPanel, object: nil)
                         do { try await library.playCatalogGroup(recommendations.tracks) }
                         catch { previewError = error.localizedDescription }
                     }
@@ -333,6 +334,7 @@ struct DiscoveryView: View {
                     if !group.tracks.isEmpty {
                         Button {
                             Task {
+                                NotificationCenter.default.post(name: .openNowPlayingPanel, object: nil)
                                 do { try await library.playCatalogGroup(isRadio ? group.tracks.shuffled() : group.tracks) }
                                 catch { previewError = error.localizedDescription }
                             }
@@ -398,6 +400,10 @@ struct DiscoveryView: View {
     }
 
     private func preview(_ track: CatalogTrack, in queue: [CatalogTrack] = []) {
+        let alreadyCurrent = library.currentTrackID == track.previewID
+        if !alreadyCurrent {
+            NotificationCenter.default.post(name: .openNowPlayingPanel, object: nil)
+        }
         Task {
             do { try await library.toggleCatalogPreview(track, in: queue) }
             catch { previewError = error.localizedDescription }

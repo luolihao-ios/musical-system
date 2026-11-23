@@ -19,6 +19,7 @@ enum NowPlayingLyricSnippet {
 struct NowPlayingView: View {
     @Bindable var model: NowPlayingModel
     var queueRequest: Int = 0
+    var bottomSafeInset: CGFloat = 0
     var closePanel: (() -> Void)? = nil
     var panelDragChanged: ((DragGesture.Value) -> Void)? = nil
     var panelDragEnded: ((DragGesture.Value) -> Void)? = nil
@@ -223,8 +224,10 @@ struct NowPlayingView: View {
             }
             .padding(.horizontal, 26)
             .padding(.top, 10)
-            .padding(.bottom, 26)
+            .padding(.bottom, max(24, bottomSafeInset + 10))
         }
+        .contentShape(Rectangle())
+        .simultaneousGesture(bodyPanelDrag)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("player.layout.compact")
     }
@@ -350,8 +353,10 @@ struct NowPlayingView: View {
         }
         .frame(width: clampedSide, height: clampedSide)
         .contentShape(Rectangle())
-        .onLongPressGesture(minimumDuration: 0.45) {
-            showSkinPicker = true
+        .onTapGesture {
+            if visualMode != .classic {
+                switchContent(to: .lyrics)
+            }
         }
         .highPriorityGesture(panelDrag)
         .accessibilityElement(children: visualMode == .classic ? .contain : .ignore)
@@ -481,6 +486,21 @@ struct NowPlayingView: View {
             .updating($panelGestureActive) { _, active, _ in active = true }
             .onChanged { panelDragChanged?($0) }
             .onEnded { panelDragEnded?($0) }
+    }
+
+    private var bodyPanelDrag: some Gesture {
+        DragGesture(minimumDistance: 18, coordinateSpace: .global)
+            .updating($panelGestureActive) { _, active, _ in
+                if contentMode == .artwork { active = true }
+            }
+            .onChanged { value in
+                guard contentMode == .artwork else { return }
+                panelDragChanged?(value)
+            }
+            .onEnded { value in
+                guard contentMode == .artwork else { return }
+                panelDragEnded?(value)
+            }
     }
 
     private func switchContent(to mode: NowPlayingContentMode) {

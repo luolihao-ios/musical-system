@@ -242,6 +242,9 @@ struct OnlineCatalogSearchView: View {
 
     private func playOnline(_ track: CatalogTrack) {
         guard track.previewURL != nil else { return }
+        if model.currentTrackID != track.previewID {
+            NotificationCenter.default.post(name: .openNowPlayingPanel, object: nil)
+        }
         let queue = playableResults
         Task {
             do { try await model.toggleCatalogPreview(track, in: queue) }
