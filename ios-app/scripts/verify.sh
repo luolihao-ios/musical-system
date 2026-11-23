@@ -58,6 +58,8 @@ xcodebuild test \
   -destination "platform=iOS Simulator,id=$simulator_id" \
   -derivedDataPath "$ios_root/build/DerivedData" \
   -resultBundlePath "$ios_root/build/PlayerTests.xcresult" \
+  -retry-tests-on-failure \
+  -test-iterations 2 \
   "${test_selection[@]}" \
   CODE_SIGNING_ALLOWED=NO \
   COMPILER_INDEX_STORE_ENABLE=NO
