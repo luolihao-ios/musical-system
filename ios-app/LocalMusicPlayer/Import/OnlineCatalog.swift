@@ -77,6 +77,59 @@ actor OnlineCatalog: CatalogDownloading {
         case jamendo, archive, netease, qq, kugou, itunes
     }
 
+    func suggest(query: String) async -> [String] {
+        let keyword = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !keyword.isEmpty else { return [] }
+        async let netease = try? suggestNetEase(query: keyword)
+        async let itunes = try? suggestITunes(query: keyword)
+        let (neList, itList) = await (netease, itunes)
+        let combined = (neList ?? []) + (itList ?? [])
+        return Array(combined.removingDuplicateStrings().prefix(8))
+    }
+
+    private func suggestNetEase(query: String) async throws -> [String] {
+        var c = URLComponents(string: "https://music.163.com/api/search/suggest/web")!
+        c.queryItems = [URLQueryItem(name: "s", value: query)]
+        let data = try await requestData(c.url!, timeout: 5)
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let result = root["result"] as? [String: Any] else { return [] }
+        var list: [String] = []
+        if let songs = result["songs"] as? [[String: Any]] {
+            for song in songs {
+                guard let name = song["name"] as? String, !name.isEmpty else { continue }
+                if let artists = song["artists"] as? [[String: Any]],
+                   let artist = artists.first?["name"] as? String, !artist.isEmpty {
+                    list.append("\(name) \(artist)")
+                } else {
+                    list.append(name)
+                }
+            }
+        }
+        if let artists = result["artists"] as? [[String: Any]] {
+            for artist in artists {
+                if let name = artist["name"] as? String, !name.isEmpty {
+                    list.append(name)
+                }
+            }
+        }
+        return list
+    }
+
+    private func suggestITunes(query: String) async throws -> [String] {
+        let storefront = await iTunesStorefront()
+        let primary = Self.iTunesRegion(storefront: storefront, locale: .current)
+        let region = primary == "CN" ? "HK" : primary
+        var c = URLComponents(string: "https://itunes.apple.com/search")!
+        c.queryItems = [
+            .init(name: "term", value: query), .init(name: "country", value: region),
+            .init(name: "media", value: "music"), .init(name: "entity", value: "song"),
+            .init(name: "limit", value: "5")
+        ]
+        guard let url = c.url else { return [] }
+        let tracks = try Self.decodeITunesTracks(try await requestData(url, timeout: 5), region: region)
+        return tracks.map { "\($0.title) \($0.artist)" }
+    }
+
     func search(query: String, onUpdate: (@MainActor @Sendable ([CatalogTrack]) -> Void)? = nil) async throws -> [CatalogTrack] {
         let keyword = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !keyword.isEmpty else { return [] }

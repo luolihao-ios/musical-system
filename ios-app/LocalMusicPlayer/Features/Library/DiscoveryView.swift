@@ -8,6 +8,7 @@ struct DiscoveryView: View {
     @State private var previewError: String?
     @State private var selectedShelf: DiscoveryShelf?
     @State private var selectedGroup: DiscoveryGroup?
+    @State private var showSearch = false
 
     private let mint = PlayerTheme.accent.opacity(0.13)
 
@@ -89,6 +90,13 @@ struct DiscoveryView: View {
         .navigationDestination(item: $selectedGroup) { group in
             groupTracks(group)
         }
+        .navigationDestination(isPresented: $showSearch) {
+            OnlineCatalogSearchView(
+                model: library,
+                embeddedInNavigationStack: false,
+                autoFocus: true
+            )
+        }
     }
 
     private var header: some View {
@@ -98,7 +106,9 @@ struct DiscoveryView: View {
                 Text("为你推荐好音乐").font(.subheadline).foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
-            Button(action: openSearch) {
+            Button {
+                showSearch = true
+            } label: {
                 Image(systemName: "magnifyingglass")
                     .font(.title3.weight(.semibold))
                     .frame(width: 44, height: 44)

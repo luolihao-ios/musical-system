@@ -4,9 +4,14 @@ import SwiftUI
 struct OnlineCatalogSearchView: View {
     @Bindable var model: LibraryModel
     var initialResults: [CatalogTrack] = []
+    var embeddedInNavigationStack: Bool = true
+    var autoFocus: Bool = false
+
     @AppStorage("search.recentQueries") private var recentQueriesRaw = ""
     @State private var query = ""
     @State private var results: [CatalogTrack] = []
+    @State private var suggestions: [String] = []
+    @State private var suggestTask: Task<Void, Never>?
     @State private var loading = false
     @State private var searchFailed = false
     @State private var submittedQuery: String?
@@ -58,70 +63,122 @@ struct OnlineCatalogSearchView: View {
         }
     }
 
+    private var isShowingSuggestions: Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmed.isEmpty && submittedQuery != trimmed && !loading
+    }
+
     private func sourceGroup(for track: CatalogTrack) -> String {
         if track.provider.hasPrefix("iTunes") { return "iTunes" }
         return track.provider
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                searchBar
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, 10)
+        if embeddedInNavigationStack {
+            NavigationStack {
+                content
+            }
+        } else {
+            content
+        }
+    }
 
-                if availableSources.count > 1 {
-                    sourceFilterBar
-                        .padding(.bottom, 8)
+    private var content: some View {
+        VStack(spacing: 0) {
+            searchBar
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 10)
+
+            if availableSources.count > 1 && !isShowingSuggestions {
+                sourceFilterBar
+                    .padding(.bottom, 8)
+            }
+
+            List {
+                if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && results.isEmpty {
+                    if !recentQueries.isEmpty {
+                        Section {
+                            ForEach(recentQueries, id: \.self) { term in
+                                Button {
+                                    query = term
+                                    startSearch()
+                                } label: {
+                                    Label(term, systemImage: "clock.arrow.circlepath")
+                                }
+                                .foregroundStyle(.primary)
+                            }
+                        } header: {
+                            HStack {
+                                Text("最近搜索")
+                                Spacer()
+                                Button("清空") { recentQueriesRaw = "" }
+                                    .font(.caption)
+                            }
+                        }
+                    }
+                    Section("推荐搜索") {
+                        ForEach(recommendedTerms, id: \.self) { term in
+                            Button(term) { query = term; startSearch() }
+                        }
+                    }
+                } else if isShowingSuggestions {
+                    Section("搜索联想") {
+                        if suggestions.isEmpty {
+                            Button {
+                                startSearch()
+                            } label: {
+                                Label(
+                                    String(format: NSLocalizedString("搜索“%@”", comment: ""), query.trimmingCharacters(in: .whitespacesAndNewlines)),
+                                    systemImage: "magnifyingglass"
+                                )
+                            }
+                            .foregroundStyle(PlayerTheme.accent)
+                        } else {
+                            ForEach(suggestions, id: \.self) { term in
+                                Button {
+                                    query = term
+                                    isSearchFocused = false
+                                    startSearch()
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "magnifyingglass")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        Text(term)
+                                            .foregroundStyle(.primary)
+                                            .lineLimit(1)
+                                        Spacer()
+                                        Image(systemName: "arrow.up.left")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
                 }
 
-                List {
-                    if query.isEmpty && results.isEmpty {
-                        if !recentQueries.isEmpty {
-                            Section {
-                                ForEach(recentQueries, id: \.self) { term in
-                                    Button {
-                                        query = term
-                                        startSearch()
-                                    } label: {
-                                        Label(term, systemImage: "clock.arrow.circlepath")
-                                    }
-                                    .foregroundStyle(.primary)
-                                }
-                            } header: {
-                                HStack {
-                                    Text("最近搜索")
-                                    Spacer()
-                                    Button("清空") { recentQueriesRaw = "" }
-                                        .font(.caption)
-                                }
-                            }
-                        }
-                        Section("推荐搜索") {
-                            ForEach(recommendedTerms, id: \.self) { term in
-                                Button(term) { query = term; startSearch() }
-                            }
-                        }
-                    }
-
-                    if loading {
-                        HStack(spacing: 10) {
-                            ProgressView()
-                            Text("正在搜索多源曲库…")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .listRowBackground(Color.clear)
-                    }
-
-                    if submittedQuery != nil && !loading && filteredResults.isEmpty {
-                        Text(searchFailed ? LocalizedStringKey("在线搜索暂不可用，请重试") : LocalizedStringKey("暂无在线搜索结果"))
+                if loading {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        Text("正在搜索多源曲库…")
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
-                    } else if !loading && !filteredResults.isEmpty && filteredResults.allSatisfy({ $0.previewURL == nil }) {
-                        Text("找到曲目信息，暂无可试听音源").foregroundStyle(.secondary)
                     }
+                    .listRowBackground(Color.clear)
+                }
 
+                if !isShowingSuggestions && submittedQuery != nil && !loading && filteredResults.isEmpty {
+                    Text(searchFailed ? LocalizedStringKey("在线搜索暂不可用，请重试") : LocalizedStringKey("暂无在线搜索结果"))
+                        .foregroundStyle(.secondary)
+                } else if !isShowingSuggestions && !loading && !filteredResults.isEmpty && filteredResults.allSatisfy({ $0.previewURL == nil }) {
+                    Text("找到曲目信息，暂无可试听音源").foregroundStyle(.secondary)
+                }
+
+                if !isShowingSuggestions {
                     ForEach(filteredResults) { track in
                         HStack(alignment: .center, spacing: 10) {
                             metadata(track)
@@ -134,24 +191,35 @@ struct OnlineCatalogSearchView: View {
                         .padding(.vertical, 4)
                     }
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
             }
-            .background(RefreshBackdrop())
-            .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
-            .onChange(of: query) { _, value in
-                if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    cancelSearch()
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+        }
+        .background(RefreshBackdrop())
+        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
+        .onAppear {
+            if autoFocus {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(120))
+                    isSearchFocused = true
                 }
             }
-            .task { if results.isEmpty { results = initialResults } }
-            .navigationTitle("搜索")
-            .navigationBarTitleDisplayMode(.inline)
-            .alert("提示", isPresented: Binding(get: { !message.isEmpty }, set: { if !$0 { message = "" } })) {
-                Button("好") { message = "" }
-            } message: {
-                Text(message)
+        }
+        .onChange(of: query) { _, value in
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                cancelSearch()
+            } else if trimmed != submittedQuery {
+                scheduleSuggestions(for: trimmed)
             }
+        }
+        .task { if results.isEmpty { results = initialResults } }
+        .navigationTitle("搜索")
+        .navigationBarTitleDisplayMode(.inline)
+        .alert("提示", isPresented: Binding(get: { !message.isEmpty }, set: { if !$0 { message = "" } })) {
+            Button("好") { message = "" }
+        } message: {
+            Text(message)
         }
     }
 
@@ -292,6 +360,18 @@ struct OnlineCatalogSearchView: View {
         }
     }
 
+    private func scheduleSuggestions(for keyword: String) {
+        suggestTask?.cancel()
+        suggestTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(220))
+            guard !Task.isCancelled else { return }
+            let fetched = await OnlineCatalog.shared.suggest(query: keyword)
+            guard !Task.isCancelled,
+                  query.trimmingCharacters(in: .whitespacesAndNewlines) == keyword else { return }
+            suggestions = fetched
+        }
+    }
+
     private func saveRecentQuery(_ keyword: String) {
         var list = recentQueries.filter { $0.caseInsensitiveCompare(keyword) != .orderedSame }
         list.insert(keyword, at: 0)
@@ -299,6 +379,9 @@ struct OnlineCatalogSearchView: View {
     }
 
     private func cancelSearch() {
+        suggestTask?.cancel()
+        suggestTask = nil
+        suggestions = []
         searchTask?.cancel()
         searchTask = nil
         searchGeneration = UUID()
