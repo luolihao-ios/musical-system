@@ -169,18 +169,23 @@ actor OnlineCatalog: CatalogDownloading {
 
     private func searchITunes(query: String) async throws -> [CatalogTrack] {
         let storefront = await iTunesStorefront()
-        let region = Self.iTunesRegion(storefront: storefront, locale: .current)
-        var components = URLComponents(string: "https://itunes.apple.com/search")!
-        components.queryItems = [
-            .init(name: "term", value: query), .init(name: "country", value: region),
-            .init(name: "media", value: "music"), .init(name: "entity", value: "song"),
-            .init(name: "limit", value: "20")
-        ]
-        guard let url = components.url else { throw URLError(.badURL) }
-        let data = try await requestData(url, timeout: 8)
-        let results = try Self.decodeITunesTracks(data, region: region)
-        PlayerInteractionDiagnostics.log("online-search itunes region=\(region) metadata=\(results.count)")
-        return results
+        let primary = Self.iTunesRegion(storefront: storefront, locale: .current)
+        let regions: [String] = primary == "CN" ? ["CN", "HK", "US"] : [primary, "US"].removingDuplicateStrings()
+        for region in regions {
+            var components = URLComponents(string: "https://itunes.apple.com/search")!
+            components.queryItems = [
+                .init(name: "term", value: query), .init(name: "country", value: region),
+                .init(name: "media", value: "music"), .init(name: "entity", value: "song"),
+                .init(name: "limit", value: "20")
+            ]
+            guard let url = components.url else { continue }
+            guard let data = try? await requestData(url, timeout: 8),
+                  let results = try? Self.decodeITunesTracks(data, region: region),
+                  !results.isEmpty else { continue }
+            PlayerInteractionDiagnostics.log("online-search itunes region=\(region) tracks=\(results.count)")
+            return results
+        }
+        return []
     }
 
     nonisolated static func decodeITunesTracks(_ data: Data, region: String) throws -> [CatalogTrack] {
@@ -190,6 +195,8 @@ actor OnlineCatalog: CatalogDownloading {
                 let trackId: Int?
                 let trackName: String?
                 let artistName: String?
+                let artworkUrl100: String?
+                let previewUrl: String?
             }
             let results: [Item]
         }
@@ -197,9 +204,25 @@ actor OnlineCatalog: CatalogDownloading {
             guard item.kind == "song", let id = item.trackId,
                   let title = item.trackName, !title.isEmpty,
                   let artist = item.artistName, !artist.isEmpty else { return nil }
-            // 只用商店曲目信息。Apple 的封面、预览 URL 不进入播放器、首页或下载队列。
-            return CatalogTrack(id: "itunes-\(region)-\(id)", title: title, artist: artist,
-                audioURL: URL(string: "https://example.invalid")!, license: .unknown, provider: "iTunes · \(region)")
+            let preview = item.previewUrl.flatMap { value -> URL? in
+                guard let url = URL(string: value), url.scheme?.lowercased() == "https" else { return nil }
+                return url
+            }
+            let artwork = item.artworkUrl100.flatMap { raw -> URL? in
+                let upgraded = raw.replacingOccurrences(of: "100x100", with: "600x600")
+                return URL(string: upgraded)
+            }
+            return CatalogTrack(
+                id: "itunes-\(region)-\(id)",
+                title: title,
+                artist: artist,
+                audioURL: preview ?? URL(string: "https://example.invalid")!,
+                license: .unknown,
+                provider: "iTunes · \(region)",
+                previewURL: preview,
+                artworkURL: artwork,
+                providerAllowsDownload: false
+            )
         }
     }
 
@@ -269,19 +292,22 @@ actor OnlineCatalog: CatalogDownloading {
             async let calm = try? searchNetEase(query: market.regionalQuery)
             async let folk = try? searchNetEase(query: "民谣")
             async let piano = try? searchNetEase(query: "钢琴曲")
+            async let itunesHits = try? searchITunes(query: "周杰伦")
             async let openFallback = try? archiveGroups(query: nil, order: .popular, limit: 5)
-            let (hotTracks, calmTracks, folkTracks, pianoTracks, archiveAlbums) = await (hot, calm, folk, piano, openFallback)
+            let (hotTracks, calmTracks, folkTracks, pianoTracks, itunesTracks, archiveAlbums) = await (hot, calm, folk, piano, itunesHits, openFallback)
 
-            let chartTracks = DiscoveryModel.playableTracks(hotTracks ?? [])
+            let chartTracks = DiscoveryModel.playableTracks((hotTracks ?? []) + (itunesTracks ?? []))
             let calmList = DiscoveryModel.playableTracks(calmTracks ?? [])
             let folkList = DiscoveryModel.playableTracks(folkTracks ?? [])
             let pianoList = DiscoveryModel.playableTracks(pianoTracks ?? [])
+            let itunesList = DiscoveryModel.playableTracks(itunesTracks ?? [])
             let albums = archiveAlbums ?? []
 
             let mixes: [DiscoveryGroup] = [
                 .init(id: "calm", title: "轻松时刻", tracks: calmList),
                 .init(id: "folk", title: "民谣精选", tracks: folkList),
-                .init(id: "piano", title: "钢琴漫游", tracks: pianoList)
+                .init(id: "piano", title: "钢琴漫游", tracks: pianoList),
+                .init(id: "itunes-picks", title: "华语精选", tracks: itunesList)
             ]
             let radios: [DiscoveryGroup] = [
                 .init(id: "radio-calm", title: "轻松时刻", tracks: calmList + pianoList),
@@ -289,7 +315,7 @@ actor OnlineCatalog: CatalogDownloading {
                 .init(id: "radio-folk", title: "民谣电台", tracks: folkList)
             ]
             let combinedRecs = DiscoveryModel.playableTracks(
-                Array(chartTracks.prefix(6)) + Array(calmList.prefix(4)) + Array(folkList.prefix(4)) + albums.compactMap { $0.tracks.first }
+                Array(itunesList.prefix(4)) + Array(chartTracks.prefix(6)) + Array(calmList.prefix(4)) + Array(folkList.prefix(4))
             )
             if !combinedRecs.isEmpty {
                 return DiscoveryFeed(recommendations: combinedRecs, shelves: [
@@ -445,12 +471,57 @@ actor OnlineCatalog: CatalogDownloading {
         c.queryItems = [URLQueryItem(name: "s", value: query), URLQueryItem(name: "type", value: "1"), URLQueryItem(name: "limit", value: "20")]
         let object = try JSONSerialization.jsonObject(with: try await requestData(c.url!)) as? [String: Any]
         let songs = (object?["result"] as? [String: Any])?["songs"] as? [[String: Any]] ?? []
-        return songs.compactMap { song in
-            guard let id = song["id"] as? Int, let title = song["name"] as? String, let artists = song["artists"] as? [[String: Any]], let artist = artists.first?["name"] as? String else { return nil }
-            let preview = URL(string: "https://music.163.com/song/media/outer/url?id=\(id).mp3")
-            let artwork = ((song["album"] as? [String: Any])?["picUrl"] as? String).flatMap(URL.init(string:))
-            return CatalogTrack(id: "netease-\(id)", title: title, artist: artist, audioURL: preview ?? URL(string: "https://example.invalid")!, license: .unknown, provider: "网易云音乐", previewURL: preview, artworkURL: artwork)
+        let parsed: [(id: Int, title: String, artist: String, fee: Int, picUrl: String?)] = songs.compactMap { song in
+            guard let id = song["id"] as? Int,
+                  let title = song["name"] as? String,
+                  let artists = song["artists"] as? [[String: Any]],
+                  let artist = artists.first?["name"] as? String else { return nil }
+            let fee = song["fee"] as? Int ?? 0
+            let picUrl = (song["album"] as? [String: Any])?["picUrl"] as? String
+            return (id, title, artist, fee, picUrl)
         }
+        // 优先排免费可播曲目 (fee == 0 或 8)，VIP 曲目排后。
+        let ordered = parsed.filter { $0.fee == 0 || $0.fee == 8 } + parsed.filter { $0.fee != 0 && $0.fee != 8 }
+        let ids = ordered.prefix(20).map(\.id)
+        let artworkMap = await fetchNetEaseArtworks(ids: ids)
+        return ordered.prefix(20).map { item in
+            let preview = URL(string: "https://music.163.com/song/media/outer/url?id=\(item.id).mp3")
+            let rawArt = artworkMap[item.id] ?? item.picUrl
+            let artwork = rawArt.flatMap { value -> URL? in
+                let httpsValue = value.hasPrefix("http://") ? "https://" + value.dropFirst(7) : value
+                let resized = httpsValue.contains("?") ? httpsValue : httpsValue + "?param=400y400"
+                return URL(string: resized)
+            }
+            return CatalogTrack(
+                id: "netease-\(item.id)",
+                title: item.title,
+                artist: item.artist,
+                audioURL: preview ?? URL(string: "https://example.invalid")!,
+                license: .unknown,
+                provider: "网易云音乐",
+                previewURL: preview,
+                artworkURL: artwork
+            )
+        }
+    }
+
+    private func fetchNetEaseArtworks(ids: [Int]) async -> [Int: String] {
+        guard !ids.isEmpty else { return [:] }
+        var components = URLComponents(string: "https://music.163.com/api/song/detail")!
+        let idList = "[" + ids.map(String.init).joined(separator: ",") + "]"
+        components.queryItems = [URLQueryItem(name: "ids", value: idList)]
+        guard let url = components.url,
+              let data = try? await requestData(url, timeout: 8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let songs = root["songs"] as? [[String: Any]] else { return [:] }
+        var map: [Int: String] = [:]
+        for song in songs {
+            guard let id = song["id"] as? Int,
+                  let album = song["album"] as? [String: Any],
+                  let pic = album["picUrl"] as? String, !pic.isEmpty else { continue }
+            map[id] = pic
+        }
+        return map
     }
 
     private func searchQQMusic(query: String) async throws -> [CatalogTrack] {
@@ -485,14 +556,31 @@ actor OnlineCatalog: CatalogDownloading {
     }
 
     private func searchKugou(query: String) async throws -> [CatalogTrack] {
-        var c = URLComponents(string: "https://mobilecdn.kugou.com/api/v3/search/song")!
-        c.queryItems = [URLQueryItem(name: "keyword", value: query), URLQueryItem(name: "pagesize", value: "20"), URLQueryItem(name: "page", value: "1")]
-        let object = try JSONSerialization.jsonObject(with: try await requestData(c.url!)) as? [String: Any]
-        let list = ((object?["data"] as? [String: Any])?["info"] as? [[String: Any]]) ?? []
+        var c = URLComponents(string: "https://songsearch.kugou.com/song_search_v2")!
+        c.queryItems = [
+            URLQueryItem(name: "keyword", value: query),
+            URLQueryItem(name: "pagesize", value: "20"),
+            URLQueryItem(name: "page", value: "1")
+        ]
+        let object = try JSONSerialization.jsonObject(with: try await requestData(c.url!, timeout: 8)) as? [String: Any]
+        let list = ((object?["data"] as? [String: Any])?["lists"] as? [[String: Any]]) ?? []
         return list.compactMap { song in
-            guard let hash = song["hash"] as? String, let title = song["songname"] as? String else { return nil }
-            let artwork = (song["imgurl"] as? String)?.replacingOccurrences(of: "{size}", with: "500")
-            return CatalogTrack(id: "kugou-\(hash)", title: title, artist: song["singername"] as? String ?? "酷狗音乐", audioURL: URL(string: "https://example.invalid")!, license: .unknown, provider: "酷狗音乐", artworkURL: artwork.flatMap(URL.init(string:)))
+            guard let hash = song["FileHash"] as? String ?? song["HQFileHash"] as? String,
+                  !hash.isEmpty,
+                  let rawTitle = song["SongName"] as? String ?? song["FileName"] as? String else { return nil }
+            let title = rawTitle.replacingOccurrences(of: "<em>", with: "").replacingOccurrences(of: "</em>", with: "")
+            let rawArtist = song["SingerName"] as? String ?? "酷狗音乐"
+            let artist = rawArtist.replacingOccurrences(of: "<em>", with: "").replacingOccurrences(of: "</em>", with: "")
+            let artwork = (song["Image"] as? String)?.replacingOccurrences(of: "{size}", with: "400")
+            return CatalogTrack(
+                id: "kugou-\(hash)",
+                title: title,
+                artist: artist,
+                audioURL: URL(string: "https://example.invalid")!,
+                license: .unknown,
+                provider: "酷狗音乐",
+                artworkURL: artwork.flatMap(URL.init(string:))
+            )
         }
     }
 
@@ -538,5 +626,11 @@ actor OnlineCatalog: CatalogDownloading {
 private extension Array where Element == CatalogTrack {
     func removingDuplicates() -> [CatalogTrack] {
         var seen = Set<String>(); return filter { seen.insert($0.id).inserted }
+    }
+}
+
+private extension Array where Element == String {
+    func removingDuplicateStrings() -> [String] {
+        var seen = Set<String>(); return filter { seen.insert($0).inserted }
     }
 }

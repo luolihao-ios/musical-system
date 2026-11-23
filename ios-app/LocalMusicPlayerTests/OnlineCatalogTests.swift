@@ -16,14 +16,14 @@ final class OnlineCatalogTests: XCTestCase {
         XCTAssertEqual(OnlineCatalog.iTunesRegion(storefront: nil, locale: Locale(identifier: "zh_CN")), "CN")
     }
 
-    func testITunesCatalogRowsNeverExposeAppleAudioForPlaybackOrDownload() throws {
-        let json = #"{"resultCount":1,"results":[{"kind":"song","trackId":42,"trackName":"Anti-Hero","artistName":"Taylor Swift","artworkUrl100":"https://example.org/cover.jpg","previewUrl":"https://example.org/audio.m4a"}]}"#
+    func testITunesCatalogRowsProvidePreviewAndHDArtworkWithoutDownload() throws {
+        let json = #"{"resultCount":1,"results":[{"kind":"song","trackId":42,"trackName":"Anti-Hero","artistName":"Taylor Swift","artworkUrl100":"https://example.org/100x100bb.jpg","previewUrl":"https://example.org/audio.m4a"}]}"#
         let tracks = try OnlineCatalog.decodeITunesTracks(Data(json.utf8), region: "US")
         let row = try XCTUnwrap(tracks.first)
         XCTAssertEqual(row.title, "Anti-Hero")
         XCTAssertEqual(row.provider, "iTunes · US")
-        XCTAssertNil(row.previewURL)
-        XCTAssertNil(row.artworkURL)
+        XCTAssertEqual(row.previewURL?.absoluteString, "https://example.org/audio.m4a")
+        XCTAssertEqual(row.artworkURL?.absoluteString, "https://example.org/600x600bb.jpg")
         XCTAssertFalse(row.allowsDownload)
     }
 

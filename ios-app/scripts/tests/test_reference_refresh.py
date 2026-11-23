@@ -11,11 +11,11 @@ class ReferenceRefreshTests(unittest.TestCase):
         self.assertIn("recommendations.shelves", view)
         self.assertIn("toggleCatalogPreview(track, in:", view)
 
-    def test_search_has_online_and_local_paths(self):
+    def test_search_is_online_only_with_visible_search_bar(self):
         view = (ROOT / "Features/Library/OnlineCatalogSearchView.swift").read_text(encoding="utf-8")
-        self.assertIn("Picker", view)
-        self.assertIn("model.tracks", view)
-        self.assertIn("model.play(track", view)
+        self.assertIn("search.submit", view)
+        self.assertIn("OnlineCatalog.shared.search", view)
+        self.assertNotIn('Picker("音乐来源"', view)
 
     def test_player_can_switch_appearance_without_switching_engine(self):
         view = (ROOT / "Features/NowPlaying/NowPlayingView.swift").read_text(encoding="utf-8")

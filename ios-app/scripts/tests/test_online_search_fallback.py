@@ -12,7 +12,7 @@ class OnlineSearchFallbackTests(unittest.TestCase):
         self.assertIn("onUpdate:", view)
         self.assertIn("withTaskGroup", service.split("func search(query:", 1)[1].split("private func searchJamendo", 1)[0])
 
-    def test_itunes_is_an_online_search_source_but_not_a_home_source(self):
+    def test_itunes_is_wired_for_online_search_and_discovery(self):
         service = (ROOT / "Import/OnlineCatalog.swift").read_text(encoding="utf-8")
         self.assertIn("case .itunes:", service)
-        self.assertNotIn("searchITunes", service.split("func discoveryFeed", 1)[1].split("private func searchInternetArchive", 1)[0])
+        self.assertIn("searchITunes", service.split("func discoveryFeed", 1)[1].split("private func searchInternetArchive", 1)[0])

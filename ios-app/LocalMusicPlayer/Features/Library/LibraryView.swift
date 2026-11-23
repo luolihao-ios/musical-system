@@ -68,10 +68,6 @@ struct LibraryView: View {
         .navigationTitle(title ?? (personalLibrary ? "我的" : categoriesOnly ? "音乐库" : ""))
         .background(RefreshBackdrop())
         .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
-        .searchable(
-            text: $model.searchText,
-            prompt: "搜索歌曲、歌手或专辑"
-        )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack {

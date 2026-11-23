@@ -2,7 +2,6 @@ import SwiftUI
 
 @MainActor
 struct OnlineCatalogSearchView: View {
-    private enum Scope: Hashable { case online, local }
     @Bindable var model: LibraryModel
     var initialResults: [CatalogTrack] = []
     @AppStorage("search.recentQueries") private var recentQueriesRaw = ""
@@ -14,8 +13,8 @@ struct OnlineCatalogSearchView: View {
     @State private var searchTask: Task<Void, Never>?
     @State private var message = ""
     @State private var searchGeneration = UUID()
-    @State private var scope: Scope = .online
-    @State private var playableOnly = true
+    @State private var selectedSource: String = "all"
+    @FocusState private var isSearchFocused: Bool
 
     private var recentQueries: [String] {
         recentQueriesRaw
@@ -27,62 +26,57 @@ struct OnlineCatalogSearchView: View {
     private var recommendedTerms: [String] {
         let lang = Locale.current.language.languageCode?.identifier ?? ""
         if lang.hasPrefix("zh") {
-            return ["轻音乐", "钢琴曲", "民谣", "爵士", "纯音乐", "华语流行"]
+            return ["周杰伦", "轻音乐", "钢琴曲", "民谣", "爵士", "华语流行"]
         }
         return ["piano", "jazz", "acoustic", "electronic"]
     }
 
+    private var availableSources: [String] {
+        var seen = Set<String>()
+        var list: [String] = []
+        for track in results {
+            let group = sourceGroup(for: track)
+            if !group.isEmpty, seen.insert(group).inserted {
+                list.append(group)
+            }
+        }
+        return list
+    }
+
     private var playableResults: [CatalogTrack] {
-        results.filter { $0.previewURL != nil }
+        filteredResults.filter { $0.previewURL != nil }
     }
 
-    private var hasMetadataOnlyResults: Bool {
-        results.contains { $0.previewURL == nil }
-    }
-
-    private var displayedOnlineResults: [CatalogTrack] {
-        if playableOnly && !playableResults.isEmpty {
-            return playableResults
+    private var filteredResults: [CatalogTrack] {
+        switch selectedSource {
+        case "all":
+            return results
+        case "playable":
+            return results.filter { $0.previewURL != nil }
+        default:
+            return results.filter { sourceGroup(for: $0) == selectedSource }
         }
-        return results
     }
 
-    private var localResults: [TrackSnapshot] {
-        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !term.isEmpty else { return model.tracks }
-        return model.tracks.filter {
-            [$0.title, $0.artist, $0.album].contains { $0.localizedStandardContains(term) }
-        }
+    private func sourceGroup(for track: CatalogTrack) -> String {
+        if track.provider.hasPrefix("iTunes") { return "iTunes" }
+        return track.provider
     }
 
     var body: some View {
         NavigationStack {
-            List {
-                Picker("音乐来源", selection: $scope) {
-                    Text("在线音乐").tag(Scope.online)
-                    Text("本地音乐").tag(Scope.local)
-                }
-                .pickerStyle(.segmented)
-                .listRowBackground(Color.clear)
+            VStack(spacing: 0) {
+                searchBar
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 10)
 
-                if scope == .local {
-                    ForEach(localResults) { track in
-                        TrackRow(
-                            track: track,
-                            isCurrent: model.currentTrackID == track.id,
-                            isPlaying: model.isCurrentTrackPlaying
-                        ) {
-                            Task { try? await model.play(track, in: localResults) }
-                        } toggleLike: {
-                            try? model.toggleLike(track)
-                        } delete: {
-                            try? model.delete(track)
-                        }
-                    }
-                    if localResults.isEmpty {
-                        Text("没有匹配的本地音乐").foregroundStyle(.secondary)
-                    }
-                } else {
+                if availableSources.count > 1 {
+                    sourceFilterBar
+                        .padding(.bottom, 8)
+                }
+
+                List {
                     if query.isEmpty && results.isEmpty {
                         if !recentQueries.isEmpty {
                             Section {
@@ -110,27 +104,25 @@ struct OnlineCatalogSearchView: View {
                             }
                         }
                     }
-                    if loading { ProgressView("正在搜索…") }
-                    if submittedQuery != nil && !loading && results.isEmpty {
-                        Text(searchFailed ? LocalizedStringKey("在线搜索暂不可用，请重试") : LocalizedStringKey("暂无在线搜索结果"))
-                            .foregroundStyle(.secondary)
-                    } else if !loading && !results.isEmpty && results.allSatisfy({ $0.previewURL == nil }) {
-                        Text("找到曲目信息，暂无可试听音源").foregroundStyle(.secondary)
-                    }
-                    if !playableResults.isEmpty && hasMetadataOnlyResults {
-                        HStack {
-                            Text(playableOnly ? String(localized: "仅显示可试听曲目") : String(localized: "显示全部结果"))
-                                .font(.caption)
+
+                    if loading {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                            Text("正在搜索多源曲库…")
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
-                            Spacer()
-                            Button(playableOnly ? String(localized: "显示全部") : String(localized: "仅看可播")) {
-                                playableOnly.toggle()
-                            }
-                            .font(.caption.weight(.semibold))
                         }
                         .listRowBackground(Color.clear)
                     }
-                    ForEach(displayedOnlineResults) { track in
+
+                    if submittedQuery != nil && !loading && filteredResults.isEmpty {
+                        Text(searchFailed ? LocalizedStringKey("在线搜索暂不可用，请重试") : LocalizedStringKey("暂无在线搜索结果"))
+                            .foregroundStyle(.secondary)
+                    } else if !loading && !filteredResults.isEmpty && filteredResults.allSatisfy({ $0.previewURL == nil }) {
+                        Text("找到曲目信息，暂无可试听音源").foregroundStyle(.secondary)
+                    }
+
+                    ForEach(filteredResults) { track in
                         ViewThatFits(in: .horizontal) {
                             HStack(spacing: 12) {
                                 metadata(track)
@@ -149,12 +141,11 @@ struct OnlineCatalogSearchView: View {
                         .padding(.vertical, 4)
                     }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
-            .scrollContentBackground(.hidden)
             .background(RefreshBackdrop())
             .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
-            .searchable(text: $query, prompt: "搜索歌曲、歌手或专辑")
-            .onSubmit(of: .search) { if scope == .online { startSearch() } }
             .onChange(of: query) { _, value in
                 if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     cancelSearch()
@@ -162,12 +153,91 @@ struct OnlineCatalogSearchView: View {
             }
             .task { if results.isEmpty { results = initialResults } }
             .navigationTitle("搜索")
+            .navigationBarTitleDisplayMode(.inline)
             .alert("提示", isPresented: Binding(get: { !message.isEmpty }, set: { if !$0 { message = "" } })) {
                 Button("好") { message = "" }
             } message: {
                 Text(message)
             }
         }
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("搜索歌曲、歌手或专辑", text: $query)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.search)
+                    .focused($isSearchFocused)
+                    .onSubmit { startSearch() }
+                if !query.isEmpty {
+                    Button {
+                        query = ""
+                        cancelSearch()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("清除搜索")
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(.regularMaterial, in: Capsule())
+
+            Button {
+                isSearchFocused = false
+                startSearch()
+            } label: {
+                Text("搜索")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(PlayerTheme.accent, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .accessibilityIdentifier("search.submit")
+        }
+    }
+
+    private var sourceFilterBar: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                filterChip(id: "all", title: String(localized: "全部"))
+                if results.contains(where: { $0.previewURL != nil }) {
+                    filterChip(id: "playable", title: String(localized: "可试听"))
+                }
+                ForEach(availableSources, id: \.self) { source in
+                    filterChip(id: source, title: source)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private func filterChip(id: String, title: String) -> some View {
+        let active = selectedSource == id
+        return Button {
+            selectedSource = id
+        } label: {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(active ? .white : .primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    active ? AnyShapeStyle(PlayerTheme.accent) : AnyShapeStyle(.regularMaterial),
+                    in: Capsule()
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     private func playOnline(_ track: CatalogTrack) {
@@ -182,15 +252,8 @@ struct OnlineCatalogSearchView: View {
     private func metadata(_ track: CatalogTrack) -> some View {
         let isCurrent = model.currentTrackID == track.previewID
         return HStack(spacing: 10) {
-            Color.accentColor.opacity(0.12).frame(width: 48, height: 48)
-                .overlay {
-                    AsyncImage(url: track.artworkURL) { phase in
-                        if let image = phase.image { image.resizable().scaledToFill() }
-                        else { Image(systemName: "music.note").foregroundStyle(.secondary) }
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 9))
-                .accessibilityHidden(true)
+            CachedRemoteImage(url: track.artworkURL, cornerRadius: 9, maxPixelSize: 160)
+                .frame(width: 50, height: 50)
             VStack(alignment: .leading, spacing: 4) {
                 Text(track.title)
                     .foregroundStyle(isCurrent ? PlayerTheme.accent : Color.primary)
@@ -246,6 +309,7 @@ struct OnlineCatalogSearchView: View {
         submittedQuery = nil
         loading = false
         searchFailed = false
+        selectedSource = "all"
         results = []
     }
 

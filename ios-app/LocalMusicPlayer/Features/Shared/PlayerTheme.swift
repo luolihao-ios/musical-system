@@ -59,11 +59,15 @@ struct PlayerPersonalizationView: View {
 
     var body: some View {
         Form {
-            Picker("界面主题", selection: $appearance) {
-                ForEach(PlayerAppearance.allCases) { item in Text(item.title).tag(item) }
+            Section("界面主题") {
+                Picker("界面主题", selection: $appearance) {
+                    ForEach(PlayerAppearance.allCases) { item in Text(item.title).tag(item) }
+                }
+                .pickerStyle(.segmented)
             }
-            Picker("播放外观", selection: $visualMode) {
-                ForEach(PlayerVisualMode.allCases) { item in Text(item.title).tag(item) }
+            Section("播放器外观") {
+                PlayerSkinCardsRow(visualMode: $visualMode)
+                    .padding(.vertical, 6)
             }
         }
         .navigationTitle("主题与个性化")

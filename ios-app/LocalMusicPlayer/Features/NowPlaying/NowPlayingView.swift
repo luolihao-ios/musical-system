@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum NowPlayingContentMode: Equatable {
     case artwork
@@ -28,10 +29,10 @@ struct NowPlayingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showQueue = false
     @State private var contentMode: NowPlayingContentMode = .artwork
-    @State private var artworkTheme = NowPlayingArtworkTheme.fallback
+    @State private var backdropImage: UIImage?
     @AppStorage("player.visualMode") private var visualMode = PlayerVisualMode.cover
     @State private var showSleepTimer = false
-    @State private var showAudioControls = false
+    @State private var showSkinPicker = false
     @State private var scrubbingProgress: Double?
 
     private struct ArtworkRequest: Equatable, Sendable {
@@ -43,23 +44,22 @@ struct NowPlayingView: View {
         .init(trackID: model.state.currentTrack?.id, path: model.state.currentTrack?.artworkReference)
     }
 
-    private var foreground: Color { artworkTheme.foreground.color }
+    private var foreground: Color { .white }
 
     var body: some View {
         NavigationStack {
             ZStack {
-                LinearGradient(
-                    colors: [artworkTheme.top.color, artworkTheme.bottom.color],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
+                immersiveBackdrop
 
                 VStack(spacing: 0) {
+                    Capsule()
+                        .fill(.white.opacity(0.32))
+                        .frame(width: 38, height: 5)
+                        .padding(.top, 10)
+                        .padding(.bottom, 2)
+
                     header
-                    if contentMode == .artwork {
-                        visualSelector
-                    }
+
                     GeometryReader { geometry in
                         let layout = AdaptivePlayerLayout.resolve(size: geometry.size)
                         if #available(iOS 27.1, *), !geometry.reservedRegions(kind: .division, options: .includeInactive).isEmpty {
@@ -67,38 +67,14 @@ struct NowPlayingView: View {
                         } else if layout.isWide {
                             widePlayer(layout: layout)
                         } else if visualMode == .classic && contentMode == .artwork {
-                            VStack(spacing: 8) {
-                                ClassicPlayerVisual(model: model, showQueue: { showQueue = true })
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .accessibilityIdentifier("player.artwork")
-                                utilityBar
-                                    .padding(.horizontal, 28)
-                                    .padding(.bottom, 14)
-                            }
-                            .accessibilityElement(children: .contain)
-                            .accessibilityIdentifier("player.layout.compact")
+                            ClassicPlayerVisual(model: model, showQueue: { showQueue = true })
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .padding(.bottom, 16)
+                                .accessibilityIdentifier("player.artwork")
+                                .accessibilityElement(children: .contain)
+                                .accessibilityIdentifier("player.layout.compact")
                         } else {
-                            VStack(spacing: 0) {
-                                GeometryReader { viewport in
-                                    ScrollView {
-                                        VStack(spacing: 18) {
-                                            mainContent(in: viewport.size, artworkSide: layout.artworkSide)
-                                            trackIdentity
-                                            if !model.hasLyrics { lyricsSearch }
-                                        }
-                                        .padding(.horizontal, 24)
-                                        .padding(.bottom, 12)
-                                        .frame(maxWidth: .infinity)
-                                    }
-                                    .scrollIndicators(.hidden)
-                                }
-                                playerControls
-                                    .padding(.horizontal, 24)
-                                    .padding(.top, 12)
-                                    .padding(.bottom, 16)
-                            }
-                            .accessibilityElement(children: .contain)
-                            .accessibilityIdentifier("player.layout.compact")
+                            compactPlayer(in: geometry.size, artworkSide: layout.artworkSide)
                         }
                     }
                 }
@@ -119,25 +95,26 @@ struct NowPlayingView: View {
         }
         .task(id: artworkRequest) {
             let request = artworkRequest
-            artworkTheme = .fallback
-            let task = Task.detached(priority: .utility) {
-                guard !Task.isCancelled else { return NowPlayingArtworkTheme.fallback }
-                return NowPlayingArtworkTheme.load(atPath: request.path)
+            let task = Task.detached(priority: .utility) { () -> UIImage? in
+                guard !Task.isCancelled, let path = request.path else { return nil }
+                return ArtworkImageLoader.image(atPath: path, maxPixelSize: 240)
             }
-            let theme = await withTaskCancellationHandler {
+            let image = await withTaskCancellationHandler {
                 await task.value
             } onCancel: {
                 task.cancel()
             }
-            // 切歌或网络补图会取消旧请求，旧颜色绝不能覆盖新封面。
             guard !Task.isCancelled, artworkRequest == request else { return }
             if reduceMotion {
-                artworkTheme = theme
+                backdropImage = image
             } else {
-                withAnimation(.easeInOut(duration: 0.3)) { artworkTheme = theme }
+                withAnimation(.easeInOut(duration: 0.4)) { backdropImage = image }
             }
         }
         .sheet(isPresented: $showQueue) { queueSheet }
+        .sheet(isPresented: $showSkinPicker) {
+            PlayerAppearanceSheet(visualMode: $visualMode)
+        }
         .confirmationDialog("定时暂停", isPresented: $showSleepTimer, titleVisibility: .visible) {
             ForEach([15, 30, 45, 60], id: \.self) { minutes in
                 Button {
@@ -150,30 +127,39 @@ struct NowPlayingView: View {
                 Button("关闭定时暂停", role: .destructive) { model.scheduleSleepTimer(minutes: nil) }
             }
         }
-        .sheet(isPresented: $showAudioControls) {
-            NavigationStack {
-                Form {
-                    Slider(value: Binding(get: { model.state.volume }, set: { model.setVolume($0) }), in: 0...1) {
-                        Text("播放音量")
-                    }
-                }
-                .navigationTitle("播放音量")
-            }
-            .presentationDetents([.medium])
-        }
     }
 
-    private var visualSelector: some View {
-        Picker("播放外观", selection: $visualMode) {
-            ForEach(PlayerVisualMode.allCases) { mode in
-                Text(mode.title).tag(mode)
+    private var immersiveBackdrop: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.10, green: 0.14, blue: 0.24),
+                    Color(red: 0.06, green: 0.08, blue: 0.14)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            if let backdropImage {
+                Image(uiImage: backdropImage)
+                    .resizable()
+                    .scaledToFill()
+                    .scaleEffect(1.35)
+                    .blur(radius: 64)
+                    .saturation(1.25)
+                    .opacity(0.75)
             }
+            LinearGradient(
+                colors: [
+                    .black.opacity(0.26),
+                    .black.opacity(0.42),
+                    .black.opacity(0.70)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
         }
-        .pickerStyle(.segmented)
-        .frame(maxWidth: 360)
-        .padding(.horizontal, 20)
-        .padding(.bottom, 6)
-        .accessibilityIdentifier("player.appearance.mode")
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
     }
 
     private var header: some View {
@@ -188,25 +174,33 @@ struct NowPlayingView: View {
             }
             .accessibilityLabel("收起播放器")
             .accessibilityIdentifier("player.detail.close")
+
             Spacer(minLength: 0)
-            HStack(spacing: 4) {
+
+            HStack(spacing: 18) {
                 contentTab("歌曲", mode: .artwork, identifier: "player.tab.song")
+                Rectangle()
+                    .fill(.white.opacity(0.25))
+                    .frame(width: 1, height: 12)
                 contentTab("歌词", mode: .lyrics, identifier: "player.tab.lyrics")
             }
-            .padding(4)
-            .background(foreground.opacity(0.09), in: Capsule())
+
             Spacer(minLength: 0)
-            Button { model.toggleCurrentFavorite() } label: {
-                Image(systemName: model.state.currentTrack?.isLiked == true ? "heart.fill" : "heart")
-                    .font(.title3.weight(.semibold)).frame(width: 44, height: 44)
+
+            Button {
+                showSkinPicker = true
+            } label: {
+                Image(systemName: "record.circle")
+                    .font(.title3.weight(.medium))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
-            .disabled(!model.canFavoriteCurrentTrack)
-            .accessibilityLabel(model.state.currentTrack?.isLiked == true ? String(localized: "取消收藏") : String(localized: "收藏"))
-            .accessibilityHint(model.canFavoriteCurrentTrack ? "" : String(localized: "仅本地歌曲可收藏"))
+            .accessibilityLabel("切换播放器外观")
+            .accessibilityIdentifier("player.appearance.mode")
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 12)
-        .frame(height: 60)
+        .frame(height: 52)
         .contentShape(Rectangle())
         .highPriorityGesture(panelDrag)
     }
@@ -214,68 +208,137 @@ struct NowPlayingView: View {
     private func contentTab(_ title: String, mode: NowPlayingContentMode, identifier: String) -> some View {
         Button { switchContent(to: mode) } label: {
             Text(LocalizedStringKey(title))
-                .font(.subheadline.weight(contentMode == mode ? .bold : .medium))
-                .frame(minWidth: 64, minHeight: 36)
-                .background(foreground.opacity(contentMode == mode ? 0.15 : 0), in: Capsule())
+                .font(.subheadline.weight(contentMode == mode ? .bold : .regular))
+                .foregroundStyle(.white.opacity(contentMode == mode ? 1.0 : 0.55))
+                .frame(minWidth: 44, minHeight: 36)
         }
         .accessibilityAddTraits(contentMode == mode ? .isSelected : [])
         .accessibilityIdentifier(identifier)
     }
 
-    @ViewBuilder
-    private func mainContent(in size: CGSize, artworkSide: CGFloat) -> some View {
-        if contentMode == .lyrics {
-            Group {
-                if model.hasLyrics {
-                    SyncedLyricsView(model: model, foreground: foreground)
+    private func compactPlayer(in size: CGSize, artworkSide: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            GeometryReader { viewport in
+                if contentMode == .lyrics {
+                    lyricsContent(in: viewport.size)
+                        .padding(.horizontal, 26)
                 } else {
-                    VStack(spacing: 12) {
-                        Image(systemName: "text.alignleft").font(.largeTitle)
-                        Text("暂无歌词").font(.headline)
-                        Text("可以查找歌词或导入同名 LRC 文件")
-                            .font(.subheadline)
+                    VStack(spacing: 18) {
+                        Spacer(minLength: 4)
+                        artwork(side: min(artworkSide, viewport.size.width - 48, viewport.size.height - (model.hasLyrics ? 96 : 36)))
+                        if model.hasLyrics {
+                            lyricSnippet
+                        } else if model.isSearchingLyrics || !model.lyricsSearchMessage.isEmpty {
+                            Text(model.isSearchingLyrics ? String(localized: "正在查找歌词…") : model.lyricsSearchMessage)
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.65))
+                        }
+                        Spacer(minLength: 4)
                     }
-                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 24)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(height: max(120, size.height - (model.hasLyrics ? 90 : 150)))
-            .accessibilityIdentifier("player.lyrics.full")
-            .transition(.opacity)
-        } else {
-            VStack(spacing: 16) {
-                artwork(side: artworkSide)
-                if model.hasLyrics { lyricSnippet }
+
+            VStack(spacing: 20) {
+                trackIdentityBar
+                progressControls
+                transportControls
             }
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 26)
             .padding(.top, 10)
-            .transition(.opacity)
+            .padding(.bottom, 26)
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("player.layout.compact")
     }
 
-    private var playerControls: some View {
-        VStack(spacing: 12) {
-            progressControls
-            transportControls
-            utilityBar
+    @ViewBuilder
+    private func lyricsContent(in size: CGSize) -> some View {
+        Group {
+            if model.hasLyrics {
+                SyncedLyricsView(model: model, foreground: foreground)
+            } else {
+                VStack(spacing: 14) {
+                    Spacer()
+                    Image(systemName: "text.alignleft")
+                        .font(.largeTitle)
+                        .foregroundStyle(.white.opacity(0.5))
+                    Text("暂无歌词")
+                        .font(.headline)
+                    Text("可以查找歌词或导入同名 LRC 文件")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.65))
+                    lyricsSearch
+                        .padding(.top, 4)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityIdentifier("player.lyrics.full")
+        .transition(.opacity)
     }
 
-    private var utilityBar: some View {
-        HStack {
-            Button {
-                switchContent(to: contentMode == .lyrics ? .artwork : .lyrics)
-            } label: { Label("歌词", systemImage: "text.alignleft") }
-            Spacer()
-            Button { showAudioControls = true } label: { Label("音量", systemImage: "slider.vertical.3") }
-            Spacer()
-            Button { showSleepTimer = true } label: {
-                Label(sleepTimerLabel, systemImage: model.sleepDeadline == nil ? "timer" : "timer.circle.fill")
+    private var trackIdentityBar: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(model.state.currentTrack?.title ?? String(localized: "选择一首本地音乐"))
+                    .font(.title3.weight(.bold))
+                    .lineLimit(1)
+                HStack(spacing: 8) {
+                    Text(model.state.currentTrack?.artist ?? String(localized: "爱乐之城"))
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.72))
+                        .lineLimit(1)
+                    if let deadline = model.sleepDeadline {
+                        let minutes = max(1, Int(ceil(deadline.timeIntervalSinceNow / 60)))
+                        Label("\(minutes)m", systemImage: "timer")
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2)
+                            .background(.white.opacity(0.16), in: Capsule())
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+            Button { model.toggleCurrentFavorite() } label: {
+                Image(systemName: model.state.currentTrack?.isLiked == true ? "heart.fill" : "heart")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(model.state.currentTrack?.isLiked == true ? Color.pink : .white.opacity(model.canFavoriteCurrentTrack ? 0.92 : 0.35))
+                    .frame(width: 40, height: 40)
+            }
+            .disabled(!model.canFavoriteCurrentTrack)
+            .accessibilityLabel(model.state.currentTrack?.isLiked == true ? String(localized: "取消收藏") : String(localized: "收藏"))
+
+            Menu {
+                Button {
+                    showSkinPicker = true
+                } label: {
+                    Label("播放器外观（封面 / 黑胶 / iPod）", systemImage: "record.circle")
+                }
+                Button {
+                    showSleepTimer = true
+                } label: {
+                    Label(model.sleepDeadline == nil ? String(localized: "定时暂停") : sleepTimerLabel, systemImage: "timer")
+                }
+                if !model.hasLyrics {
+                    Button {
+                        Task { await model.findLyrics() }
+                    } label: {
+                        Label("查找歌词", systemImage: "text.magnifyingglass")
+                    }
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .frame(width: 40, height: 40)
             }
             .accessibilityIdentifier("player.sleepTimer")
         }
-        .font(.caption)
         .buttonStyle(.plain)
-        .padding(.horizontal, 8)
     }
 
     private var sleepTimerLabel: String {
@@ -285,13 +348,14 @@ struct NowPlayingView: View {
     }
 
     private func artwork(side: CGFloat) -> some View {
-        Group {
+        let clampedSide = max(140, side)
+        return Group {
             switch visualMode {
             case .cover:
                 if model.state.currentTrack?.artworkReference != nil {
-                    ArtworkView(path: model.state.currentTrack?.artworkReference, cornerRadius: 24)
-                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                        .shadow(color: .black.opacity(0.22), radius: 20, y: 10)
+                    ArtworkView(path: model.state.currentTrack?.artworkReference, cornerRadius: 22)
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .shadow(color: .black.opacity(0.38), radius: 26, y: 14)
                 } else {
                     RecordVisual(model: model)
                 }
@@ -300,7 +364,7 @@ struct NowPlayingView: View {
                     .padding(8)
                     .overlay(alignment: .topTrailing) {
                         VinylTonearm(isPlaying: model.state.isPlaying)
-                            .frame(width: side * 0.34, height: side * 0.57)
+                            .frame(width: clampedSide * 0.34, height: clampedSide * 0.57)
                             .allowsHitTesting(false)
                             .accessibilityHidden(true)
                     }
@@ -308,8 +372,11 @@ struct NowPlayingView: View {
                 ClassicPlayerVisual(model: model, showQueue: { showQueue = true })
             }
         }
-        .frame(width: side, height: side)
+        .frame(width: clampedSide, height: clampedSide)
         .contentShape(Rectangle())
+        .onLongPressGesture(minimumDuration: 0.45) {
+            showSkinPicker = true
+        }
         .highPriorityGesture(panelDrag)
         .accessibilityElement(children: visualMode == .classic ? .contain : .ignore)
         .accessibilityLabel(Text(visualMode.title))
@@ -326,7 +393,7 @@ struct NowPlayingView: View {
                 .frame(width: layout.columnWidth)
         }
         .padding(.horizontal, 32)
-        .padding(.top, 16)
+        .padding(.top, 12)
         .padding(.bottom, 20)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .contain)
@@ -335,7 +402,6 @@ struct NowPlayingView: View {
 
     @available(iOS 27.1, *)
     private var duoPlayer: some View {
-        // 系统容器负责真正的折痕分割与横纵方向切换，不假定折痕永远在水平中心。
         ArrangementView {
             GeometryReader { pane in primaryPane(size: pane.size) }
         } secondary: {
@@ -348,16 +414,16 @@ struct NowPlayingView: View {
     }
 
     private func primaryPane(size: CGSize) -> some View {
-        let side = min(max(0, size.width), max(96, size.height - 330), 640)
+        let side = min(max(0, size.width), max(120, size.height - 290), 560)
         return ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: 18) {
                 Spacer(minLength: 0)
                 artwork(side: side)
                 if model.hasLyrics { lyricSnippet }
-                trackIdentity
-                if !model.hasLyrics { lyricsSearch }
-                Spacer(minLength: 12)
-                playerControls
+                trackIdentityBar
+                Spacer(minLength: 10)
+                progressControls
+                transportControls
             }
             .frame(maxWidth: .infinity)
             .frame(minHeight: max(0, size.height))
@@ -367,64 +433,66 @@ struct NowPlayingView: View {
 
     private var secondaryPane: some View {
         VStack(alignment: .leading, spacing: 16) {
-                Text(contentMode == .lyrics ? String(localized: "同步歌词") : String(localized: "播放队列"))
-                    .font(.title2.weight(.bold))
-                if contentMode == .lyrics {
-                    if model.hasLyrics {
-                        SyncedLyricsView(model: model, foreground: foreground)
-                            .accessibilityIdentifier("player.lyrics.full")
-                    } else {
-                        ContentUnavailableView("暂无歌词", systemImage: "text.alignleft")
-                    }
+            Text(contentMode == .lyrics ? String(localized: "同步歌词") : String(localized: "播放队列"))
+                .font(.title2.weight(.bold))
+            if contentMode == .lyrics {
+                if model.hasLyrics {
+                    SyncedLyricsView(model: model, foreground: foreground)
+                        .accessibilityIdentifier("player.lyrics.full")
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(Array(model.state.queue.enumerated()), id: \.element.id) { entry in
-                                Button { Task { await model.playQueueItem(at: entry.offset) } } label: {
-                                    HStack(spacing: 12) {
-                                        ArtworkView(path: entry.element.artworkReference, cornerRadius: 8)
-                                            .frame(width: 44, height: 44)
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(entry.element.title).font(.headline).lineLimit(2)
-                                            Text(entry.element.artist).font(.subheadline).opacity(0.7).lineLimit(1)
-                                        }
-                                        Spacer(minLength: 0)
-                                        if entry.offset == model.state.currentIndex {
-                                            Image(systemName: "speaker.wave.2.fill")
-                                        }
+                    ContentUnavailableView("暂无歌词", systemImage: "text.alignleft")
+                }
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(Array(model.state.queue.enumerated()), id: \.element.id) { entry in
+                            Button { Task { await model.playQueueItem(at: entry.offset) } } label: {
+                                HStack(spacing: 12) {
+                                    ArtworkView(path: entry.element.artworkReference, cornerRadius: 8)
+                                        .frame(width: 44, height: 44)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(entry.element.title).font(.headline).lineLimit(2)
+                                        Text(entry.element.artist).font(.subheadline).opacity(0.7).lineLimit(1)
                                     }
-                                    .padding(12)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(foreground.opacity(entry.offset == model.state.currentIndex ? 0.13 : 0.04), in: RoundedRectangle(cornerRadius: 12))
-                                    .contentShape(Rectangle())
+                                    Spacer(minLength: 0)
+                                    if entry.offset == model.state.currentIndex {
+                                        Image(systemName: "speaker.wave.2.fill")
+                                    }
                                 }
-                                .buttonStyle(.plain)
+                                .padding(12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(foreground.opacity(entry.offset == model.state.currentIndex ? 0.16 : 0.06), in: RoundedRectangle(cornerRadius: 12))
+                                .contentShape(Rectangle())
                             }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
+            }
         }
         .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(foreground.opacity(0.055), in: RoundedRectangle(cornerRadius: 24))
+        .background(foreground.opacity(0.08), in: RoundedRectangle(cornerRadius: 24))
     }
 
     private var lyricSnippet: some View {
         let lines = NowPlayingLyricSnippet.lines(from: model.lyricLines, currentIndex: model.currentLyricIndex)
         return Button { switchContent(to: .lyrics) } label: {
-            VStack(spacing: 7) {
+            VStack(spacing: 6) {
                 if lines.isEmpty {
                     Text(model.hasLyrics ? String(localized: "点击查看完整歌词") : String(localized: "暂无歌词 · 点击查看"))
                         .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.7))
                 } else {
                     ForEach(Array(lines.enumerated()), id: \.element.id) { entry in
                         Text(entry.element.text)
-                            .font(entry.offset == 0 ? .body.weight(.medium) : .subheadline)
+                            .font(entry.offset == 0 ? .subheadline.weight(.semibold) : .caption)
+                            .foregroundStyle(.white.opacity(entry.offset == 0 ? 0.95 : 0.55))
                             .lineLimit(1)
                     }
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 48)
+            .frame(maxWidth: .infinity, minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -450,91 +518,115 @@ struct NowPlayingView: View {
         }
     }
 
-    private var trackIdentity: some View {
-        VStack(spacing: 6) {
-            Text(model.state.currentTrack?.title ?? String(localized: "选择一首本地音乐"))
-                .font(.title2.weight(.bold))
-                .lineLimit(1)
-            Text(model.state.currentTrack?.artist ?? String(localized: "爱乐之城"))
-                .font(.subheadline)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
     private var lyricsSearch: some View {
         VStack(spacing: 6) {
             Button { Task { await model.findLyrics() } } label: {
                 Label(model.isSearchingLyrics ? String(localized: "正在查找歌词…") : String(localized: "查找歌词"), systemImage: "text.magnifyingglass")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .background(.white.opacity(0.18), in: Capsule())
             }
+            .buttonStyle(.plain)
             .disabled(model.isSearchingLyrics)
             .accessibilityIdentifier("player.lyrics.search")
             if !model.lyricsSearchMessage.isEmpty {
-                Text(model.lyricsSearchMessage).font(.caption)
+                Text(model.lyricsSearchMessage)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
             }
         }
     }
 
     private var progressControls: some View {
-        let displayedProgress = scrubbingProgress ?? model.progress
+        let isDragging = scrubbingProgress != nil
+        let displayedProgress = min(max(scrubbingProgress ?? model.progress, 0), 1)
         let displayedPosition = scrubbingProgress.map { $0 * model.state.duration } ?? model.state.position
-        return VStack(spacing: 4) {
-            Slider(
-                value: Binding(
-                    get: { displayedProgress },
-                    set: { scrubbingProgress = $0 }
-                ),
-                in: 0...1,
-                onEditingChanged: { editing in
-                    if !editing, let target = scrubbingProgress {
-                        scrubbingProgress = nil
-                        try? model.seek(fraction: target)
-                    }
+        return VStack(spacing: 8) {
+            GeometryReader { bar in
+                let trackHeight: CGFloat = isDragging ? 8 : 4
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(.white.opacity(0.24))
+                        .frame(height: trackHeight)
+                    Capsule()
+                        .fill(.white.opacity(isDragging ? 1.0 : 0.90))
+                        .frame(width: max(trackHeight, bar.size.width * displayedProgress), height: trackHeight)
                 }
-            )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            let fraction = min(max(value.location.x / max(1, bar.size.width), 0), 1)
+                            scrubbingProgress = fraction
+                        }
+                        .onEnded { value in
+                            let fraction = min(max(value.location.x / max(1, bar.size.width), 0), 1)
+                            scrubbingProgress = nil
+                            try? model.seek(fraction: fraction)
+                        }
+                )
+            }
+            .frame(height: 24)
+            .animation(.easeOut(duration: 0.15), value: isDragging)
+            .accessibilityElement()
             .accessibilityLabel("播放进度")
             .accessibilityIdentifier("player.detail.progress")
+
             HStack {
                 Text(format(displayedPosition))
                 Spacer()
                 Text(format(model.state.duration))
             }
             .font(.caption.monospacedDigit())
+            .foregroundStyle(.white.opacity(0.68))
         }
     }
 
     private var transportControls: some View {
         HStack(spacing: 0) {
             Button { model.cycleMode() } label: {
-                Image(systemName: modeIcon).font(.title3).frame(width: 44, height: 48)
+                Image(systemName: modeIcon)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .frame(width: 44, height: 48)
             }
             .accessibilityLabel("播放模式：\(modeLabel)")
             .accessibilityIdentifier("player.detail.mode")
             Spacer(minLength: 0)
             Button { Task { await model.previous() } } label: {
-                Image(systemName: "backward.end.fill").font(.title2).frame(width: 44, height: 48)
+                Image(systemName: "backward.fill")
+                    .font(.title2)
+                    .frame(width: 48, height: 48)
             }
             .accessibilityLabel("上一首")
             .accessibilityIdentifier("player.detail.previous")
             Spacer(minLength: 0)
             Button { Task { await model.togglePlayback() } } label: {
                 Image(systemName: model.state.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.title2)
-                    .frame(width: 64, height: 64)
-                    .background(PlayerTheme.accent, in: Circle())
-                    .foregroundStyle(.white)
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(Color(red: 0.08, green: 0.10, blue: 0.14))
+                    .frame(width: 68, height: 68)
+                    .background(.white, in: Circle())
+                    .shadow(color: .black.opacity(0.22), radius: 12, y: 6)
             }
             .accessibilityLabel(model.state.isPlaying ? String(localized: "暂停") : String(localized: "播放"))
             .accessibilityIdentifier("player.detail.playPause")
             Spacer(minLength: 0)
             Button { Task { await model.next() } } label: {
-                Image(systemName: "forward.end.fill").font(.title2).frame(width: 44, height: 48)
+                Image(systemName: "forward.fill")
+                    .font(.title2)
+                    .frame(width: 48, height: 48)
             }
             .accessibilityLabel("下一首")
             .accessibilityIdentifier("player.detail.next")
             Spacer(minLength: 0)
             Button { showQueue = true } label: {
-                Image(systemName: "list.bullet").font(.title3).frame(width: 44, height: 48)
+                Image(systemName: "list.bullet")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .frame(width: 44, height: 48)
             }
             .accessibilityLabel("播放队列")
             .accessibilityIdentifier("player.detail.queue")
