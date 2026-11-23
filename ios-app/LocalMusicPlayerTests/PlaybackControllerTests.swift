@@ -4,6 +4,88 @@ import XCTest
 
 @MainActor
 final class PlaybackControllerTests: XCTestCase {
+    func testLateFailedLoadDoesNotStopNewerPlayback() async throws {
+        let engine = FakeAudioEngine()
+        engine.suspendsLoads = true
+        let controller = PlaybackController(engine: engine, preferencesStore: FakePreferencesStore())
+        let queue = [track("one"), track("two")]
+        let first = Task { try await controller.playTrack(queue[0], in: queue) }
+        while engine.loadedURLs.count < 1 { await Task.yield() }
+        let second = Task { try await controller.playTrack(queue[1], in: queue) }
+        while engine.loadedURLs.count < 2 { await Task.yield() }
+        engine.completeLoad(trackID: "two")
+        try await second.value
+        engine.failLoad(trackID: "one")
+        _ = try? await first.value
+        XCTAssertEqual(controller.state.currentTrack?.id, "two")
+        XCTAssertTrue(controller.state.isPlaying)
+        XCTAssertEqual(engine.unloadCount, 0)
+    }
+
+    func testPauseDuringLoadDoesNotAutoplayWhenLoadFinishes() async throws {
+        let engine = FakeAudioEngine()
+        engine.suspendsLoads = true
+        let controller = PlaybackController(engine: engine, preferencesStore: FakePreferencesStore())
+        let song = track("one")
+        let pending = Task { try await controller.playTrack(song, in: [song]) }
+        while engine.loadedURLs.isEmpty { await Task.yield() }
+        try controller.pause()
+        engine.completeLoad(trackID: "one")
+        try await pending.value
+        XCTAssertFalse(controller.state.isPlaying)
+        XCTAssertEqual(engine.playCount, 0)
+    }
+
+    func testOnlinePreviewReplacesLocalTrackInSharedPlayback() async throws {
+        let engine = FakeAudioEngine()
+        let controller = PlaybackController(engine: engine, preferencesStore: FakePreferencesStore())
+        let local = track("local")
+        try await controller.playTrack(local, in: [local])
+        let preview = CatalogTrack(id: "jamendo-7", title: "雨夜", artist: "歌手",
+            audioURL: URL(string: "https://example.org/song.mp3")!, license: .publicDomain,
+            previewURL: URL(string: "https://example.org/preview.mp3")!).previewSnapshot()
+        let song = try XCTUnwrap(preview)
+        try await controller.playTrack(song, in: [song])
+        XCTAssertEqual(controller.state.currentTrack?.title, "雨夜")
+        XCTAssertEqual(controller.state.queue.count, 1)
+        XCTAssertEqual(engine.loadedURLs.last?.absoluteString, "https://example.org/preview.mp3")
+        XCTAssertFalse(engine.loadedURLs.last!.isFileURL)
+        XCTAssertTrue(controller.state.isPlaying)
+        try await controller.playTrack(local, in: [local])
+        XCTAssertEqual(controller.state.currentTrack?.id, "local")
+    }
+
+    func testStreamDurationUpdatesAfterMetadataArrives() async throws {
+        let engine = FakeAudioEngine()
+        engine.duration = 0
+        let controller = PlaybackController(engine: engine, preferencesStore: FakePreferencesStore())
+        let stream = TrackSnapshot(id: "stream", title: "在线", artist: "歌手", album: "", duration: 0,
+            sourceKind: .onlinePreview, sourceReference: "https://example.org/audio.mp3")
+        try await controller.playTrack(stream, in: [stream])
+        XCTAssertEqual(controller.state.duration, 0)
+        engine.duration = 123
+        engine.onPositionChanged?(5)
+        XCTAssertEqual(controller.state.duration, 123)
+        XCTAssertEqual(controller.state.position, 5)
+    }
+
+    func testCoverRefreshPreservesAudioAndPlaybackProgress() async throws {
+        let engine = FakeAudioEngine()
+        let controller = PlaybackController(engine: engine, preferencesStore: FakePreferencesStore())
+        let original = track("one")
+        try await controller.playTrack(original, in: [original])
+        try controller.seek(to: 40)
+        let before = controller.state
+        let loadCount = engine.loadedURLs.count
+        let updated = TrackSnapshot(id: original.id, title: original.title, artist: original.artist,
+            album: original.album, duration: original.duration, sourceKind: original.sourceKind,
+            sourceReference: original.sourceReference, artworkReference: "/music/artwork-downloaded.jpg")
+        controller.refreshTrackMetadata(updated)
+        XCTAssertEqual(controller.state.currentTrack?.artworkReference, "/music/artwork-downloaded.jpg")
+        XCTAssertEqual(controller.state.position, before.position)
+        XCTAssertEqual(controller.state.isPlaying, before.isPlaying)
+        XCTAssertEqual(engine.loadedURLs.count, loadCount)
+    }
     func testPlayTrackOverridesRestoredTrackAndStartsAtZero() async throws {
         let engine = FakeAudioEngine()
         engine.position = 37
@@ -80,6 +162,29 @@ final class PlaybackControllerTests: XCTestCase {
                 && snapshot.duration == 180
         })
         controller.removeStateObserver(observerID)
+    }
+
+    func testFailedAudioLoadDoesNotLeaveTrackMarkedAsPlaying() async throws {
+        let engine = FakeAudioEngine()
+        engine.loadError = PlaybackTestError.failedToLoad
+        let controller = PlaybackController(
+            engine: engine,
+            preferencesStore: FakePreferencesStore()
+        )
+        let queue = [track("broken")]
+
+        do {
+            try await controller.playTrack(queue[0], in: queue)
+            XCTFail("Expected the audio load error to be propagated")
+        } catch {
+            XCTAssertEqual(error as? PlaybackTestError, .failedToLoad)
+        }
+
+        XCTAssertNil(controller.state.currentTrack)
+        XCTAssertFalse(controller.state.isPlaying)
+        XCTAssertEqual(controller.state.position, 0)
+        XCTAssertEqual(controller.state.duration, 0)
+        XCTAssertGreaterThanOrEqual(engine.unloadCount, 1)
     }
 
     func testNextWrapsAndRepeatOneReplaysCurrentTrack() async throws {
@@ -331,17 +436,21 @@ private final class FakeAudioEngine: AudioEngine {
     private(set) var pauseCount = 0
     private(set) var unloadCount = 0
     var suspendsLoads = false
+    var loadError: Error?
     private var currentURL: URL?
     private var loadContinuations:
-        [String: CheckedContinuation<Void, Never>] = [:]
+        [String: CheckedContinuation<Void, Error>] = [:]
 
     func load(url: URL) async throws {
         loadedURLs.append(url)
         currentURL = url
         position = 0
+        if let loadError {
+            throw loadError
+        }
         if suspendsLoads {
             let trackID = url.deletingPathExtension().lastPathComponent
-            await withCheckedContinuation { continuation in
+            try await withCheckedThrowingContinuation { continuation in
                 loadContinuations[trackID] = continuation
             }
         }
@@ -376,9 +485,17 @@ private final class FakeAudioEngine: AudioEngine {
         loadContinuations.removeValue(forKey: trackID)?.resume()
     }
 
+    func failLoad(trackID: String) {
+        loadContinuations.removeValue(forKey: trackID)?.resume(throwing: PlaybackTestError.failedToLoad)
+    }
+
     func finish() async {
         await onEnded?()
     }
+}
+
+private enum PlaybackTestError: Error, Equatable {
+    case failedToLoad
 }
 
 @MainActor

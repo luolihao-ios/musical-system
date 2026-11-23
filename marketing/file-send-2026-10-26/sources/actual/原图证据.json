@@ -1,0 +1,137 @@
+[
+  {
+    "device": "iphone",
+    "page": "connect",
+    "file": "iphone\\connect.png",
+    "width": 1206,
+    "height": 2622,
+    "sourceRun": 40315019977,
+    "sha256": "7ca53c120deedf830d752b4ca97a5247ad2da290c6209686dcc9f739e8feb078"
+  },
+  {
+    "device": "iphone",
+    "page": "receive",
+    "file": "iphone\\receive.png",
+    "width": 1206,
+    "height": 2622,
+    "sourceRun": 40315019977,
+    "sha256": "6045abb3c2f10d7a8ce5eb67813503a8ad539821c395f43dac6e09a19971ba6c"
+  },
+  {
+    "device": "iphone",
+    "page": "send",
+    "file": "iphone\\send.png",
+    "width": 1206,
+    "height": 2622,
+    "sourceRun": 40315019977,
+    "sha256": "cc5ed2d20050274b62dd2eb63276b6fc1998ad3c22d9afc857182aed1018de90"
+  },
+  {
+    "device": "iphone",
+    "page": "edit",
+    "file": "iphone\\edit.png",
+    "width": 1206,
+    "height": 2622,
+    "sourceRun": 40315019977,
+    "sha256": "e695dc9cf464fd512e1ba0b8ebb1dd1415cf739fbd15a1255256f3faced56571"
+  },
+  {
+    "device": "iphone",
+    "page": "completed",
+    "file": "iphone\\completed.png",
+    "width": 1206,
+    "height": 2622,
+    "sourceRun": 40315019977,
+    "sha256": "02e3e62cc9b2ee41437843e5f57e51b46e68d37ce07e65d73bb1eb727af45160"
+  },
+  {
+    "device": "ipad",
+    "page": "connect",
+    "file": "ipad\\connect.png",
+    "width": 2064,
+    "height": 2752,
+    "sourceRun": 40312953344,
+    "sha256": "b8bd9c05e6418d3639b60662d1817ae68e1751655f0985f596f2766044d51479"
+  },
+  {
+    "device": "ipad",
+    "page": "receive",
+    "file": "ipad\\receive.png",
+    "width": 2064,
+    "height": 2752,
+    "sourceRun": 40312953344,
+    "sha256": "e5d6e8b94049ffd2b1dd117f0e6fce27805db625ed1c6bc84b681def88c33f66"
+  },
+  {
+    "device": "ipad",
+    "page": "send",
+    "file": "ipad\\send.png",
+    "width": 2064,
+    "height": 2752,
+    "sourceRun": 40312953344,
+    "sha256": "1d5cf4f558e4db98c4185cde709b3e4a9cead0f38533fb1e93aa118fcd852360"
+  },
+  {
+    "device": "ipad",
+    "page": "edit",
+    "file": "ipad\\edit.png",
+    "width": 2064,
+    "height": 2752,
+    "sourceRun": 40312953344,
+    "sha256": "12ffec7dae20134f495641b974c5260558c50deb49e0811ea61718846ab3b7af"
+  },
+  {
+    "device": "ipad",
+    "page": "completed",
+    "file": "ipad\\completed.png",
+    "width": 2064,
+    "height": 2752,
+    "sourceRun": 40312953344,
+    "sha256": "7f980f7c05ea6a9acbca084c334dd50723acd159240f7492c6bb9078cb1ca936"
+  },
+  {
+    "device": "duo",
+    "page": "connect",
+    "file": "duo\\connect.png",
+    "width": 1398,
+    "height": 2034,
+    "sourceRun": 40360171692,
+    "sha256": "f21c5ed2fd51c9f2a3195fa4d62a450d6509557de1f14f6fd01102c5d8aecfba"
+  },
+  {
+    "device": "duo",
+    "page": "receive",
+    "file": "duo\\receive.png",
+    "width": 1398,
+    "height": 2034,
+    "sourceRun": 40360171692,
+    "sha256": "313a01c3b904ce9a7e9d8e2503f0a37aee1e6904211b23281d13ecd0c5e2cc04"
+  },
+  {
+    "device": "duo",
+    "page": "send",
+    "file": "duo\\send.png",
+    "width": 1398,
+    "height": 2034,
+    "sourceRun": 40360171692,
+    "sha256": "9ee18e14f266054750ef827bc96499d851ce2eb3bbe2845761ff112e037ec7a7"
+  },
+  {
+    "device": "duo",
+    "page": "edit",
+    "file": "duo\\edit.png",
+    "width": 1398,
+    "height": 2034,
+    "sourceRun": 40360171692,
+    "sha256": "ffae4d55e1a8b5da0ef8a9e2c1bc7246cdf042e168f485d0ea99c3b17f062c1f"
+  },
+  {
+    "device": "duo",
+    "page": "completed",
+    "file": "duo\\completed.png",
+    "width": 1398,
+    "height": 2034,
+    "sourceRun": 40360171692,
+    "sha256": "e67049baa4544574296de0639e19339d1e414078d8102deb92a0fd7cbb1e7f54"
+  }
+]

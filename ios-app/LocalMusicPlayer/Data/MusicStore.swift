@@ -13,18 +13,35 @@ final class MusicStore {
     }
 
     func upsert(_ incoming: TrackRecord) throws {
-        if let existing = try track(id: incoming.id) {
+        let exact = try track(id: incoming.id)
+        let duplicate = exact == nil && !incoming.artist.isEmpty && incoming.duration > 0 ? try tracks().first {
+            !$0.artist.isEmpty && $0.duration > 0 &&
+            OnlineMusicResources.normalized($0.title) == OnlineMusicResources.normalized(incoming.title) &&
+            OnlineMusicResources.normalized($0.artist) == OnlineMusicResources.normalized(incoming.artist) &&
+            OnlineMusicResources.normalized($0.album) == OnlineMusicResources.normalized(incoming.album) &&
+            abs($0.duration - incoming.duration) <= 1
+        } : nil
+        if let existing = exact ?? duplicate {
             let liked = existing.isLiked
             let lastPlayedAt = existing.lastPlayedAt
             existing.title = incoming.title
             existing.artist = incoming.artist
             existing.album = incoming.album
             existing.duration = incoming.duration
-            existing.sourceKind = incoming.sourceKind
-            existing.sourceReference = incoming.sourceReference
-            existing.artworkReference = incoming.artworkReference
-            existing.lyricsReference = incoming.lyricsReference
-            existing.isAvailable = incoming.isAvailable
+            if existing.sourceKind != .mediaLibrary || incoming.sourceKind == .mediaLibrary || !existing.isAvailable {
+                existing.sourceKind = incoming.sourceKind
+                existing.sourceReference = incoming.sourceReference
+                existing.isAvailable = incoming.isAvailable
+            }
+            // 再次导入不能用新生成的占位封面覆盖已经补齐或自选的真实封面。
+            let keepArtwork = CoverArtworkPolicy.needsSearch(path: incoming.artworkReference)
+                && !CoverArtworkPolicy.needsSearch(path: existing.artworkReference)
+                && existing.artworkReference.map { FileManager.default.fileExists(atPath: $0) } == true
+            if !keepArtwork, let artwork = incoming.artworkReference {
+                existing.artworkReference = artwork
+                existing.artworkOriginRaw = incoming.artworkOriginRaw
+            }
+            existing.lyricsReference = incoming.lyricsReference ?? existing.lyricsReference
             existing.isLiked = liked
             existing.lastPlayedAt = lastPlayedAt
         } else {
@@ -40,15 +57,39 @@ final class MusicStore {
         }
     }
 
+    func saveCoverHistory(_ status: CoverSearchHistory.Status, track: TrackRecord) throws {
+        try CoverSearchHistory.write(status, to: track)
+        try context.save()
+    }
+
+    func recoverInterruptedCoverSearches() throws {
+        for track in try tracks() where CoverSearchHistory.read(track)?.status == .searching {
+            try CoverSearchHistory.write(.pending, to: track)
+        }
+        try context.save()
+    }
+
     func refreshAvailability(fileManager: FileManager = .default) throws {
         let records = try context.fetch(FetchDescriptor<TrackRecord>())
+        let importRoot = Self.defaultImportRoot(fileManager: fileManager)
         for record in records {
             switch record.sourceKind {
             case .importedFile:
-                record.isAvailable = fileManager.fileExists(
-                    atPath: record.sourceReference
-                )
-            case .mediaLibrary:
+                if let resolved = Self.resolveImportedPath(record.sourceReference, root: importRoot, fileManager: fileManager) {
+                    record.sourceReference = resolved
+                    record.isAvailable = true
+                    if let artwork = record.artworkReference,
+                       let resolvedArtwork = Self.resolveImportedPath(artwork, root: importRoot, fileManager: fileManager) {
+                        record.artworkReference = resolvedArtwork
+                    }
+                    if let lyrics = record.lyricsReference,
+                       let resolvedLyrics = Self.resolveImportedPath(lyrics, root: importRoot, fileManager: fileManager) {
+                        record.lyricsReference = resolvedLyrics
+                    }
+                } else {
+                    record.isAvailable = false
+                }
+            case .mediaLibrary, .onlinePreview:
                 guard let url = URL(string: record.sourceReference) else {
                     record.isAvailable = false
                     continue
@@ -58,6 +99,21 @@ final class MusicStore {
             }
         }
         try context.save()
+    }
+
+    static func resolveImportedPath(_ path: String, root: URL, fileManager: FileManager = .default) -> String? {
+        if fileManager.fileExists(atPath: path) { return path }
+        let components = URL(fileURLWithPath: path).pathComponents
+        guard components.count >= 2 else { return nil }
+        let candidate = root
+            .appendingPathComponent(components[components.count - 2], isDirectory: true)
+            .appendingPathComponent(components[components.count - 1])
+        return fileManager.fileExists(atPath: candidate.path) ? candidate.path : nil
+    }
+
+    private static func defaultImportRoot(fileManager: FileManager) -> URL {
+        let applicationSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? fileManager.temporaryDirectory
+        return applicationSupport.appendingPathComponent("ImportedMusic", isDirectory: true)
     }
 
     func track(id: String) throws -> TrackRecord? {
@@ -73,6 +129,21 @@ final class MusicStore {
         guard let track = try track(id: trackID) else { return }
         track.isLiked = isLiked
         try context.save()
+    }
+
+    @discardableResult
+    func deleteTrack(id: String) throws -> Bool {
+        guard let track = try track(id: id) else { return false }
+        let requestedID = id
+        let entries = try context.fetch(
+            FetchDescriptor<PlaylistEntryRecord>(
+                predicate: #Predicate { $0.trackID == requestedID }
+            )
+        )
+        entries.forEach { context.delete($0) }
+        context.delete(track)
+        try context.save()
+        return true
     }
 
     func playlists() throws -> [PlaylistRecord] {

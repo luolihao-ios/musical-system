@@ -1,0 +1,35 @@
+import XCTest
+import Network
+@testable import AiyueTransfer
+
+final class WebHTTPConnectionTests: XCTestCase {
+    func testStreamsBodyAndDownloadWithoutLoadingWholeFile() async throws {
+        let queue = DispatchQueue(label: "web-test")
+        // The simulator occasionally reports port 0 for an `.any` listener,
+        // which makes the loopback request target 127.0.0.1:0. Keep this test
+        // isolated from the app's production port 8080 with a fixed test port.
+        let testPort: UInt16 = 39_543
+        let listener = try NWListener(using: .tcp, on: NWEndpoint.Port(rawValue: testPort)!)
+        let ready = expectation(description: "listener")
+        listener.stateUpdateHandler = { state in if case .ready = state { ready.fulfill() } }
+        var clients: [WebHTTPConnection] = []
+        listener.newConnectionHandler = { socket in
+            let client = WebHTTPConnection(socket, queue: queue)
+            clients.append(client)
+            client.authorize = { _ in true }
+            client.handle = { _, temporary, connection in connection.download(temporary) }
+            client.start()
+        }
+        listener.start(queue: queue)
+        defer { listener.cancel() }
+        await fulfillment(of: [ready], timeout: 5)
+        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(testPort)/upload")!)
+        request.httpMethod = "PUT"
+        let body = Data(repeating: 0x5a, count: 2 * 1024 * 1024 + 7)
+        request.httpBody = body
+        let (received, response) = try await URLSession.shared.data(for: request)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        XCTAssertEqual(received, body)
+        _ = clients
+    }
+}

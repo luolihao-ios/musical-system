@@ -56,6 +56,8 @@ final class PlaylistsModelTests: XCTestCase {
 
 @MainActor
 private final class FakePlaylistPlayback: LibraryPlaybackControlling {
+    func pause() throws { state.isPlaying = false }
+    func play() async throws { state.isPlaying = true }
     var state = PlaybackState()
     private(set) var selectedTrack: TrackSnapshot?
     private(set) var queue: [TrackSnapshot] = []

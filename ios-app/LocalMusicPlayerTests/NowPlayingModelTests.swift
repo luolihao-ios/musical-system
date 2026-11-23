@@ -1,9 +1,100 @@
 import XCTest
 import SwiftUI
+import SwiftData
 @testable import LocalMusicPlayer
 
 @MainActor
 final class NowPlayingModelTests: XCTestCase {
+    func testSleepTimerCancellationAndExpiry() throws {
+        let playback = FakeNowPlayingController(state: PlaybackState(isPlaying: true))
+        let model = NowPlayingModel(playback: playback)
+        let now = Date(timeIntervalSince1970: 1_000)
+        model.scheduleSleepTimer(minutes: 5, now: now)
+        XCTAssertEqual(model.sleepDeadline, now.addingTimeInterval(300))
+        model.expireSleepTimer(now: now.addingTimeInterval(299))
+        XCTAssertNotNil(model.sleepDeadline)
+        model.scheduleSleepTimer(minutes: nil, now: now)
+        model.expireSleepTimer(now: now.addingTimeInterval(300))
+        XCTAssertEqual(playback.pauseCount, 0)
+        model.scheduleSleepTimer(minutes: 5, now: now)
+        model.expireSleepTimer(now: now.addingTimeInterval(300))
+        XCTAssertNil(model.sleepDeadline)
+        XCTAssertEqual(playback.pauseCount, 1)
+    }
+    func testDownloadedLyricsArePublishedBeforeReturningWithoutReadingSavedFileAgain() async throws {
+        let container = try ModelContainerFactory.make(inMemory: true)
+        let store = try MusicStore(context: container.mainContext)
+        let track = TrackSnapshot(id: "immediate-lyrics", title: "即时歌词", artist: "歌手", album: "",
+            duration: 120, sourceKind: .onlinePreview, sourceReference: "https://example.org/a.mp3")
+        let playback = FakeNowPlayingController(state: PlaybackState(queue: [track], currentIndex: 0))
+        let reader = CountingLyricsReader()
+        let resources = RequestedLyricsFixture()
+        let model = NowPlayingModel(playback: playback, lyricsReader: reader, online: resources, store: store)
+        await model.findLyrics()
+        let path = try XCTUnwrap(playback.state.currentTrack?.lyricsReference)
+        defer { try? FileManager.default.removeItem(at: URL(fileURLWithPath: path).deletingLastPathComponent()) }
+        XCTAssertEqual(try String(contentsOfFile: path, encoding: .utf8), "[00:01.00]按需歌词")
+        XCTAssertEqual(model.lyricLines.map(\.text), ["按需歌词"], "已取得的文本必须立即显示，不等待磁盘二次读取")
+        XCTAssertEqual(model.lyricTrackID, track.id)
+        XCTAssertFalse(model.isSearchingLyrics)
+        let reads = await reader.calls
+        XCTAssertEqual(reads, 0)
+        await model.findLyrics()
+        let requests = await resources.requests
+        XCTAssertEqual(requests, 1, "已有歌词不能重复搜索")
+    }
+
+    func testOnlinePreviewCanLoadLyricsWithoutCreatingLibraryRecord() async throws {
+        let container = try ModelContainerFactory.make(inMemory: true)
+        let store = try MusicStore(context: container.mainContext)
+        let track = TrackSnapshot(id: "preview-lyrics", title: "试听歌曲", artist: "歌手", album: "",
+            duration: 120, sourceKind: .onlinePreview, sourceReference: "https://example.org/a.mp3")
+        let playback = FakeNowPlayingController(state: PlaybackState(queue: [track], currentIndex: 0))
+        let model = NowPlayingModel(playback: playback, online: RequestedLyricsFixture(), store: store)
+        await model.findLyrics()
+        for _ in 0..<200 {
+            if model.hasLyrics { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertTrue(model.hasLyrics)
+        XCTAssertNil(try store.track(id: track.id))
+        XCTAssertFalse(model.lyricsSearchMessage.contains("正在"))
+        if let path = playback.state.currentTrack?.lyricsReference {
+            try? FileManager.default.removeItem(at: URL(fileURLWithPath: path).deletingLastPathComponent())
+        }
+    }
+
+    func testNetworkLyricsAreRequestedOnlyAfterExplicitAction() async throws {
+        let container = try ModelContainerFactory.make(inMemory: true)
+        let store = try MusicStore(context: container.mainContext)
+        let record = TrackRecord(id: "on-demand", title: "测试歌", artist: "测试歌手", album: "", duration: 120,
+                                 sourceKind: .importedFile, sourceReference: "/music/fixture.mp3")
+        try store.upsert(record)
+        let playback = FakeNowPlayingController(state: PlaybackState(queue: [TrackSnapshot(record)], currentIndex: 0))
+        let resources = RequestedLyricsFixture()
+        let model = NowPlayingModel(playback: playback, online: resources, store: store)
+        await Task.yield()
+        let before = await resources.requests
+        XCTAssertEqual(before, 0, "打开播放页不能自动搜索歌词")
+        await model.findLyrics()
+        for _ in 0..<200 {
+            if model.hasLyrics { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertTrue(model.hasLyrics)
+        XCTAssertEqual(model.lyricLines.map(\.text), ["按需歌词"])
+        let after = await resources.requests
+        let askedForCover = await resources.askedForCover
+        XCTAssertEqual(after, 1)
+        XCTAssertFalse(askedForCover)
+        let path = try XCTUnwrap(store.track(id: "on-demand")?.lyricsReference)
+        defer { try? FileManager.default.removeItem(at: URL(fileURLWithPath: path).deletingLastPathComponent()) }
+        XCTAssertEqual(try String(contentsOfFile: path, encoding: .utf8), "[00:01.00]按需歌词")
+        await model.findLyrics()
+        let repeated = await resources.requests
+        XCTAssertEqual(repeated, 1, "已有歌词不应再次查询")
+    }
+
     func testMiniPlayerKeepsCompactHeightWhenGivenFullScreenProposal() {
         let playback = FakeNowPlayingController(
             state: state(position: 10, isPlaying: true)
@@ -13,7 +104,7 @@ final class NowPlayingModelTests: XCTestCase {
             lyricsReader: FakeLyricsReader(source: nil)
         )
         let controller = UIHostingController(
-            rootView: MiniPlayerView(model: model, openNowPlaying: {})
+            rootView: MiniPlayerView(model: model, openNowPlaying: {}, menuClearance: 0)
         )
 
         let size = controller.sizeThatFits(
@@ -170,6 +261,24 @@ final class NowPlayingModelTests: XCTestCase {
     }
 }
 
+private actor RequestedLyricsFixture: MusicResourceSearching {
+    private(set) var requests = 0
+    private(set) var askedForCover = false
+    func search(_ query: MusicResourceQuery, lyrics: Bool, cover: Bool) async -> MusicResourceResult {
+        requests += 1
+        askedForCover = cover
+        return MusicResourceResult(lyrics: "[00:01.00]按需歌词", cover: nil)
+    }
+}
+
+private actor CountingLyricsReader: LyricsReading {
+    private(set) var calls = 0
+    func read(path: String) async throws -> String? {
+        calls += 1
+        return nil
+    }
+}
+
 private struct FakeLyricsReader: LyricsReading {
     let source: String?
 
@@ -208,7 +317,8 @@ private final class FakeNowPlayingController: PlaybackControlling {
     }
 
     func play() async throws {}
-    func pause() throws {}
+    private(set) var pauseCount = 0
+    func pause() throws { pauseCount += 1 }
     func next() async throws {}
     func previous() async throws {}
 
@@ -225,6 +335,14 @@ private final class FakeNowPlayingController: PlaybackControlling {
     ) async throws {}
 
     func playQueueItem(at index: Int) async throws {}
+
+    func refreshTrackMetadata(_ track: TrackSnapshot) {
+        var updated = state
+        for index in updated.queue.indices where updated.queue[index].id == track.id {
+            updated.queue[index] = track
+        }
+        publish(updated)
+    }
 
     func moveQueue(fromOffsets: IndexSet, toOffset: Int) throws {
         lastMoveOffsets = fromOffsets

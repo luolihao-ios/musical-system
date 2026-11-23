@@ -19,6 +19,16 @@ final class ProceduralArtworkGenerator: ImportedArtworkGenerating {
         artist: String,
         seed: String
     ) throws -> Data {
+        autoreleasepool {
+            renderArtwork(title: title, artist: artist, seed: seed)
+        }
+    }
+
+    private func renderArtwork(
+        title: String,
+        artist: String,
+        seed: String
+    ) -> Data {
         let digest = Array(
             SHA256.hash(data: Data("\(seed)|\(title)|\(artist)".utf8))
         )

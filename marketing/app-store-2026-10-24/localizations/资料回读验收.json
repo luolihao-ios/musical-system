@@ -1,0 +1,20 @@
+{
+  "app": "6806107359",
+  "version": "0.2.1",
+  "versionId": "d12a445b-28c0-4f85-b298-5466189ac28f",
+  "frenchVersionLocalizationId": "29d29642-6763-494f-971b-828bedb738b9",
+  "frenchAppInfoLocalizationId": "929d1f19-3668-4808-8bf8-492aec55e523",
+  "locales": ["en-US", "zh-Hans", "zh-Hant", "fr-FR"],
+  "whatsNewLengths": {"en-US": 960, "zh-Hans": 294, "zh-Hant": 301, "fr-FR": 1093},
+  "frenchFieldsVerified": true,
+  "allWhatsNewVerified": true,
+  "publishedMetadataUnchanged": true,
+  "existingDescriptionsUnchanged": true,
+  "libraryCount": 20,
+  "newDraftPlacements": 14,
+  "newImagesAndOrderVerified": true,
+  "publishedImagePlacementsUnchanged": true,
+  "submittedForReview": false,
+  "binaryUploaded": false,
+  "verification": "保存成功后 Python HTTP 回读遇到 TLS 中断；改用独立 Node 只读请求重新读取，再用同一 verify 函数对比初始备份。素材由独立 verify-campaign.cjs 回读。未把失败请求当成功证据。"
+}

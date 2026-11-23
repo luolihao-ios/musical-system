@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 import SwiftData
 
@@ -20,13 +21,17 @@ final class AppContainer {
             preferencesStore: store
         )
         try store.refreshAvailability()
+        try store.recoverInterruptedCoverSearches()
         try playback.initialize()
         let libraryModel = LibraryModel(
             store: store,
             fileImporter: FileImportService(),
             systemImporter: SystemLibraryImporter(),
-            playback: playback
+            playback: playback,
+            scansAuthorizedFolders: !inMemory,
+            coverSearch: inMemory ? nil : CatalogCoverSearch.shared
         )
+        CoverSearchDiagnostics.log("session version=\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") ?? "?") build=\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") ?? "?") provider=existing-catalogs")
         let playlistsModel = PlaylistsModel(
             store: store,
             playback: playback
@@ -35,7 +40,7 @@ final class AppContainer {
         try playlistsModel.reload()
         try playback.restoreQueueIfPossible(libraryModel.tracks)
         let bridge = NowPlayingBridge(controller: playback)
-        let nowPlayingModel = NowPlayingModel(playback: playback)
+        let nowPlayingModel = NowPlayingModel(playback: playback, online: OnlineMusicResources.shared, store: store)
 
         self.modelContainer = modelContainer
         self.store = store
@@ -45,6 +50,7 @@ final class AppContainer {
         self.playlistsModel = playlistsModel
         self.nowPlayingModel = nowPlayingModel
         self.transferHandoffImporter = TransferHandoffImporter(importer: FileImportService(), store: store)
+        if !inMemory { libraryModel.scheduleMissingCoverSearch() }
     }
 }
 
@@ -58,6 +64,7 @@ final class AppBootstrap {
     func start() {
         guard !didStart else { return }
         didStart = true
+        CrashExceptionDiagnostics.install()
         do {
             container = try AppContainer()
         } catch {

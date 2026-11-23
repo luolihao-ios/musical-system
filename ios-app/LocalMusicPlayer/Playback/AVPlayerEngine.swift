@@ -53,6 +53,11 @@ final class AVPlayerEngine: AudioEngine {
     }
 
     func load(url: URL) async throws {
+        guard !url.isFileURL || FileManager.default.fileExists(atPath: url.path) else {
+            PlaybackDiagnostics.log("AVPlayer 找不到音频资源：\(url.path)")
+            throw PlaybackError.invalidSource
+        }
+        PlaybackDiagnostics.log("AVPlayer 准备加载：\(url.path)")
         if let completionObserver {
             NotificationCenter.default.removeObserver(completionObserver)
         }
@@ -67,7 +72,18 @@ final class AVPlayerEngine: AudioEngine {
                 await self?.onEnded?()
             }
         }
-        _ = try await item.asset.load(.isPlayable)
+        do {
+            let playable = try await item.asset.load(.isPlayable)
+            guard playable else { throw PlaybackError.invalidSource }
+        } catch {
+            PlaybackDiagnostics.log(
+                "AVPlayer 资源不可播放：\(url.path)，错误=\(error.localizedDescription)"
+            )
+            // 旧网络请求失败不能卸载用户刚切换到的新资源。
+            if player.currentItem === item { player.replaceCurrentItem(with: nil) }
+            throw error
+        }
+        PlaybackDiagnostics.log("AVPlayer 资源可播放：\(url.path)")
     }
 
     func play() {

@@ -39,6 +39,12 @@ public actor IncomingFileStore {
         let final = try duplicateURL(for: SafeRelativePath(item.relativePath), below: destination)
         try fileManager.createDirectory(at: final.deletingLastPathComponent(), withIntermediateDirectories: true)
         try fileManager.moveItem(at: temporary, to: final)
+        if let group = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "group.com.luolihao.aiyuetransfer") {
+            let shared = group.appendingPathComponent("MusicHandoff", isDirectory: true).appendingPathComponent(final.lastPathComponent)
+            try? fileManager.createDirectory(at: shared.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? fileManager.removeItem(at: shared)
+            try? fileManager.copyItem(at: final, to: shared)
+        }
         return final
     }
 

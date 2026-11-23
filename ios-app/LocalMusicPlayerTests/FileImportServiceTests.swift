@@ -4,6 +4,58 @@ import XCTest
 
 @MainActor
 final class FileImportServiceTests: XCTestCase {
+    func testLocalMP3ImportAndReimportKeepsLyrics() async throws {
+        let fixture = try Fixture()
+        let audio = try fixture.file(name: "歌曲.mp3", contents: Data("audio".utf8))
+        let lyrics = try fixture.file(name: "歌曲.lrc", contents: Data("[00:01]歌词".utf8))
+        let metadata = FakeMetadataReader(metadata: ImportedMetadata(title: "歌曲", artist: "歌手", album: "", duration: 120, artworkData: nil))
+        let service = FileImportService(rootDirectory: fixture.importRoot, metadataReader: metadata)
+        let first = try await service.importFiles([ImportedFile(sourceURL: audio, kind: .audio), ImportedFile(sourceURL: lyrics, kind: .lyrics)])
+        let repeated = try await service.importFiles([ImportedFile(sourceURL: audio, kind: .audio)])
+        XCTAssertEqual(first[0].id, repeated[0].id)
+        XCTAssertNotNil(repeated[0].lyricsReference)
+        XCTAssertNotNil(repeated[0].artworkReference)
+        XCTAssertEqual(try String(contentsOfFile: XCTUnwrap(repeated[0].lyricsReference), encoding: .utf8), "[00:01]歌词")
+    }
+
+    func testCompanionArtworkTakesPriorityOverGeneratedArtwork() async throws {
+        let fixture = try Fixture()
+        let audio = try fixture.file(
+            name: "用户封面.mp3",
+            contents: Data("audio".utf8)
+        )
+        let cover = try fixture.file(
+            name: "用户封面.jpg",
+            contents: Data("companion-artwork".utf8)
+        )
+        let service = FileImportService(
+            rootDirectory: fixture.importRoot,
+            metadataReader: FakeMetadataReader(
+                metadata: ImportedMetadata(
+                    title: "用户封面",
+                    artist: "",
+                    album: "",
+                    duration: 180,
+                    artworkData: nil
+                )
+            ),
+            artworkGenerator: FakeArtworkGenerator(
+                data: Data("generated-artwork".utf8)
+            )
+        )
+
+        let tracks = try await service.importFiles([
+            ImportedFile(sourceURL: audio, kind: .audio),
+            ImportedFile(sourceURL: cover, kind: .cover)
+        ])
+
+        let artworkPath = try XCTUnwrap(tracks.first?.artworkReference)
+        XCTAssertEqual(
+            try Data(contentsOf: URL(fileURLWithPath: artworkPath)),
+            Data("companion-artwork".utf8)
+        )
+    }
+
     func testMissingEmbeddedArtworkGeneratesAndPersistsArtwork() async throws {
         let fixture = try Fixture()
         let audio = try fixture.file(
@@ -263,6 +315,10 @@ final class FileImportServiceTests: XCTestCase {
         XCTAssertTrue(entries.allSatisfy { !$0.lastPathComponent.contains(".staging-") })
         XCTAssertEqual(security.beginCount, security.endCount)
     }
+}
+
+private struct EmptyResources: MusicResourceSearching {
+    func search(_ query: MusicResourceQuery, lyrics: Bool, cover: Bool) async -> MusicResourceResult { MusicResourceResult() }
 }
 
 private struct FakeMetadataReader: ImportedMetadataReading {

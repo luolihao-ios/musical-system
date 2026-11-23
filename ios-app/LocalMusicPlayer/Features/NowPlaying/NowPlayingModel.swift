@@ -1,6 +1,10 @@
 import Foundation
 import Observation
 
+extension Notification.Name {
+    static let libraryFavoritesChanged = Self("libraryFavoritesChanged")
+}
+
 protocol LyricsReading: Sendable {
     func read(path: String) async throws -> String?
 }
@@ -9,8 +13,15 @@ struct FileLyricsReader: LyricsReading {
     func read(path: String) async throws -> String? {
         try await Task.detached(priority: .utility) {
             let fileManager = FileManager()
-            guard fileManager.fileExists(atPath: path) else { return nil }
-            return try String(contentsOfFile: path, encoding: .utf8)
+            guard fileManager.fileExists(atPath: path) else {
+                PlaybackDiagnostics.log("歌词文件不存在 path=\(path)")
+                return nil
+            }
+            do { return try String(contentsOfFile: path, encoding: .utf8) }
+            catch {
+                PlaybackDiagnostics.log("歌词文件读取失败 path=\(path) error=\(error)")
+                throw error
+            }
         }.value
     }
 }
@@ -22,21 +33,32 @@ final class NowPlayingModel {
     private(set) var lyricLines: [LyricLine] = []
     private(set) var currentLyricIndex: Int?
     private(set) var lyricTrackID: String?
+    private(set) var isSearchingLyrics = false
+    private(set) var lyricsSearchMessage = ""
+    private(set) var sleepDeadline: Date?
     var reduceMotion: Bool
 
     private let playback: any PlaybackControlling
     private let lyricsReader: any LyricsReading
+    private let online: (any MusicResourceSearching)?
+    private let store: MusicStore?
+    private var requestedLyricsPath: String?
     private var requestedLyricTrackID: String?
     private var lyricsTask: Task<Void, Never>?
     private var observerID: UUID?
+    private var sleepTask: Task<Void, Never>?
 
     init(
         playback: any PlaybackControlling,
         lyricsReader: any LyricsReading = FileLyricsReader(),
-        reduceMotion: Bool = false
+        reduceMotion: Bool = false,
+        online: (any MusicResourceSearching)? = nil,
+        store: MusicStore? = nil
     ) {
         self.playback = playback
         self.lyricsReader = lyricsReader
+        self.online = online
+        self.store = store
         self.reduceMotion = reduceMotion
         state = playback.state
         observerID = playback.observeState { [weak self] state in
@@ -46,6 +68,7 @@ final class NowPlayingModel {
 
     isolated deinit {
         lyricsTask?.cancel()
+        sleepTask?.cancel()
         if let observerID {
             playback.removeStateObserver(observerID)
         }
@@ -92,6 +115,47 @@ final class NowPlayingModel {
         try? playback.setVolume(volume)
     }
 
+    var canFavoriteCurrentTrack: Bool {
+        guard let track = state.currentTrack, store != nil else { return false }
+        return track.sourceKind != .onlinePreview
+    }
+
+    func toggleCurrentFavorite() {
+        guard let track = state.currentTrack, let store, canFavoriteCurrentTrack else { return }
+        do {
+            try store.setLiked(trackID: track.id, isLiked: !track.isLiked)
+            if let updated = try store.track(id: track.id) {
+                playback.refreshTrackMetadata(TrackSnapshot(updated))
+                NotificationCenter.default.post(name: .libraryFavoritesChanged, object: nil)
+            }
+        } catch {
+            PlaybackDiagnostics.log("更新收藏失败 error=\(error)")
+        }
+    }
+
+    func scheduleSleepTimer(minutes: Int?, now: Date = .now) {
+        sleepTask?.cancel()
+        sleepTask = nil
+        sleepDeadline = nil
+        guard let minutes, (1...120).contains(minutes) else { return }
+        let deadline = now.addingTimeInterval(Double(minutes * 60))
+        sleepDeadline = deadline
+        sleepTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSinceNow))) }
+            catch { return }
+            guard self?.sleepDeadline == deadline else { return }
+            self?.expireSleepTimer(now: max(.now, deadline))
+        }
+    }
+
+    func expireSleepTimer(now: Date = .now) {
+        guard let sleepDeadline, now >= sleepDeadline else { return }
+        self.sleepDeadline = nil
+        sleepTask?.cancel()
+        sleepTask = nil
+        try? playback.pause()
+    }
+
     func cycleMode() {
         let modes = PlaybackMode.allCases
         let current = modes.firstIndex(of: state.mode) ?? 0
@@ -117,9 +181,62 @@ final class NowPlayingModel {
         try? playback.clearQueue()
     }
 
+    func findLyrics() async {
+        guard !isSearchingLyrics, !hasLyrics, let track = state.currentTrack else { return }
+        guard let online, let store else { lyricsSearchMessage = String(localized: "歌词查询未配置"); return }
+        isSearchingLyrics = true
+        lyricsSearchMessage = String(localized: "正在查找歌词…")
+        defer { isSearchingLyrics = false }
+        let result = await online.search(MusicResourceQuery(title: track.title, artist: track.artist,
+            album: track.album, duration: track.duration), lyrics: true, cover: false)
+        guard !Task.isCancelled else { return }
+        do {
+            guard let text = result.lyrics, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                if state.currentTrack?.id == track.id { lyricsSearchMessage = String(localized: "没有找到匹配的歌词，可导入同名 LRC 文件") }
+                return
+            }
+            guard state.currentTrack?.id == track.id else { return }
+            let current = try store.track(id: track.id)
+            guard current?.lyricsReference == nil, state.currentTrack?.lyricsReference == nil else { return }
+            let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            let directory = base.appendingPathComponent("ImportedMusic").appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let url = directory.appendingPathComponent("lyrics.lrc")
+            try text.write(to: url, atomically: true, encoding: .utf8)
+            let updated: TrackSnapshot
+            if let current {
+                current.lyricsReference = url.path
+                try store.upsert(current)
+                updated = TrackSnapshot(current)
+            } else if let active = state.currentTrack, active.sourceKind == .onlinePreview {
+                updated = TrackSnapshot(id: active.id, title: active.title, artist: active.artist,
+                    album: active.album, duration: active.duration, sourceKind: active.sourceKind,
+                    sourceReference: active.sourceReference, artworkReference: active.artworkReference,
+                    lyricsReference: url.path)
+            } else {
+                lyricsSearchMessage = String(localized: "歌曲已移除，请重新选择")
+                return
+            }
+            // 搜索结果已在内存中且完成持久化，无需重新排队读取同一文件。
+            // 先登记路径，再通知播放模型，避免状态回调再次发起磁盘任务。
+            lyricsTask?.cancel()
+            requestedLyricTrackID = updated.id
+            requestedLyricsPath = updated.lyricsReference
+            applyLyrics(text, trackID: updated.id)
+            PlaybackDiagnostics.log("歌词搜索结果直接显示 id=\(updated.id) chars=\(text.count)")
+            playback.refreshTrackMetadata(updated)
+            if state.currentTrack?.id == track.id {
+                lyricsSearchMessage = String(localized: "已找到歌词，点击歌词查看")
+            }
+        } catch {
+            if state.currentTrack?.id == track.id { lyricsSearchMessage = String(localized: "歌词保存失败，请重试") }
+        }
+    }
+
     private func apply(_ state: PlaybackState) {
         self.state = state
-        if requestedLyricTrackID != state.currentTrack?.id {
+        if requestedLyricTrackID != state.currentTrack?.id || requestedLyricsPath != state.currentTrack?.lyricsReference {
+            if requestedLyricTrackID != state.currentTrack?.id { lyricsSearchMessage = "" }
             loadLyrics(for: state.currentTrack)
         }
         updateCurrentLyricIndex()
@@ -133,8 +250,10 @@ final class NowPlayingModel {
     }
 
     private func loadLyrics(for track: TrackSnapshot?) {
+        PlaybackDiagnostics.log("歌词加载请求 id=\(track?.id ?? "none") path=\(track?.lyricsReference ?? "none")")
         lyricsTask?.cancel()
         requestedLyricTrackID = track?.id
+        requestedLyricsPath = track?.lyricsReference
         lyricTrackID = nil
         lyricLines = []
         currentLyricIndex = nil
@@ -146,15 +265,26 @@ final class NowPlayingModel {
         let reader = lyricsReader
         lyricsTask = Task { [weak self] in
             let source = try? await reader.read(path: path)
+            PlaybackDiagnostics.log("歌词读取结束 id=\(requestedID) chars=\(source?.count ?? 0) cancelled=\(Task.isCancelled)")
             guard !Task.isCancelled,
                   let self,
                   self.state.currentTrack?.id == requestedID,
-                  self.requestedLyricTrackID == requestedID else {
+                  self.requestedLyricTrackID == requestedID,
+                  self.requestedLyricsPath == path else {
                 return
             }
-            self.lyricLines = LRCParser.parse(source ?? "")
-            self.lyricTrackID = requestedID
-            self.updateCurrentLyricIndex()
+            self.applyLyrics(source, trackID: requestedID)
         }
+    }
+
+    private func applyLyrics(_ source: String?, trackID: String) {
+        lyricLines = LRCParser.parse(source ?? "")
+        if lyricLines.isEmpty, let source {
+            lyricLines = source.split(whereSeparator: \.isNewline).map {
+                LyricLine(timestamp: .infinity, text: String($0))
+            }
+        }
+        lyricTrackID = trackID
+        updateCurrentLyricIndex()
     }
 }

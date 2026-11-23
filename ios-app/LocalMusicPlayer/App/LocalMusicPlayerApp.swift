@@ -3,14 +3,36 @@ import SwiftUI
 @main
 @MainActor
 struct LocalMusicPlayerApp: App {
+    @AppStorage("player.appearance") private var appearance = PlayerAppearance.gradient
     @State private var bootstrap = AppBootstrap()
 
     var body: some Scene {
         WindowGroup {
-            BootstrapView(bootstrap: bootstrap)
-                .preferredColorScheme(.dark)
-                .onOpenURL { url in Task { try? await bootstrap.container?.transferHandoffImporter.importURL(url) } }
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--adaptive-store-assets") {
+                AdaptiveStoreAssetHarness().preferredColorScheme(.light)
+            } else if ProcessInfo.processInfo.arguments.contains("--player-interaction-tests") {
+                PlayerInteractionTestHarness().preferredColorScheme(.dark)
+            } else {
+                applicationContent
+            }
+            #else
+            applicationContent
+            #endif
         }
+    }
+
+    private var applicationContent: some View {
+            BootstrapView(bootstrap: bootstrap)
+                .preferredColorScheme(appearance.colorScheme)
+                .onOpenURL { url in Task {
+                    bootstrap.start()
+                    do {
+                        try await bootstrap.container?.transferHandoffImporter.importURL(url)
+                        try bootstrap.container?.libraryModel.reload()
+                        bootstrap.container?.libraryModel.scheduleMissingCoverSearch()
+                    } catch { bootstrap.container?.libraryModel.showImportError(error.localizedDescription) }
+                } }
     }
 }
 

@@ -2,29 +2,159 @@ name: iOS App Store Connect upload
 
 on:
   workflow_dispatch:
+    inputs:
+      operation:
+        description: 执行操作
+        type: choice
+        default: build
+        options:
+          - build
+          - testflight
+          - inspect-screenshots
+          - inspect-library
+          - capture-ipad
+          - inspect-adaptive-environment
+          - upload-library
+          - upload-screenshots
 
 permissions:
   contents: read
 
 jobs:
-  archive-and-upload:
-    runs-on: macos-latest
+  adaptive-environment:
+    if: inputs.operation == 'inspect-adaptive-environment'
+    runs-on: xcode-27
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Inspect Xcode 27.1 and Duo simulator support
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode_27.1.app/Contents/Developer
+          mkdir -p ios-app/build/adaptive-environment
+          xcodebuild -version | tee ios-app/build/adaptive-environment/xcode.txt
+          xcodebuild -showsdks | tee ios-app/build/adaptive-environment/sdks.txt
+          xcrun simctl list devicetypes -j > ios-app/build/adaptive-environment/device-types.json
+          python3 ios-app/scripts/prepare_adaptive_runtime.py --output ios-app/build/adaptive-environment/runtimes.json
+          xcrun simctl list devices available -j > ios-app/build/adaptive-environment/devices.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: adaptive-environment
+          path: ios-app/build/adaptive-environment
+  capture-ipad:
+    if: inputs.operation == 'capture-ipad'
+    runs-on: xcode-27
     env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+      - run: brew install xcodegen
+      - name: Capture actual iPad player UI
+        run: |
+          set -euo pipefail
+          xcodegen generate --spec ios-app/project.yml
+          DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; p=json.load(sys.stdin); print(next(d["udid"] for ds in p["devices"].values() for d in ds if "iPad Pro" in d["name"] and "13" in d["name"]))')
+          xcodebuild test -project ios-app/LocalMusicPlayer.xcodeproj -scheme LocalMusicPlayer -destination "platform=iOS Simulator,id=$DEVICE_ID" -derivedDataPath ios-app/build/StoreDerivedData -resultBundlePath ios-app/build/StoreScreens.xcresult -parallel-testing-enabled NO -only-testing:LocalMusicPlayerUITests/StoreAssetCaptureTests CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO
+      - name: Export captured images
+        if: always()
+        run: xcrun xcresulttool export attachments --path ios-app/build/StoreScreens.xcresult --output-path ios-app/build/store-assets
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ipad-store-screenshots
+          path: ios-app/build/store-assets
+  screenshots:
+    if: inputs.operation == 'inspect-screenshots' || inputs.operation == 'upload-screenshots' || inputs.operation == 'inspect-library' || inputs.operation == 'upload-library'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install API authentication dependency
+        run: python -m pip install 'PyJWT[crypto]==2.10.1'
+      - name: Validate store asset files
+        if: inputs.operation == 'upload-library'
+        run: python -m unittest discover -s scripts/tests -p 'test_store_artwork.py' -v
+      - name: Inspect or upload Chinese screenshots
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          if [ "$OPERATION" = "upload-library" ]; then
+            python scripts/app_store_screenshots.py upload-library
+          elif [ "$OPERATION" = "inspect-library" ]; then
+            python scripts/app_store_screenshots.py inspect-library
+          elif [ "$OPERATION" = "inspect-screenshots" ]; then
+            python scripts/app_store_screenshots.py inspect
+          else
+            python scripts/app_store_screenshots.py upload
+          fi
+      - uses: actions/upload-artifact@v7
+        if: inputs.operation == 'inspect-library'
+        with:
+          name: app-store-asset-specifications
+          path: .api-inspection/asset-refdata.json
+      - uses: actions/upload-artifact@v7
+        if: always() && inputs.operation == 'upload-library'
+        with:
+          name: app-store-upload-verification
+          path: .api-inspection/upload-verification.json
+          if-no-files-found: warn
+  archive-and-upload:
+    if: inputs.operation == 'build' || inputs.operation == 'testflight' || inputs.operation == ''
+    runs-on: xcode-27
+    timeout-minutes: 60
+    concurrency:
+      group: music-player-connect-release
+      cancel-in-progress: false
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
       BUNDLE_ID: com.luolihao.musicalsystem
       KEYCHAIN_PATH: /tmp/local-music-signing.keychain-db
       TEMP_SIGNING_DIR: /tmp/local-music-signing
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Verify release automation and unused build number
+        env:
+          OPERATION: ${{ inputs.operation }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+        run: |
+          python -m pip install 'PyJWT[crypto]==2.10.1'
+          python -m unittest discover -s scripts/tests -p 'test_music_release.py' -v
+          CHECK=preflight
+          if [ "$OPERATION" = "testflight" ]; then CHECK=testflight-preflight; fi
+          python scripts/music_release.py "$CHECK" --output .api-inspection/music-release-preflight.json
       - name: Install XcodeGen
         run: brew install xcodegen
+      - name: Run iOS simulator tests
+        run: ./ios-app/scripts/verify.sh
+      - name: Preserve simulator test evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: player-interaction-test-evidence
+          path: |
+            ios-app/build/PlayerTests.xcresult
+            ios-app/build/music-player-interaction.log
+            ios-app/build/player-evidence
+          if-no-files-found: warn
       - name: Validate required secrets
         env:
           P12: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
           P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
           PROFILE: ${{ secrets.IOS_APP_STORE_PROFILE_BASE64 }}
-          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          API_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
+          API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
         run: |
           set -euo pipefail
           for value in "$P12" "$P12_PASSWORD" "$PROFILE" "$KEY_ID" "$ISSUER_ID" "$API_KEY"; do
@@ -46,6 +176,9 @@ jobs:
           PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" "$TEMP_SIGNING_DIR/profile.plist")
           PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" "$TEMP_SIGNING_DIR/profile.plist")
           TEAM_ID=$(/usr/libexec/PlistBuddy -c "Print TeamIdentifier:0" "$TEMP_SIGNING_DIR/profile.plist")
+          /usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.security.application-groups:0' "$TEMP_SIGNING_DIR/profile.plist" \
+            | grep -Fx 'group.com.luolihao.aiyuetransfer' \
+            || { echo 'App Store Profile 未绑定 group.com.luolihao.aiyuetransfer，请重新生成 AiYuezhicheng 的 Profile 后更新 IOS_APP_STORE_PROFILE_BASE64。' >&2; exit 1; }
           cp "$TEMP_SIGNING_DIR/appstore.mobileprovision" \
             "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
 
@@ -78,7 +211,10 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
-            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME"
+            AIYUE_TEAM_ID="$TEAM_ID" \
+            AIYUE_PROFILE_NAME="$PROFILE_NAME" \
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGNING_REQUIRED=YES
 
           cat > "$TEMP_SIGNING_DIR/ExportOptions.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -99,11 +235,32 @@ jobs:
             -archivePath ios-app/build/AppStore/LocalMusicPlayer.xcarchive \
             -exportPath ios-app/build/AppStore/export \
             -exportOptionsPlist "$TEMP_SIGNING_DIR/ExportOptions.plist"
+      - name: Preserve release symbols
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: music-player-release-symbols
+          path: ios-app/build/AppStore/LocalMusicPlayer.xcarchive/dSYMs
+          if-no-files-found: warn
+      - name: Verify exported App Group entitlement
+        run: |
+          set -euo pipefail
+          IPA_PATH=$(find ios-app/build/AppStore/export -maxdepth 1 -name '*.ipa' -print -quit)
+          test -n "$IPA_PATH"
+          CHECK_DIR="$RUNNER_TEMP/local-music-entitlements"
+          rm -rf "$CHECK_DIR"
+          mkdir -p "$CHECK_DIR"
+          unzip -q "$IPA_PATH" -d "$CHECK_DIR"
+          APP_PATH=$(find "$CHECK_DIR/Payload" -maxdepth 1 -name '*.app' -print -quit)
+          test -n "$APP_PATH"
+          codesign -d --entitlements :- "$APP_PATH" > "$CHECK_DIR/entitlements.plist" 2> "$CHECK_DIR/codesign.log"
+          /usr/libexec/PlistBuddy -c 'Print :com.apple.security.application-groups:0' "$CHECK_DIR/entitlements.plist" \
+            | grep -Fx 'group.com.luolihao.aiyuetransfer'
       - name: Upload to App Store Connect
         env:
-          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
+          API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.appstoreconnect/private_keys"
@@ -111,14 +268,30 @@ jobs:
           echo "$API_PRIVATE_KEY_BASE64" | base64 -D > "$API_KEY_PATH"
           IPA_PATH=$(find ios-app/build/AppStore/export -maxdepth 1 -name '*.ipa' -print -quit)
           test -n "$IPA_PATH"
+          python scripts/music_release.py verify-ipa --ipa "$IPA_PATH" --output .api-inspection/music-release-ipa.json
           xcrun altool --validate-app --type ios -f "$IPA_PATH" \
             --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER_ID"
           xcrun altool --upload-app --type ios -f "$IPA_PATH" \
             --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER_ID"
+      - name: Preserve signed release IPA
+        uses: actions/upload-artifact@v7
+        with:
+          name: music-player-app-store-ipa
+          path: ios-app/build/AppStore/export/*.ipa
+          retention-days: 14
+          if-no-files-found: error
+      - name: Preserve Connect release readback
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: music-connect-release-verification
+          path: .api-inspection/music-release*.json
+          include-hidden-files: true
+          if-no-files-found: warn
       - name: Clean temporary signing material
         if: always()
         env:
-          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
         run: |
           security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
           rm -rf "$TEMP_SIGNING_DIR"

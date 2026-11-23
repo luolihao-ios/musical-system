@@ -1,59 +1,81 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct LibraryView: View {
     @Bindable var model: LibraryModel
-    @Bindable var playlists: PlaylistsModel
+    var categoriesOnly = false
+    var personalLibrary = false
+    var title: LocalizedStringKey? = nil
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @State private var showDocumentPicker = false
+    @State private var showMusicFolderPicker = false
+    @State private var sortedByTitle = false
+
+    private var displayedTracks: [TrackSnapshot] {
+        let tracks = model.filteredTracks
+        return sortedByTitle ? tracks.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending } : tracks
+    }
 
     var body: some View {
         Group {
-            if model.tracks.isEmpty {
-                ContentUnavailableView {
-                    Label("还没有本地音乐", systemImage: "music.note.list")
-                } description: {
-                    Text("从“文件”或设备音乐资料库导入")
-                } actions: {
-                    Button("从“文件”导入") {
-                        showDocumentPicker = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(PlayerTheme.accent)
+            if categoriesOnly {
+                VStack {
+                    libraryEntrances.frame(maxHeight: horizontalSizeClass == .regular ? 400 : 150)
+                    Spacer()
                 }
+            } else if model.tracks.isEmpty && !personalLibrary {
+                emptyLibrary
             } else {
                 List {
-                    Section {
-                        libraryEntrances
-                            .listRowInsets(
-                                EdgeInsets(
-                                    top: 8,
-                                    leading: 0,
-                                    bottom: 8,
-                                    trailing: 0
-                                )
-                            )
-                            .listRowBackground(Color.clear)
+                    if personalLibrary {
+                        Section {
+                            libraryEntrances
+                                .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
+                        } header: {
+                            Text("音乐库")
+                        }
                     }
-                    Section("全部歌曲 · \(model.filteredTracks.count)") {
-                        ForEach(model.filteredTracks) { track in
-                            trackRow(track)
+                    if model.tracks.isEmpty {
+                        emptyLibrary.listRowBackground(Color.clear)
+                    } else {
+                        Section {
+                            ForEach(displayedTracks) { track in
+                                trackRow(track)
+                            }
+                        } header: {
+                            HStack {
+                                Text("\(String(localized: "全部歌曲")) · \(displayedTracks.count)")
+                                Spacer()
+                                Menu {
+                                    Button("导入顺序") { sortedByTitle = false }
+                                    Button("歌曲名称") { sortedByTitle = true }
+                                } label: {
+                                    Image(systemName: "line.3.horizontal.decrease")
+                                }
+                                .accessibilityLabel("歌曲排序")
+                            }
                         }
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .accessibilityIdentifier("personal.library")
             }
         }
-        .navigationTitle("音乐库")
+        .navigationTitle(title ?? (personalLibrary ? "我的" : categoriesOnly ? "音乐库" : ""))
+        .background(RefreshBackdrop())
+        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .searchable(
             text: $model.searchText,
             prompt: "搜索歌曲、歌手或专辑"
         )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                ImportMenu {
-                    showDocumentPicker = true
-                } importSystemLibrary: {
-                    Task { await model.importSystemLibrary() }
+                HStack {
+                    importMenu.accessibilityIdentifier("personal.import")
                 }
             }
         }
@@ -68,6 +90,21 @@ struct LibraryView: View {
             DocumentPickerView { files in
                 showDocumentPicker = false
                 Task { await model.importFiles(files) }
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if model.isCompletingResources { Text(model.coverSearchMessage).font(.caption).padding(10).background(.regularMaterial, in: Capsule()).allowsHitTesting(false) }
+        }
+        .sheet(isPresented: $showMusicFolderPicker) {
+            MusicFolderPickerView { urls in
+                showMusicFolderPicker = false
+                guard let url = urls.first else { return }
+                do {
+                    try AuthorizedMusicFolderAccess.save(url)
+                    Task { await model.scanLocalAudio() }
+                } catch {
+                    model.showImportError(String(format: NSLocalizedString("无法获得文件夹访问权限：%@", comment: "文件夹访问失败"), error.localizedDescription))
+                }
             }
         }
         .alert(
@@ -91,45 +128,113 @@ struct LibraryView: View {
         }
     }
 
+    private var importMenu: some View {
+        ImportMenu(
+            importFiles: { showDocumentPicker = true },
+            scanLocalAudio: { Task { await model.scanLocalAudio() } },
+            authorizeMusicFolder: { showMusicFolderPicker = true }
+        )
+    }
+
+    private var emptyLibrary: some View {
+        VStack(spacing: 14) {
+            ContentUnavailableView {
+                Label("还没有本地音乐", systemImage: "music.note.list")
+            } description: {
+                Text("从“文件”或设备音乐资料库导入")
+            } actions: {
+                importMenu.buttonStyle(.borderedProminent)
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 8)], spacing: 8) {
+                importShortcut("从“文件”导入", icon: "folder") { showDocumentPicker = true }
+                importShortcut("扫描本地音频", icon: "waveform") { Task { await model.scanLocalAudio() } }
+                importShortcut("授权音乐文件夹", icon: "checkmark.shield") { showMusicFolderPicker = true }
+            }
+        }
+    }
+
+    private func importShortcut(_ label: LocalizedStringKey, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: icon).font(.headline).foregroundStyle(PlayerTheme.accent)
+                Text(label).font(.caption).multilineTextAlignment(.center)
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, minHeight: 72)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 13))
+        }
+        .buttonStyle(.plain)
+    }
+
     private var libraryEntrances: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 12) {
+        Group {
+            if personalLibrary {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: horizontalSizeClass == .regular ? 144 : 68), spacing: 8)], spacing: 8) {
+                    libraryEntranceItems
+                }
+                .padding(.horizontal, 16)
+            } else if horizontalSizeClass == .regular {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 16)], spacing: 16) {
+                        libraryEntranceItems
+                    }
+                    .padding(24)
+                }
+            } else {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 12) { libraryEntranceItems }
+                        .padding(.horizontal)
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private var libraryEntranceItems: some View {
+        Group {
+                if personalLibrary {
+                    NavigationLink {
+                        LibraryTracksView(title: String(localized: "全部歌曲"), tracks: displayedTracks, model: model)
+                    } label: {
+                        LibraryEntranceCard(title: String(localized: "歌曲"), systemImage: "music.note",
+                                            countText: "\(model.tracks.count)", compact: true)
+                    }
+                    .buttonStyle(.plain)
+                }
                 ForEach(LibraryGroupKind.allCases) { kind in
                     NavigationLink {
                         LibraryGroupsView(
                             title: kind.title,
                             groups: model.groups(for: kind),
-                            model: model,
-                            playlists: playlists
+                            model: model
                         )
                     } label: {
                         LibraryEntranceCard(
                             title: kind.title,
                             systemImage: kind.systemImage,
-                            countText: "\(model.groups(for: kind).count)"
+                            countText: "\(model.groups(for: kind).count)",
+                            compact: personalLibrary
                         )
                     }
                     .buttonStyle(.plain)
                 }
-                NavigationLink {
+                if !personalLibrary {
+                    NavigationLink {
                     LibraryTracksView(
-                        title: "最近播放",
+                        title: String(localized: "最近播放"),
                         tracks: model.recentlyPlayed,
-                        model: model,
-                        playlists: playlists
+                        model: model
                     )
                 } label: {
                     LibraryEntranceCard(
-                        title: "最近播放",
+                        title: String(localized: "最近播放"),
                         systemImage: "clock.arrow.circlepath",
-                        countText: "\(model.recentlyPlayed.count) 首"
+                        countText: String(format: NSLocalizedString("%lld 首", comment: "歌曲数量"), Int64(model.recentlyPlayed.count))
                     )
                 }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal)
+                    .buttonStyle(.plain)
+                }
         }
-        .scrollIndicators(.hidden)
     }
 
     @ViewBuilder
@@ -139,13 +244,12 @@ struct LibraryView: View {
             isCurrent: model.currentTrackID == track.id,
             isPlaying: model.isCurrentTrackPlaying
         ) {
-            Task { try? await model.play(track) }
+            NotificationCenter.default.post(name: .showMiniPlayer, object: nil)
+            Task { try? await model.play(track, in: displayedTracks) }
         } toggleLike: {
             try? model.toggleLike(track)
-        } addToPlaylist: { playlistID in
-            try? playlists.add(trackID: track.id, to: playlistID)
-        } playlists: {
-            playlists.playlists.filter { !$0.isBuiltIn }
+        } delete: {
+            try? model.delete(track)
         }
     }
 }
@@ -154,22 +258,25 @@ private struct LibraryEntranceCard: View {
     let title: String
     let systemImage: String
     let countText: String
+    var compact = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: compact ? .center : .leading, spacing: compact ? 6 : 12) {
             Image(systemName: systemImage)
                 .font(.title2)
                 .foregroundStyle(PlayerTheme.accent)
             Text(title)
-                .font(.headline)
+                .font(compact ? .caption.weight(.semibold) : .headline)
+                .lineLimit(2)
             Text(countText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .frame(width: 112, alignment: .leading)
-        .padding(14)
+        .frame(width: compact ? nil : 112, alignment: .leading)
+        .frame(maxWidth: compact ? .infinity : nil)
+        .padding(compact ? 8 : 14)
         .background(
-            PlayerTheme.panel,
+            Color(uiColor: .systemGray6),
             in: RoundedRectangle(cornerRadius: 18, style: .continuous)
         )
     }
@@ -179,7 +286,6 @@ private struct LibraryGroupsView: View {
     let title: String
     let groups: [LibraryTrackGroup]
     @Bindable var model: LibraryModel
-    @Bindable var playlists: PlaylistsModel
 
     var body: some View {
         List(groups) { group in
@@ -187,23 +293,23 @@ private struct LibraryGroupsView: View {
                 LibraryTracksView(
                     title: group.title,
                     tracks: group.tracks,
-                    model: model,
-                    playlists: playlists
+                    model: model
                 )
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(group.title)
-                    Text("\(group.tracks.count) 首")
+                    Text("\(group.tracks.count) \(String(localized: "首"))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
         }
         .navigationTitle(title)
+        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .overlay {
             if groups.isEmpty {
                 ContentUnavailableView(
-                    "暂无\(title)",
+                    String(format: NSLocalizedString("暂无%@", comment: "分类为空"), title),
                     systemImage: "music.note.list"
                 )
             }
@@ -211,11 +317,10 @@ private struct LibraryGroupsView: View {
     }
 }
 
-private struct LibraryTracksView: View {
+struct LibraryTracksView: View {
     let title: String
     let tracks: [TrackSnapshot]
     @Bindable var model: LibraryModel
-    @Bindable var playlists: PlaylistsModel
 
     var body: some View {
         List(tracks) { track in
@@ -224,16 +329,16 @@ private struct LibraryTracksView: View {
                 isCurrent: model.currentTrackID == track.id,
                 isPlaying: model.isCurrentTrackPlaying
             ) {
+                NotificationCenter.default.post(name: .showMiniPlayer, object: nil)
                 Task { try? await model.play(track, in: tracks) }
             } toggleLike: {
                 try? model.toggleLike(track)
-            } addToPlaylist: { playlistID in
-                try? playlists.add(trackID: track.id, to: playlistID)
-            } playlists: {
-                playlists.playlists.filter { !$0.isBuiltIn }
+            } delete: {
+                try? model.delete(track)
             }
         }
         .navigationTitle(title)
+        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .overlay {
             if tracks.isEmpty {
                 ContentUnavailableView(
@@ -245,15 +350,13 @@ private struct LibraryTracksView: View {
     }
 }
 
-private struct TrackRow: View {
+struct TrackRow: View {
     let track: TrackSnapshot
     let isCurrent: Bool
     let isPlaying: Bool
     let play: () -> Void
     let toggleLike: () -> Void
-    let addToPlaylist: (String) -> Void
-    let playlists: () -> [PlaylistSnapshot]
-
+    let delete: () -> Void
     var body: some View {
         HStack(spacing: 12) {
             Button(action: play) {
@@ -290,37 +393,39 @@ private struct TrackRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                     }
+                    Spacer(minLength: 0)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            Spacer()
-            Menu {
+            HStack(spacing: 2) {
+                Button(role: .destructive, action: delete) {
+                    Image(systemName: "trash")
+                        .foregroundStyle(.red)
+                        .frame(width: 38, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("删除歌曲")
+
                 Button(action: toggleLike) {
-                    Label(
-                        track.isLiked ? "取消喜欢" : "我喜欢",
-                        systemImage: track.isLiked ? "heart.slash" : "heart"
-                    )
+                    Image(systemName: track.isLiked ? "heart.fill" : "heart")
+                        .foregroundStyle(
+                            track.isLiked ? PlayerTheme.accent : Color.secondary
+                        )
+                        .frame(width: 38, height: 44)
                 }
-                if playlists().isEmpty {
-                    Text("先创建一个自建歌单")
-                } else {
-                    Menu("添加到歌单") {
-                        ForEach(playlists()) { playlist in
-                            Button(playlist.name) {
-                                addToPlaylist(playlist.id)
-                            }
-                        }
-                    }
-                }
-            } label: {
-                Image(systemName: track.isLiked ? "heart.fill" : "ellipsis")
-                    .foregroundStyle(
-                        track.isLiked ? PlayerTheme.accent : Color.secondary
-                    )
-                    .frame(width: 44, height: 44)
+                .buttonStyle(.plain)
+                .accessibilityLabel(track.isLiked ? String(localized: "取消收藏") : String(localized: "收藏"))
             }
-            .accessibilityLabel("歌曲操作")
         }
         .opacity(track.isAvailable ? 1 : 0.45)
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                delete()
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+        }
     }
 }

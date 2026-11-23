@@ -1,0 +1,267 @@
+name: file send — GitHub build, TestFlight and store
+
+on:
+  push:
+    paths:
+      - "transfer-ios-next/**"
+      - "shared-swift/**"
+      - ".github/workflows/aiyue-next-release.yml"
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: 操作（编译、打包、TestFlight、商店资料与素材均在 GitHub 执行）
+        type: choice
+        default: release
+        options: [release, verify, capture, capture-iphone, inspect-store, update-store, upload-assets, update-whats-new]
+      draft_version:
+        description: 明确授权创建的商店草稿版本（留空只操作现有草稿）
+        type: string
+        default: ''
+      preview_device:
+        description: 实际截图设备（用于 capture-iphone 操作）
+        type: choice
+        default: iphone
+        options: [iphone, ipad, duo]
+
+permissions:
+  contents: read
+
+jobs:
+  iphone-preview:
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'capture-iphone'
+    runs-on: xcode-27
+    timeout-minutes: 25
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      PREVIEW_DEVICE: ${{ inputs.preview_device || 'iphone' }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: brew install xcodegen
+      - name: Capture five actual iPhone App pages for preview
+        run: |
+          set -euo pipefail
+          xcodegen generate --spec transfer-ios-next/project.yml
+          mkdir -p transfer-ios-next/build/preview
+          python3 ios-app/scripts/prepare_adaptive_runtime.py --output transfer-ios-next/build/preview/runtimes.json
+          case "$PREVIEW_DEVICE" in
+            iphone) DEVICE_TYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-17 ;;
+            ipad) DEVICE_TYPE=com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB ;;
+            duo) DEVICE_TYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-Duo ;;
+          esac
+          RUNTIME=$(python3 ios-app/scripts/adaptive_runtime.py --runtimes transfer-ios-next/build/preview/runtimes.json --type "$DEVICE_TYPE")
+          DEVICE_ID=$(xcrun simctl create "file send preview $PREVIEW_DEVICE" "$DEVICE_TYPE" "$RUNTIME")
+          xcrun simctl boot "$DEVICE_ID"
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+          xcodebuild test -project transfer-ios-next/AiYueTransferNext.xcodeproj -scheme AiyueTransfer \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" -derivedDataPath transfer-ios-next/build/PreviewDerivedData \
+            -resultBundlePath "transfer-ios-next/build/preview/$PREVIEW_DEVICE.xcresult" -parallel-testing-enabled NO \
+            -only-testing:AiyueTransferUITests/StoreAssetCaptureTests \
+            CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO
+      - name: Export original App screenshots
+        if: always()
+        run: xcrun xcresulttool export attachments --path "transfer-ios-next/build/preview/$PREVIEW_DEVICE.xcresult" --output-path "transfer-ios-next/build/preview/$PREVIEW_DEVICE-images"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: filesend-five-actual-${{ inputs.preview_device || 'iphone' }}-pages
+          path: transfer-ios-next/build/preview
+  store:
+    if: github.event_name == 'workflow_dispatch' && contains(fromJSON('["inspect-store","update-store","upload-assets","update-whats-new"]'), inputs.operation)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install 'PyJWT[crypto]==2.10.1'
+      - name: Verify store automation
+        run: python -m unittest discover -s scripts/tests -p 'test_filesend_store.py' -v
+      - name: Manage existing file send App Store record
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          OPERATION: ${{ inputs.operation }}
+          DRAFT_VERSION: ${{ inputs.draft_version }}
+        run: |
+          set -euo pipefail
+          case "$OPERATION" in
+            inspect-store) python scripts/filesend_store.py inspect ;;
+            update-store) python scripts/filesend_store.py update-metadata --draft-version "$DRAFT_VERSION" ;;
+            upload-assets) python scripts/filesend_store.py upload-library ;;
+            update-whats-new) python scripts/filesend_store.py update-whats-new ;;
+          esac
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: filesend-store-verification
+          path: .api-inspection
+          include-hidden-files: true
+  adaptive:
+    if: github.event_name == 'push' || contains(fromJSON('["release","verify","capture"]'), inputs.operation)
+    runs-on: xcode-27
+    timeout-minutes: 55
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+      - run: brew install xcodegen
+      - name: Browser and localization regression
+        run: |
+          node transfer-ios-next/scripts/test-web.cjs
+          node transfer-ios-next/scripts/test_web_localization.mjs
+          python3 transfer-ios-next/scripts/test_branding.py
+          python3 transfer-ios-next/scripts/test_adaptive_layout.py
+      - name: Prepare iPhone, iPad and Duo runtime
+        run: python3 ios-app/scripts/prepare_adaptive_runtime.py --output transfer-ios-next/build/adaptive/runtimes.json
+      - name: Test actual App and capture five pages on all three devices
+        run: |
+          set -euo pipefail
+          xcodegen generate --spec transfer-ios-next/project.yml
+          TEST_STATUS=0
+          for KIND in iphone ipad duo; do
+            case "$KIND" in
+              iphone) DEVICE_TYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-17 ;;
+              ipad) DEVICE_TYPE=com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB ;;
+              duo) DEVICE_TYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-Duo ;;
+            esac
+            RUNTIME=$(python3 ios-app/scripts/adaptive_runtime.py --runtimes transfer-ios-next/build/adaptive/runtimes.json --type "$DEVICE_TYPE")
+            DEVICE_ID=$(xcrun simctl create "file send $KIND" "$DEVICE_TYPE" "$RUNTIME")
+            xcrun simctl boot "$DEVICE_ID"
+            xcrun simctl bootstatus "$DEVICE_ID" -b
+            xcodebuild test -project transfer-ios-next/AiYueTransferNext.xcodeproj -scheme AiyueTransfer \
+              -destination "platform=iOS Simulator,id=$DEVICE_ID" -derivedDataPath transfer-ios-next/build/AdaptiveDerivedData \
+              -resultBundlePath "transfer-ios-next/build/adaptive/$KIND.xcresult" -parallel-testing-enabled NO \
+              -only-testing:AiyueTransferTests -only-testing:AiyueTransferUITests/StoreAssetCaptureTests \
+              CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO || TEST_STATUS=1
+            xcrun xcresulttool export attachments --path "transfer-ios-next/build/adaptive/$KIND.xcresult" \
+              --output-path "transfer-ios-next/build/adaptive/$KIND-images" || TEST_STATUS=1
+            xcrun simctl shutdown "$DEVICE_ID"
+          done
+          exit "$TEST_STATUS"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: filesend-adaptive-device-captures
+          path: transfer-ios-next/build/adaptive
+  ios:
+    needs: adaptive
+    if: github.event_name == 'push' || contains(fromJSON('["release","verify"]'), inputs.operation)
+    name: iOS IPA artifact
+    runs-on: xcode-27
+    concurrency:
+      group: filesend-release
+      cancel-in-progress: false
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      BUNDLE_ID: com.luolihao.aiyuetransfer
+      KEYCHAIN_PATH: /tmp/aiyue-next.keychain-db
+      SIGNING_DIR: /tmp/aiyue-next-signing
+    steps:
+      - uses: actions/checkout@v7
+      - run: brew install xcodegen
+      - name: Browser verification
+        run: node transfer-ios-next/scripts/test-web.cjs
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install 'PyJWT[crypto]==2.10.1'
+      - name: Assign build number greater than every existing TestFlight upload
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+        run: python scripts/filesend_store.py next-build
+      - name: Import signing material
+        env:
+          P12: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          PROFILE: ${{ secrets.AIYUE_TRANSFER_APP_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$P12" && test -n "$P12_PASSWORD" && test -n "$PROFILE"
+          mkdir -p "$SIGNING_DIR" "$HOME/Library/MobileDevice/Provisioning Profiles"
+          echo "$P12" | base64 -D > "$SIGNING_DIR/distribution.p12"
+          echo "$PROFILE" | base64 -D > "$SIGNING_DIR/app.mobileprovision"
+          security cms -D -i "$SIGNING_DIR/app.mobileprovision" > "$SIGNING_DIR/profile.plist"
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' "$SIGNING_DIR/profile.plist")
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print Name' "$SIGNING_DIR/profile.plist")
+          TEAM_ID=$(/usr/libexec/PlistBuddy -c 'Print TeamIdentifier:0' "$SIGNING_DIR/profile.plist")
+          APP_IDENTIFIER=$(/usr/libexec/PlistBuddy -c 'Print Entitlements:application-identifier' "$SIGNING_DIR/profile.plist")
+          test "$APP_IDENTIFIER" = "$TEAM_ID.$BUNDLE_ID"
+          cp "$SIGNING_DIR/app.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 24)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$SIGNING_DIR/distribution.p12" -k "$KEYCHAIN_PATH" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          echo "PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
+          echo "PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
+          echo "TEAM_ID=$TEAM_ID" >> "$GITHUB_ENV"
+      - name: Test, archive and export IPA
+        working-directory: transfer-ios-next
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          xcodebuild archive -project AiYueTransferNext.xcodeproj -scheme AiyueTransfer -configuration Release -destination 'generic/platform=iOS' -archivePath build/AiyueTransfer.xcarchive CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="Apple Distribution" DEVELOPMENT_TEAM="$TEAM_ID" AIYUE_TEAM_ID="$TEAM_ID" AIYUE_PROFILE_NAME="$PROFILE_NAME" CURRENT_PROJECT_VERSION="$FILE_SEND_BUILD" CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES
+          cat > "$SIGNING_DIR/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>method</key><string>app-store-connect</string><key>signingStyle</key><string>manual</string><key>teamID</key><string>$TEAM_ID</string><key>provisioningProfiles</key><dict><key>$BUNDLE_ID</key><string>$PROFILE_NAME</string></dict></dict></plist>
+          EOF
+          xcodebuild -exportArchive -archivePath build/AiyueTransfer.xcarchive -exportPath build/export -exportOptionsPlist "$SIGNING_DIR/ExportOptions.plist"
+          mv "$(find build/export -maxdepth 1 -name '*.ipa' -print -quit)" build/export/AiYueTransfer.ipa
+      - name: Verify signed App Group entitlement
+        run: |
+          set -euo pipefail
+          CHECK_DIR=$(mktemp -d)
+          unzip -q transfer-ios-next/build/export/AiYueTransfer.ipa -d "$CHECK_DIR"
+          APP_PATH=$(find "$CHECK_DIR/Payload" -maxdepth 1 -name '*.app' -print -quit)
+          codesign -d --entitlements :- "$APP_PATH" > "$CHECK_DIR/entitlements.plist"
+          python3 - "$CHECK_DIR/entitlements.plist" "$APP_PATH" <<'PY'
+          import plistlib, sys, subprocess
+          from pathlib import Path
+          sys.path.insert(0, "scripts")
+          from filesend_store import LABELS, BUNDLE
+          with open(sys.argv[1], 'rb') as stream:
+              entitlements = plistlib.load(stream)
+          assert 'group.com.luolihao.aiyuetransfer' in entitlements.get('com.apple.security.application-groups', []), '成品包缺少 App Group 签名权限，停止上传'
+          app = Path(sys.argv[2])
+          with (app / 'Info.plist').open('rb') as stream:
+              info = plistlib.load(stream)
+          expected_name = LABELS['en-US']['name']
+          assert info['CFBundleIdentifier'] == BUNDLE, '成品包 Bundle ID 不匹配'
+          assert info['CFBundleDisplayName'] == expected_name, '成品包安装显示名与英文商店标题不一致'
+          assert info['CFBundleName'] == expected_name, '成品包 Bundle Name 不匹配'
+          assert info['ITSAppUsesNonExemptEncryption'] is False, '成品包出口合规声明不匹配'
+          for language in ('en', 'zh-Hans', 'zh-Hant'):
+              data = subprocess.check_output(['plutil', '-convert', 'xml1', '-o', '-', str(app / (language + '.lproj') / 'InfoPlist.strings')])
+              localized = plistlib.loads(data)
+              assert localized['CFBundleDisplayName'] == expected_name, '成品包本地化安装名不匹配：' + language
+          print('成品包 App Group、Bundle ID、三语言安装名及加密声明验证通过：', expected_name)
+          PY
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: AiYueTransfer-iOS-IPA
+          path: transfer-ios-next/build/export/AiYueTransfer.ipa
+          if-no-files-found: ignore
+      - name: Upload to App Store Connect
+        if: github.event_name == 'workflow_dispatch' && inputs.operation == 'release'
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          API_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_${API_KEY_ID}.p8"
+          echo "$API_PRIVATE_KEY_BASE64" | base64 -D > "$API_KEY_PATH"
+          xcrun altool --validate-app --type ios -f transfer-ios-next/build/export/AiYueTransfer.ipa --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER_ID"
+          xcrun altool --upload-app --type ios -f transfer-ios-next/build/export/AiYueTransfer.ipa --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER_ID"
+      - name: Clean signing material
+        if: always()
+        run: |
+          security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+          rm -rf "$SIGNING_DIR" "$HOME/.appstoreconnect/private_keys"
+          rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/${PROFILE_UUID:-}.mobileprovision"

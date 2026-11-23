@@ -47,6 +47,25 @@ final class FileImportService {
     }
 
     func importFiles(_ files: [ImportedFile]) async throws -> [TrackRecord] {
+        var tracksFromPackages: [TrackRecord] = []
+        for file in files where file.kind == .package {
+            let access = securityScope.beginAccessing(file.sourceURL)
+            defer { if access { securityScope.endAccessing(file.sourceURL) } }
+            let temporary = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? fileManager.removeItem(at: temporary) }
+            let (manifest, urls) = try MusicPackage.extract(file.sourceURL, to: temporary)
+            let audio = urls.first { $0.pathExtension.lowercased() == "mp3" }!
+            // Normalize companion names to the audio stem for the existing importer.
+            var resources = [ImportedFile(sourceURL: audio, kind: .audio)]
+            for (path, kind) in [(manifest.lyricsPath, ImportedFile.Kind.lyrics), (manifest.coverPath, ImportedFile.Kind.cover)] {
+                guard let path else { continue }
+                let source = temporary.appendingPathComponent(path)
+                let renamed = audio.deletingPathExtension().appendingPathExtension(source.pathExtension)
+                if source != renamed { try fileManager.copyItem(at: source, to: renamed) }
+                resources.append(ImportedFile(sourceURL: renamed, kind: kind))
+            }
+            tracksFromPackages += try await importFiles(resources)
+        }
         try fileManager.createDirectory(
             at: rootDirectory,
             withIntermediateDirectories: true
@@ -57,7 +76,7 @@ final class FileImportService {
                 .lastPathComponent.lowercased()
             lyricFiles[key] = file
         }
-        var tracks: [TrackRecord] = []
+        var tracks: [TrackRecord] = tracksFromPackages
         for file in files where file.kind == .audio {
             let ext = file.sourceURL.pathExtension.lowercased()
             guard Self.supportedAudioExtensions.contains(ext) else {
@@ -67,7 +86,8 @@ final class FileImportService {
                 .lastPathComponent.lowercased()
             let track = try await importAudio(
                 file,
-                lyrics: lyricFiles[key]
+                lyrics: lyricFiles[key],
+                cover: files.first { $0.kind == .cover && $0.sourceURL.deletingPathExtension().lastPathComponent.lowercased() == key }
             )
             tracks.append(track)
         }
@@ -76,7 +96,8 @@ final class FileImportService {
 
     private func importAudio(
         _ audio: ImportedFile,
-        lyrics: ImportedFile?
+        lyrics: ImportedFile?,
+        cover: ImportedFile?
     ) async throws -> TrackRecord {
         let didAccessAudio = securityScope.beginAccessing(audio.sourceURL)
         defer {
@@ -135,9 +156,22 @@ final class FileImportService {
             ? fallback.artist : embeddedArtist
 
         var stagedArtwork: URL?
+        var artworkOrigin: CoverArtworkOrigin = .generated
         if let artwork = metadata.artworkData, !artwork.isEmpty {
+            artworkOrigin = .embedded
             let target = staging.appending(path: "artwork")
             try artwork.write(to: target, options: .atomic)
+            stagedArtwork = target
+        } else if let cover {
+            artworkOrigin = .companion
+            let access = securityScope.beginAccessing(cover.sourceURL)
+            defer {
+                if access {
+                    securityScope.endAccessing(cover.sourceURL)
+                }
+            }
+            let target = staging.appending(path: "artwork")
+            try fileManager.copyItem(at: cover.sourceURL, to: target)
             stagedArtwork = target
         } else if let generatedArtwork = try? artworkGenerator.generateArtwork(
             title: resolvedTitle,
@@ -148,6 +182,16 @@ final class FileImportService {
             try generatedArtwork.write(to: target, options: .atomic)
             stagedArtwork = target
         }
+        // Reimporting the same MP3 must not discard already downloaded resources.
+        for (name, missing) in [("lyrics.lrc", stagedLyrics == nil), ("artwork", stagedArtwork == nil)] where missing {
+            let previous = destination.appendingPathComponent(name)
+            if fileManager.fileExists(atPath: previous.path) {
+                let target = staging.appendingPathComponent(name)
+                try fileManager.copyItem(at: previous, to: target)
+                if name == "lyrics.lrc" { stagedLyrics = target } else { stagedArtwork = target; artworkOrigin = .existing }
+            }
+        }
+        // 导入只整理本地文件；封面由资料库的后台队列补齐，歌词仅按按钮查询。
 
         if fileManager.fileExists(atPath: destination.path) {
             try fileManager.removeItem(at: destination)
@@ -162,7 +206,7 @@ final class FileImportService {
         let finalArtwork = stagedArtwork.map {
             destination.appending(path: $0.lastPathComponent).path
         }
-        return TrackRecord(
+        let record = TrackRecord(
             id: identifier,
             title: resolvedTitle,
             artist: resolvedArtist,
@@ -173,6 +217,8 @@ final class FileImportService {
             artworkReference: finalArtwork,
             lyricsReference: finalLyrics
         )
+        record.artworkOriginRaw = artworkOrigin.rawValue
+        return record
     }
 
     private func fallbackMetadata(

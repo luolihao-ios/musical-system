@@ -1,0 +1,8 @@
+{
+  "version": "1.0.2",
+  "whatsNew": {
+    "zh-Hans": "• 优化 iPhone 和 iPad 的界面布局与显示适配。\n• 完善手机与电脑浏览器之间的双向文件传输体验。\n• 优化多文件选择、拖拽添加及发送前的文件编辑。\n• 改进传输进度和完成状态的显示，修复已知问题。",
+    "zh-Hant": "• 最佳化 iPhone 和 iPad 的介面配置與顯示適配。\n• 改善手機與電腦瀏覽器之間的雙向檔案傳輸體驗。\n• 最佳化多檔案選取、拖放新增及傳送前的檔案編輯。\n• 改善傳輸進度與完成狀態的顯示，修正已知問題。",
+    "en-US": "• Improved layouts for iPhone and iPad.\n• Improved two-way file transfers between your phone and a computer browser.\n• Improved multiple-file selection, drag and drop, and editing before sending.\n• Improved transfer progress and completion status, with fixes for known issues."
+  }
+}

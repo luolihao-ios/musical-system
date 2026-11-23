@@ -1,8 +1,0 @@
-<Solution>
-  <Folder Name="/src/">
-    <Project Path="src/LocalMusicPlayer/LocalMusicPlayer.csproj" />
-  </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/LocalMusicPlayer.Tests/LocalMusicPlayer.Tests.csproj" />
-  </Folder>
-</Solution>

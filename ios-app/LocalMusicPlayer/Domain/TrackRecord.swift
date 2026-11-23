@@ -4,6 +4,8 @@ import SwiftData
 enum TrackSourceKind: String, Codable, Sendable {
     case importedFile
     case mediaLibrary
+    // 仅用于当前播放队列，不写入本地歌曲资料库。
+    case onlinePreview
 }
 
 @Model
@@ -20,6 +22,9 @@ final class TrackRecord {
     var isLiked: Bool
     var isAvailable: Bool
     var lastPlayedAt: Date?
+    // 可空新增字段让旧资料库保留歌曲；历史为空意味着未知，而非已搜索无结果。
+    var artworkOriginRaw: String? = nil
+    var coverSearchHistoryData: Data? = nil
 
     var sourceKind: TrackSourceKind {
         get { TrackSourceKind(rawValue: sourceKindRaw) ?? .importedFile }

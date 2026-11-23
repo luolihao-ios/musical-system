@@ -1,0 +1,159 @@
+{
+  "app": "6806107359",
+  "version": "0.2.1",
+  "locale": "zh-Hans",
+  "libraryCount": 20,
+  "newImages": 14,
+  "draftPlacements": 14,
+  "counts": {
+    "APP_SCREENSHOT:IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE": 4,
+    "APP_SCREENSHOT:IPAD_13_PROFILE": 4,
+    "APP_SCREENSHOT:IPHONE_DUO_PROFILE": 4,
+    "PRODUCT_PAGE_HEADER_ASSET:DEFAULT_PROFILE": 1,
+    "APP_STORE_SEARCH_RESULTS_ASSET:DEFAULT_PROFILE": 1
+  },
+  "orderVerified": {
+    "IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE": true,
+    "IPAD_13_PROFILE": true,
+    "IPHONE_DUO_PROFILE": true
+  },
+  "published": [
+    {
+      "version": "0.2",
+      "unchanged": true
+    },
+    {
+      "version": "0.1",
+      "unchanged": true
+    }
+  ],
+  "complete": true,
+  "selected": [
+    {
+      "file": "iphone-medium/01-aiyue-20261024-local.png",
+      "id": "04c00019-5acf-84df-8011-e6492f060130",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "referenceMatches": true,
+      "type": "APP_SCREENSHOT",
+      "group": "IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE",
+      "placements": 1
+    },
+    {
+      "file": "iphone-medium/02-aiyue-20261024-artwork.png",
+      "id": "3dc00019-5acf-84df-802c-626ad2a64e6b",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "referenceMatches": true,
+      "type": "APP_SCREENSHOT",
+      "group": "IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE",
+      "placements": 1
+    },
+    {
+      "file": "iphone-medium/03-aiyue-20261024-lyrics.png",
+      "id": "de800019-5acf-84df-803b-36905dde1568",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "referenceMatches": true,
+      "type": "APP_SCREENSHOT",
+      "group": "IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE",
+      "placements": 1
+    },
+    {
+      "file": "iphone-medium/04-aiyue-20261024-online.png",
+      "id": "ee000019-5acf-84df-802d-a9ab0a718a7c",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "referenceMatches": true,
+      "type": "APP_SCREENSHOT",
+      "group": "IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE",
+      "placements": 1
+    },
+    {
+      "file": "ipad-13/01-aiyue-20261024-v2-local.png",
+      "id": "9b800019-5acf-84df-8026-cc3f48b2f36d",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "referenceMatches": true,
+      "type": "APP_SCREENSHOT",
+      "group": "IPAD_13_PROFILE",
+      "placements": 1
+    },
+    {
+      "file": "ipad-13/02-aiyue-20261024-v2-artwork.png",
+      "id": "10000019-5acf-84df-803b-7a2b5d253dc2",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "referenceMatches": true,
+      "type": "APP_SCREENSHOT",
+      "group": "IPAD_13_PROFILE",
+      "placements": 1
+    },
+    {
+      "file": "ipad-13/03-aiyue-20261024-v2-lyrics.png",
+      "id": "a8000019-5acf-84df-8031-ef1149a7324f",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "referenceMatches": true,
+      "type": "APP_SCREENSHOT",
+      "group": "IPAD_13_PROFILE",
+      "placements": 1
+    },
+    {
+      "file": "ipad-13/04-aiyue-20261024-v2-online.png",
+      "id": "9c000019-5acf-84df-8005-04cea1d3f439",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "referenceMatches": true,
+      "type": "APP_SCREENSHOT",
+      "group": "IPAD_13_PROFILE",
+      "placements": 1
+    },
+    {
+      "file": "iphone-duo/01-aiyue-20261024-v2-local.png",
+      "id": "64800019-5acf-84df-801e-30e12e4fffe8",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "referenceMatches": true,
+      "type": "APP_SCREENSHOT",
+      "group": "IPHONE_DUO_PROFILE",
+      "placements": 1
+    },
+    {
+      "file": "iphone-duo/02-aiyue-20261024-v2-artwork.png",
+      "id": "ea800019-5acf-84df-8020-8d443d21ee2e",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "referenceMatches": true,
+      "type": "APP_SCREENSHOT",
+      "group": "IPHONE_DUO_PROFILE",
+      "placements": 1
+    },
+    {
+      "file": "iphone-duo/03-aiyue-20261024-v2-lyrics.png",
+      "id": "ddc00019-5acf-84df-8001-286715068c91",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "referenceMatches": true,
+      "type": "APP_SCREENSHOT",
+      "group": "IPHONE_DUO_PROFILE",
+      "placements": 1
+    },
+    {
+      "file": "iphone-duo/04-aiyue-20261024-v2-online.png",
+      "id": "1a000019-5acf-84df-802c-146df55752b8",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "referenceMatches": true,
+      "type": "APP_SCREENSHOT",
+      "group": "IPHONE_DUO_PROFILE",
+      "placements": 1
+    },
+    {
+      "file": "creative/aiyue-20261024-v2-header.png",
+      "id": "b5400019-5acf-84df-8030-7c5ca33f0bd0",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "referenceMatches": true,
+      "type": "PRODUCT_PAGE_HEADER_ASSET",
+      "group": "DEFAULT_PROFILE",
+      "placements": 1
+    },
+    {
+      "file": "creative/aiyue-20261024-v2-search.png",
+      "id": "6a000019-5acf-84df-8033-1853be8debec",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "referenceMatches": true,
+      "type": "APP_STORE_SEARCH_RESULTS_ASSET",
+      "group": "DEFAULT_PROFILE",
+      "placements": 1
+    }
+  ]
+}

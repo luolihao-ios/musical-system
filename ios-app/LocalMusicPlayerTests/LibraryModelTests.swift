@@ -6,6 +6,326 @@ import XCTest
 final class LibraryModelTests: XCTestCase {
     private var modelContainers: [ModelContainer] = []
 
+    func testPlayingGroupReplacesQueueEvenIfFirstSongIsAlreadyPlaying() async throws {
+        let playback = PreviewPlaybackFixture()
+        let model = LibraryModel(store: try makeStore(), fileImporter: FakeFileImporter(),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: playback, catalog: BlockingCatalogFixture())
+        let address = URL(string: "https://example.org/preview.mp3")!
+        let first = CatalogTrack(id: "first", title: "First", artist: "Artist",
+                                 audioURL: address, license: .publicDomain, previewURL: address)
+        let second = CatalogTrack(id: "second", title: "Second", artist: "Artist",
+                                  audioURL: address, license: .publicDomain, previewURL: address)
+        try await model.toggleCatalogPreview(first)
+        try await model.playCatalogGroup([first, second])
+        XCTAssertTrue(playback.state.isPlaying)
+        XCTAssertEqual(playback.state.queue.map(\.id), [first.previewID, second.previewID])
+    }
+
+    func testAdvancingOnlineQueueLoadsTheNextSongsArtwork() async throws {
+        let playback = PreviewPlaybackFixture()
+        let model = LibraryModel(store: try makeStore(), fileImporter: FakeFileImporter(),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: playback, catalog: QueueArtworkFixture())
+        let audio = URL(string: "https://example.org/preview.mp3")!
+        let songs = ["first", "second"].map {
+            CatalogTrack(id: $0, title: $0, artist: "Artist", audioURL: audio, license: .publicDomain, previewURL: audio)
+        }
+        try await model.playCatalogGroup(songs)
+        playback.state.currentIndex = 1
+        for _ in 0..<200 {
+            if playback.state.currentTrack?.artworkReference != nil { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertEqual(playback.state.currentTrack?.artworkReference, "/second.jpg")
+        XCTAssertEqual(playback.state.queue.count, 2)
+        XCTAssertTrue(playback.state.isPlaying)
+    }
+
+    func testPreviewArtworkArrivingDuringPauseKeepsLyricsAndDoesNotResumeAudio() async throws {
+        let provider = DelayedPreviewArtworkFixture()
+        let playback = PreviewPlaybackFixture()
+        let model = LibraryModel(store: try makeStore(), fileImporter: FakeFileImporter(),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: playback, catalog: provider)
+        let song = CatalogTrack(id: "preview", title: "歌曲", artist: "歌手",
+            audioURL: URL(string: "https://example.org/a.mp3")!, license: .publicDomain,
+            previewURL: URL(string: "https://example.org/a.mp3")!)
+        let request = Task { try await model.toggleCatalogPreview(song) }
+        while !(await provider.started) { await Task.yield() }
+        try await model.toggleCatalogPreview(song)
+        let current = try XCTUnwrap(playback.state.currentTrack)
+        playback.refreshTrackMetadata(TrackSnapshot(id: current.id, title: current.title, artist: current.artist,
+            album: current.album, duration: current.duration, sourceKind: current.sourceKind,
+            sourceReference: current.sourceReference, lyricsReference: "/fixture.lrc"))
+        await provider.finish()
+        try await request.value
+        XCTAssertFalse(playback.state.isPlaying)
+        XCTAssertEqual(playback.state.currentTrack?.artworkReference, "/provider.jpg")
+        XCTAssertEqual(playback.state.currentTrack?.lyricsReference, "/fixture.lrc")
+    }
+
+    func testDuplicateCatalogDownloadRequestsImportOnlyOnce() async throws {
+        let store = try makeStore()
+        let provider = BlockingCatalogFixture()
+        let model = LibraryModel(store: store,
+            fileImporter: ImportedCoverFixture(record: track(id: "downloaded", title: "Embedded", artist: "Old")),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: FakeLibraryPlayback(), catalog: provider)
+        let song = CatalogTrack(id: "jamendo-12", title: "Provider Song", artist: "Provider Artist",
+            audioURL: URL(string: "https://example.org/song.mp3")!, license: .publicDomain)
+        let first = Task { await model.downloadCatalogTrack(song) }
+        while await provider.count == 0 { await Task.yield() }
+        await model.downloadCatalogTrack(song)
+        XCTAssertTrue(model.catalogDownloads[song.id]?.isBusy == true)
+        await provider.finish()
+        await first.value
+        await model.downloadCatalogTrack(song)
+        let count = await provider.count
+        XCTAssertEqual(count, 1)
+        XCTAssertEqual(model.catalogDownloads[song.id], .completed)
+        XCTAssertEqual(model.tracks.count, 1)
+        XCTAssertEqual(model.tracks.first?.title, "Provider Song")
+    }
+
+    func testFailedCatalogDownloadCanBeRetried() async throws {
+        let provider = BlockingCatalogFixture()
+        let model = LibraryModel(store: try makeStore(),
+            fileImporter: ImportedCoverFixture(record: track(id: "retry", title: "Song", artist: "A")),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: FakeLibraryPlayback(), catalog: provider)
+        let song = CatalogTrack(id: "jamendo-retry", title: "Song", artist: "A",
+            audioURL: URL(string: "https://example.org/song.mp3")!, license: .publicDomain)
+        let first = Task { await model.downloadCatalogTrack(song) }
+        while await provider.count == 0 { await Task.yield() }
+        await provider.fail()
+        await first.value
+        guard case .failed = model.catalogDownloads[song.id] else { return XCTFail("失败时必须允许重试") }
+        let second = Task { await model.downloadCatalogTrack(song) }
+        while await provider.count < 2 { await Task.yield() }
+        await provider.finish()
+        await second.value
+        XCTAssertEqual(model.catalogDownloads[song.id], .completed)
+        XCTAssertEqual(model.tracks.count, 1)
+    }
+
+    func testCatalogImportPreservesProviderMetadataAndArtwork() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cover = root.appendingPathComponent("provider.jpg")
+        try Data("provider-image".utf8).write(to: cover)
+        let incoming = track(id: "provider-song", title: "错误内嵌标题", artist: "错误内嵌歌手")
+        incoming.sourceReference = root.appendingPathComponent("audio.mp3").path
+        incoming.artworkReference = root.appendingPathComponent("artwork-generated.jpg").path
+        let store = try makeStore()
+        let model = LibraryModel(store: store, fileImporter: ImportedCoverFixture(record: incoming),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: FakeLibraryPlayback())
+        let catalog = CatalogTrack(id: "jamendo-9", title: "Song - Live", artist: "A - B",
+            audioURL: URL(string: "https://example.org/song.mp3")!, license: .publicDomain)
+        try await model.importCatalogTrack(catalog, audioURL: root.appendingPathComponent("download.mp3"), artworkURL: cover)
+        let saved = try XCTUnwrap(store.track(id: "provider-song"))
+        XCTAssertEqual(saved.title, "Song - Live")
+        XCTAssertEqual(saved.artist, "A - B")
+        XCTAssertEqual(saved.artworkOriginRaw, CoverArtworkOrigin.downloaded.rawValue)
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: saved.artworkReference!)), Data("provider-image".utf8))
+    }
+
+    func testEmptyCatalogImportIsFailureNotCompletedDownload() async throws {
+        let model = LibraryModel(store: try makeStore(), fileImporter: FakeFileImporter(),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: FakeLibraryPlayback())
+        let catalog = CatalogTrack(id: "jamendo-9", title: "Song", artist: "A",
+            audioURL: URL(string: "https://example.org/song.mp3")!, license: .publicDomain)
+        do {
+            try await model.importCatalogTrack(catalog, audioURL: URL(fileURLWithPath: "/download.mp3"), artworkURL: nil)
+            XCTFail("没有导入记录时必须返回错误")
+        } catch {
+            XCTAssertTrue(model.tracks.isEmpty)
+            XCTAssertFalse(model.isImporting)
+        }
+    }
+
+    func testNoMatchHistorySurvivesModelRecreationUntilManualRetry() async throws {
+        let store = try makeStore()
+        let song = track(id: "history", title: "历史歌曲", artist: "歌手")
+        song.artworkReference = "/music/artwork-generated.jpg"
+        try store.upsert(song)
+        let provider = EmptyHistoryCoverProvider()
+        func makeModel() -> LibraryModel {
+            LibraryModel(store: store, fileImporter: FakeFileImporter(),
+                systemImporter: FakeSystemImporter(result: .imported([])),
+                playback: FakeLibraryPlayback(), coverSearch: provider)
+        }
+        let first = makeModel()
+        first.scheduleMissingCoverSearch()
+        try await waitForCovers(first)
+        let second = makeModel()
+        second.scheduleMissingCoverSearch()
+        try await waitForCovers(second)
+        let beforeRetry = await provider.count
+        XCTAssertEqual(beforeRetry, 1, "搜过无结果的歌曲不能因为重新打开页面或 App 而再次查询")
+        second.retryMissingCovers()
+        try await waitForCovers(second)
+        let afterRetry = await provider.count
+        XCTAssertEqual(afterRetry, 2)
+    }
+
+    func testUnavailableTrackIsNotSearched() async throws {
+        let store = try makeStore()
+        let song = track(id: "missing-audio", title: "文件失效", artist: "歌手")
+        song.isAvailable = false
+        try store.upsert(song)
+        let provider = EmptyHistoryCoverProvider()
+        let model = LibraryModel(store: store, fileImporter: FakeFileImporter(),
+            systemImporter: FakeSystemImporter(result: .imported([])),
+            playback: FakeLibraryPlayback(), coverSearch: provider)
+        model.scheduleMissingCoverSearch()
+        try await waitForCovers(model)
+        let count = await provider.count
+        XCTAssertEqual(count, 0)
+    }
+
+    func testNetworkFailureIsPersistedAndDoesNotImmediatelyRetryOnReopen() async throws {
+        let store = try makeStore()
+        let song = track(id: "offline", title: "断网歌曲", artist: "歌手")
+        try store.upsert(song)
+        let provider = FailedHistoryCoverProvider()
+        let first = LibraryModel(store: store, fileImporter: FakeFileImporter(),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: FakeLibraryPlayback(), coverSearch: provider)
+        first.scheduleMissingCoverSearch()
+        try await waitForCovers(first)
+        let history = try XCTUnwrap(CoverSearchHistory.read(song))
+        XCTAssertEqual(history.status, .failed)
+        XCTAssertNotNil(history.retryAfter)
+        let second = LibraryModel(store: store, fileImporter: FakeFileImporter(),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: FakeLibraryPlayback(), coverSearch: provider)
+        second.scheduleMissingCoverSearch()
+        try await waitForCovers(second)
+        let count = await provider.count
+        XCTAssertEqual(count, 1)
+        first.cancelCoverSearch(); second.cancelCoverSearch()
+    }
+
+    private func waitForCovers(_ model: LibraryModel) async throws {
+        // 先让新建 Task 开始，再等待队列完成，避免只检查尚未置位的 isCompletingResources。
+        for _ in 0..<10 { await Task.yield() }
+        for _ in 0..<400 {
+            if !model.isCompletingResources { return }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTFail("封面队列未结束")
+    }
+
+    func testGeneratedCoverIsReplacedAfterImportAndSavedWithSource() async throws {
+        let store = try makeStore()
+        let incoming = track(id: "new-cover", title: "你好", artist: "歌手")
+        incoming.artworkReference = "/music/artwork-generated.jpg"
+        let started = expectation(description: "查询开始")
+        let provider = ControlledCoverProvider(onStart: { started.fulfill() })
+        let model = LibraryModel(store: store, fileImporter: ImportedCoverFixture(record: incoming),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: FakeLibraryPlayback(), coverSearch: provider)
+        await model.importFiles([])
+        await fulfillment(of: [started], timeout: 2)
+        XCTAssertEqual(model.tracks.first?.artworkReference, "/music/artwork-generated.jpg")
+        await provider.finish()
+        for _ in 0..<200 {
+            if !model.isCompletingResources { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let path = try XCTUnwrap(store.track(id: "new-cover")?.artworkReference)
+        let directory = URL(fileURLWithPath: path).deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: path)), Data("test-image".utf8))
+        let source = try JSONSerialization.jsonObject(with: Data(contentsOf: directory.appendingPathComponent("source.json"))) as? [String: Any]
+        XCTAssertEqual(source?["provider"] as? String, "测试来源")
+        XCTAssertEqual(source?["imageURL"] as? String, "https://example.org/art.jpg")
+        XCTAssertEqual(model.tracks.first?.artworkReference, path)
+        XCTAssertNil(model.tracks.first?.lyricsReference)
+    }
+
+    func testImportReturnsWhileCoverSearchWaitsAndDoesNotFetchLyrics() async throws {
+        let store = try makeStore()
+        let incoming = track(id: "cover-test", title: "明天你好 (Live)", artist: "歌手")
+        incoming.artworkReference = "/music/artwork-generated.jpg"
+        let started = expectation(description: "后台封面查询开始")
+        let provider = ControlledCoverProvider(onStart: { started.fulfill() })
+        let model = LibraryModel(store: store, fileImporter: ImportedCoverFixture(record: incoming),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: FakeLibraryPlayback(), coverSearch: provider)
+        await model.importFiles([])
+        XCTAssertFalse(model.isImporting)
+        XCTAssertEqual(model.tracks.count, 1, "封面查询尚未完成时音乐必须已经导入")
+        await fulfillment(of: [started], timeout: 2)
+        XCTAssertTrue(model.isCompletingResources)
+        try model.delete(model.tracks[0])
+        await provider.finish()
+        for _ in 0..<200 {
+            if !model.isCompletingResources { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertFalse(model.isCompletingResources)
+        XCTAssertTrue(model.tracks.isEmpty, "延迟封面结果不能复活已删除歌曲")
+        XCTAssertNil(try store.track(id: "cover-test"))
+    }
+
+    func testExistingRealCoverIsNotSearched() async throws {
+        let store = try makeStore()
+        let incoming = track(id: "real-cover", title: "你好", artist: "歌手")
+        incoming.artworkReference = "/music/custom-cover.jpg"
+        let provider = ControlledCoverProvider(onStart: { XCTFail("自选封面不应查询") })
+        let model = LibraryModel(store: store, fileImporter: ImportedCoverFixture(record: incoming),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: FakeLibraryPlayback(), coverSearch: provider)
+        await model.importFiles([])
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(model.tracks.first?.artworkReference, "/music/custom-cover.jpg")
+        let count = await provider.count
+        XCTAssertEqual(count, 0)
+    }
+
+    func testDifferentAlbumsDoNotReuseAnotherAlbumsCover() async throws {
+        let store = try makeStore()
+        let first = track(id: "album-one", title: "同名歌曲", artist: "同一歌手")
+        first.album = "第一张专辑"; first.artworkReference = "/music/artwork-generated.jpg"
+        let second = track(id: "album-two", title: "同名歌曲", artist: "同一歌手")
+        second.album = "第二张专辑"; second.artworkReference = "/music/artwork-generated.jpg"
+        try store.upsert(first); try store.upsert(second)
+        let model = LibraryModel(store: store, fileImporter: FakeFileImporter(),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: FakeLibraryPlayback(), coverSearch: AlbumCoverFixture())
+        model.retryMissingCovers()
+        for _ in 0..<200 {
+            if let path = try store.track(id: "album-two")?.artworkReference, path.hasSuffix("artwork-online.jpg"), !model.isCompletingResources { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let firstPath = try XCTUnwrap(store.track(id: "album-one")?.artworkReference)
+        let secondPath = try XCTUnwrap(store.track(id: "album-two")?.artworkReference)
+        defer {
+            for path in [firstPath, secondPath] where path.hasSuffix("artwork-online.jpg") {
+                try? FileManager.default.removeItem(at: URL(fileURLWithPath: path).deletingLastPathComponent())
+            }
+        }
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: firstPath)), Data("第一张专辑".utf8))
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: secondPath)), Data("第二张专辑".utf8))
+    }
+
+    func testDelayedSearchDoesNotReplaceManuallyChangedCover() async throws {
+        let store = try makeStore()
+        let incoming = track(id: "manual-race", title: "你好", artist: "歌手")
+        incoming.artworkReference = "/music/artwork-generated.jpg"
+        incoming.artworkOriginRaw = CoverArtworkOrigin.generated.rawValue
+        let started = expectation(description: "封面查询已开始")
+        let provider = ControlledCoverProvider(onStart: { started.fulfill() })
+        let model = LibraryModel(store: store, fileImporter: ImportedCoverFixture(record: incoming),
+            systemImporter: FakeSystemImporter(result: .imported([])), playback: FakeLibraryPlayback(), coverSearch: provider)
+        await model.importFiles([])
+        await fulfillment(of: [started], timeout: 2)
+        let current = try XCTUnwrap(store.track(id: "manual-race"))
+        current.artworkReference = "/music/my-cover.jpg"
+        current.artworkOriginRaw = CoverArtworkOrigin.manual.rawValue
+        try store.upsert(current)
+        try model.reload()
+        await provider.finish()
+        for _ in 0..<200 {
+            if !model.isCompletingResources { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertEqual(try store.track(id: "manual-race")?.artworkReference, "/music/my-cover.jpg")
+        XCTAssertEqual(model.tracks.first?.artworkReference, "/music/my-cover.jpg")
+    }
+
     func testSearchIsAccentInsensitiveAndPlayUsesFilteredQueue() async throws {
         let store = try makeStore()
         try store.upsert(track(id: "one", title: "Lumière", artist: "Beyoncé"))
@@ -41,6 +361,28 @@ final class LibraryModelTests: XCTestCase {
         XCTAssertTrue(model.canImportFiles)
     }
 
+    func testSecondImportRequestIsIgnoredWhileImportIsRunning() async throws {
+        let importer = BlockingFileImporter()
+        let started = expectation(description: "第一次导入已开始")
+        importer.onStart = { started.fulfill() }
+        let model = LibraryModel(
+            store: try makeStore(),
+            fileImporter: importer,
+            systemImporter: FakeSystemImporter(result: .imported([])),
+            playback: FakeLibraryPlayback()
+        )
+
+        let first = Task { await model.importFiles([]) }
+        await fulfillment(of: [started], timeout: 1)
+        let second = Task { await model.importFiles([]) }
+        await Task.yield()
+
+        XCTAssertEqual(importer.callCount, 1)
+        importer.finishAll()
+        await first.value
+        await second.value
+    }
+
     func testToggleLikeUpdatesVisibleTrack() async throws {
         let store = try makeStore()
         try store.upsert(track(id: "one", title: "夜航星", artist: "歌手"))
@@ -55,6 +397,24 @@ final class LibraryModelTests: XCTestCase {
         try model.toggleLike(model.tracks[0])
 
         XCTAssertTrue(model.tracks[0].isLiked)
+    }
+
+    func testDeletingTwoTracksInSuccessionKeepsLibraryConsistent() throws {
+        let store = try makeStore()
+        try store.upsert(track(id: "one", title: "第一首", artist: "歌手"))
+        try store.upsert(track(id: "two", title: "第二首", artist: "歌手"))
+        let model = LibraryModel(
+            store: store,
+            fileImporter: FakeFileImporter(),
+            systemImporter: FakeSystemImporter(result: .imported([])),
+            playback: FakeLibraryPlayback()
+        )
+        try model.reload()
+
+        try model.delete(model.tracks[0])
+        try model.delete(model.tracks[0])
+
+        XCTAssertTrue(model.tracks.isEmpty)
     }
 
     func testGroupsTracksByAlbumAndArtistWithUnknownFallbacks() throws {
@@ -91,11 +451,11 @@ final class LibraryModelTests: XCTestCase {
 
         XCTAssertEqual(
             Set(model.groups(for: .albums).map(\.title)),
-            Set(["测试专辑", "未知专辑"])
+            Set(["测试专辑", String(localized: "未知专辑")])
         )
         XCTAssertEqual(
             Set(model.groups(for: .artists).map(\.title)),
-            Set(["测试歌手", "未知歌手"])
+            Set(["测试歌手", String(localized: "未知歌手")])
         )
     }
 
@@ -122,10 +482,141 @@ final class LibraryModelTests: XCTestCase {
     }
 }
 
+private actor EmptyHistoryCoverProvider: CoverArtSearching {
+    private(set) var count = 0
+    func isAvailable() -> Bool { true }
+    func findCover(_ query: MusicResourceQuery) async throws -> CoverArtMatch? {
+        count += 1
+        return nil
+    }
+}
+
+private actor FailedHistoryCoverProvider: CoverArtSearching {
+    private(set) var count = 0
+    func isAvailable() -> Bool { true }
+    func findCover(_ query: MusicResourceQuery) async throws -> CoverArtMatch? {
+        count += 1
+        throw URLError(.notConnectedToInternet)
+    }
+}
+
+private actor AlbumCoverFixture: CoverArtSearching {
+    func isAvailable() -> Bool { true }
+    func findCover(_ query: MusicResourceQuery) async throws -> CoverArtMatch? {
+        CoverArtMatch(data: Data(query.album.utf8), imageURL: URL(string: "https://example.org/cover.jpg")!,
+            pageURL: nil, title: query.title, artistFallback: false, provider: "测试来源")
+    }
+}
+
+@MainActor
+private struct ImportedCoverFixture: FileImporting {
+    let record: TrackRecord
+    func importFiles(_ files: [ImportedFile]) async throws -> [TrackRecord] { [record] }
+}
+
+private actor BlockingCatalogFixture: CatalogDownloading {
+    private(set) var count = 0
+    private var continuation: CheckedContinuation<Void, Error>?
+    func download(_ track: CatalogTrack, to directory: URL, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
+        count += 1
+        try await withCheckedThrowingContinuation { continuation = $0 }
+        progress(1)
+        return directory.appendingPathComponent("audio.mp3")
+    }
+    func downloadArtwork(_ track: CatalogTrack, to directory: URL) async throws -> URL? { nil }
+    func finish() { continuation?.resume(); continuation = nil }
+    func fail() { continuation?.resume(throwing: URLError(.notConnectedToInternet)); continuation = nil }
+}
+
+private actor DelayedPreviewArtworkFixture: CatalogDownloading {
+    private(set) var started = false
+    private var continuation: CheckedContinuation<URL?, Never>?
+    func download(_ track: CatalogTrack, to directory: URL, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
+        throw URLError(.unsupportedURL)
+    }
+    func downloadArtwork(_ track: CatalogTrack, to directory: URL) async throws -> URL? {
+        started = true
+        return await withCheckedContinuation { continuation = $0 }
+    }
+    func finish() { continuation?.resume(returning: URL(fileURLWithPath: "/provider.jpg")); continuation = nil }
+}
+
+@MainActor
+private final class PreviewPlaybackFixture: LibraryPlaybackControlling {
+    var state = PlaybackState() { didSet { observer?(state) } }
+    private var observer: ((PlaybackState) -> Void)?
+    func pause() throws { state.isPlaying = false }
+    func play() async throws { state.isPlaying = true }
+    func playTrack(_ track: TrackSnapshot, in queue: [TrackSnapshot]) async throws {
+        state = PlaybackState(queue: queue, currentIndex: queue.firstIndex { $0.id == track.id }, isPlaying: true)
+    }
+    func refreshTrackMetadata(_ track: TrackSnapshot) {
+        if let index = state.queue.firstIndex(where: { $0.id == track.id }) { state.queue[index] = track }
+    }
+    func observeState(_ observer: @escaping (PlaybackState) -> Void) -> UUID {
+        self.observer = observer
+        observer(state)
+        return UUID()
+    }
+    func removeStateObserver(_ id: UUID) { observer = nil }
+}
+
+private actor QueueArtworkFixture: CatalogDownloading {
+    func download(_ track: CatalogTrack, to directory: URL, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
+        throw URLError(.unsupportedURL)
+    }
+    func downloadArtwork(_ track: CatalogTrack, to directory: URL) async throws -> URL? {
+        URL(fileURLWithPath: "/\(track.id).jpg")
+    }
+}
+
+private actor ControlledCoverProvider: CoverArtSearching {
+    let onStart: @Sendable () -> Void
+    private var continuation: CheckedContinuation<CoverArtMatch?, Never>?
+    private(set) var count = 0
+    init(onStart: @escaping @Sendable () -> Void) { self.onStart = onStart }
+    func isAvailable() -> Bool { true }
+    func findCover(_ query: MusicResourceQuery) async throws -> CoverArtMatch? {
+        count += 1
+        return await withCheckedContinuation { continuation in
+            self.continuation = continuation
+            onStart()
+        }
+    }
+    func finish() {
+        continuation?.resume(returning: CoverArtMatch(data: Data("test-image".utf8),
+            imageURL: URL(string: "https://example.org/art.jpg")!, pageURL: nil, title: "封面", artistFallback: false, provider: "测试来源"))
+        continuation = nil
+    }
+}
+
 @MainActor
 private struct FakeFileImporter: FileImporting {
     func importFiles(_ files: [ImportedFile]) async throws -> [TrackRecord] {
         []
+    }
+}
+
+@MainActor
+private final class BlockingFileImporter: FileImporting {
+    var onStart: (() -> Void)?
+    private(set) var callCount = 0
+    private var continuations: [CheckedContinuation<[TrackRecord], Error>] = []
+
+    func importFiles(_ files: [ImportedFile]) async throws -> [TrackRecord] {
+        callCount += 1
+        onStart?()
+        return try await withCheckedThrowingContinuation { continuation in
+            continuations.append(continuation)
+        }
+    }
+
+    func finishAll() {
+        let pending = continuations
+        continuations.removeAll()
+        for continuation in pending {
+            continuation.resume(returning: [])
+        }
     }
 }
 
@@ -140,6 +631,8 @@ private struct FakeSystemImporter: SystemLibraryImporting {
 
 @MainActor
 private final class FakeLibraryPlayback: LibraryPlaybackControlling {
+    func pause() throws { state.isPlaying = false }
+    func play() async throws { state.isPlaying = true }
     var state = PlaybackState()
     private(set) var queue: [TrackSnapshot] = []
     private(set) var selectedTrack: TrackSnapshot?

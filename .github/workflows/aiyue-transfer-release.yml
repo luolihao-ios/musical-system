@@ -1,42 +1,12 @@
 name: AiYue Transfer Release
 
 on:
-  push:
-    paths:
-      - "transfer-ios/**"
-      - "transfer-windows/**"
-      - "docs/transfer-protocol/**"
-      - ".github/workflows/aiyue-transfer-release.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  windows:
-    name: Windows installer
-    runs-on: windows-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: "10.0.x"
-      - name: Verify and publish
-        shell: pwsh
-        run: ./transfer-windows/scripts/verify.ps1
-      - name: Install Inno Setup
-        shell: pwsh
-        run: winget install --id JRSoftware.InnoSetup.7 --exact --source winget --silent --accept-package-agreements --accept-source-agreements
-      - name: Build installer
-        shell: pwsh
-        run: ./transfer-windows/scripts/package.ps1
-      - uses: actions/upload-artifact@v7
-        with:
-          name: AiYueTransfer-Windows-x64
-          path: transfer-windows/artifacts/installer/AiYueTransfer-Setup.exe
-          if-no-files-found: error
-
   ios:
     name: iOS signed IPA
     runs-on: macos-latest
@@ -56,9 +26,9 @@ jobs:
           P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
           APP_PROFILE: ${{ secrets.AIYUE_TRANSFER_APP_PROFILE_BASE64 }}
           SHARE_PROFILE: ${{ secrets.AIYUE_TRANSFER_SHARE_PROFILE_BASE64 }}
-          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
+          API_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
         run: |
           set -euo pipefail
           for value in "$P12" "$P12_PASSWORD" "$APP_PROFILE" "$SHARE_PROFILE" "$API_KEY_ID" "$API_ISSUER_ID" "$API_PRIVATE_KEY"; do
@@ -122,8 +92,7 @@ jobs:
             CODE_SIGN_IDENTITY='Apple Distribution' \
             AIYUE_TEAM_ID="$TEAM_ID" \
             AIYUE_APP_PROFILE_NAME="$APP_PROFILE_NAME" \
-            AIYUE_SHARE_PROFILE_NAME="$SHARE_PROFILE_NAME" \
-            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"
+            AIYUE_SHARE_PROFILE_NAME="$SHARE_PROFILE_NAME"
 
           cat > "$TEMP_SIGNING_DIR/ExportOptions.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -153,9 +122,9 @@ jobs:
           if-no-files-found: error
       - name: Validate and upload IPA to App Store Connect
         env:
-          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
+          API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.appstoreconnect/private_keys"
@@ -169,7 +138,7 @@ jobs:
       - name: Clean temporary signing material
         if: always()
         env:
-          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
         run: |
           security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
           rm -rf "$TEMP_SIGNING_DIR"

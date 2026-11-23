@@ -26,11 +26,38 @@ raise SystemExit("No available iPhone simulator was found.")
 '
 )"
 
+collect_player_diagnostics() {
+  local data_dir
+  data_dir="$(xcrun simctl get_app_container "$simulator_id" com.luolihao.musicalsystem data 2>/dev/null || true)"
+  if [ -n "$data_dir" ] && [ -f "$data_dir/Documents/music-player-interaction.log" ]; then
+    cp "$data_dir/Documents/music-player-interaction.log" "$ios_root/build/music-player-interaction.log"
+  fi
+  # 测试结束后 simctl 容器查询可能失效，保留每个测试容器的实际日志。
+  mkdir -p "$ios_root/build/player-evidence"
+  find "$HOME/Library/Developer/CoreSimulator/Devices" \
+    -path '*/data/Containers/Data/Application/*/Documents/*.log' \
+    -type f -print | while IFS= read -r logfile; do
+      container_id="$(basename "$(dirname "$(dirname "$logfile")")")"
+      cp "$logfile" "$ios_root/build/player-evidence/$container_id-$(basename "$logfile")"
+    done
+  xcrun xcresulttool export attachments \
+    --path "$ios_root/build/PlayerTests.xcresult" \
+    --output-path "$ios_root/build/player-evidence/screenshots" || true
+}
+trap 'test_status=$?; collect_player_diagnostics || true; exit "$test_status"' EXIT
+
+test_selection=(-parallel-testing-enabled NO)
+if [ "${TEST_FOCUS:-}" = "lyrics" ]; then
+  test_selection+=(-only-testing:LocalMusicPlayerTests/NowPlayingModelTests)
+fi
+
 xcodebuild test \
   -project "$ios_root/LocalMusicPlayer.xcodeproj" \
   -scheme LocalMusicPlayer \
   -configuration Debug \
   -destination "platform=iOS Simulator,id=$simulator_id" \
   -derivedDataPath "$ios_root/build/DerivedData" \
+  -resultBundlePath "$ios_root/build/PlayerTests.xcresult" \
+  "${test_selection[@]}" \
   CODE_SIGNING_ALLOWED=NO \
   COMPILER_INDEX_STORE_ENABLE=NO

@@ -1,5 +1,6 @@
 from pathlib import Path
 import plistlib
+import re
 import unittest
 
 
@@ -11,9 +12,19 @@ class ReleaseMetadataTests(unittest.TestCase):
         info = plistlib.loads((IOS_ROOT / "LocalMusicPlayer" / "Info.plist").read_bytes())
         project = (IOS_ROOT / "project.yml").read_text(encoding="utf-8")
 
-        self.assertEqual(info["CFBundleDisplayName"], "爱乐之城-musicPlayer")
-        self.assertIn('MARKETING_VERSION: "0.2"', project)
-        self.assertIn('CURRENT_PROJECT_VERSION: "32"', project)
+        self.assertEqual(info["CFBundleDisplayName"], "爱乐之城")
+        self.assertFalse(info["ITSAppUsesNonExemptEncryption"])
+        self.assertIn('MARKETING_VERSION: "0.2.3"', project)
+        self.assertIn('CURRENT_PROJECT_VERSION: "48"', project)
+
+    def test_upload_version_exceeds_last_apple_approved_version(self) -> None:
+        project = (IOS_ROOT / "project.yml").read_text(encoding="utf-8")
+        version = re.search(r'MARKETING_VERSION: "([0-9.]+)"', project)
+        self.assertIsNotNone(version)
+        parts = tuple(int(part) for part in version.group(1).split("."))
+        normalized = parts + (0,) * (3 - len(parts))
+        # 本轮只读回查显示 0.2.2 已发布。
+        self.assertGreater(normalized, (0, 2, 2), "已批准版本不能继续接收构建，须提高营销版本")
 
     def test_app_store_workflow_uses_macos_base64_decode_syntax(self) -> None:
         workflow = (IOS_ROOT.parent / ".github" / "workflows" / "ios-app-store.yml").read_text(
@@ -22,6 +33,34 @@ class ReleaseMetadataTests(unittest.TestCase):
 
         self.assertNotIn("base64 --decode", workflow)
         self.assertEqual(workflow.count("base64 -D"), 3)
+
+    def test_release_documentation_requires_unique_incrementing_build_number(self) -> None:
+        progress = (IOS_ROOT.parent / "docs" / "项目进度.md").read_text(encoding="utf-8")
+        self.assertIn(
+            "构建号必须大于 App Store Connect 中该 Bundle ID 最近一次成功上传的构建号",
+            progress,
+        )
+        self.assertIn("同一个构建号一旦成功上传", progress)
+        self.assertIn("本地调试、模拟器测试以及不上传的普通构建", progress)
+        self.assertIn("未上传的本地构建可以继续使用当前构建号", progress)
+        self.assertIn("不能替代 App 的构建号", progress)
+
+    def test_app_store_signing_settings_are_target_scoped(self) -> None:
+        project = (IOS_ROOT / "project.yml").read_text(encoding="utf-8")
+        workflow = (IOS_ROOT.parent / ".github" / "workflows" / "ios-app-store.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("CODE_SIGN_ENTITLEMENTS", project)
+        self.assertNotIn('PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME"', workflow)
+        self.assertIn('AIYUE_PROFILE_NAME="$PROFILE_NAME"', workflow)
+        self.assertIn('DEVELOPMENT_TEAM="$TEAM_ID"', workflow)
+        self.assertNotIn('CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"', workflow)
+        self.assertIn("Run iOS simulator tests", workflow)
+        self.assertIn("./ios-app/scripts/verify.sh", workflow)
+        self.assertIn("CODE_SIGNING_ALLOWED=YES", workflow)
+        self.assertIn("CODE_SIGNING_REQUIRED=YES", workflow)
+        self.assertIn("Verify exported App Group entitlement", workflow)
+        self.assertIn("group.com.luolihao.aiyuetransfer", workflow)
 
 
 if __name__ == "__main__":

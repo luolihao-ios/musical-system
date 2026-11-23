@@ -1,0 +1,17 @@
+{
+  "en-US": {
+    "name": "iYue File Transfer",
+    "subtitle": "WiFi Sharing for iPhone & PC",
+    "keywords": "browser,LAN,wireless,offline,local,computer,upload,download,web,QR,bulk,photos,video,send"
+  },
+  "zh-Hans": {
+    "name": "iOS文件传输助手",
+    "subtitle": "手机电脑双向互传，局域网轻松传文件",
+    "keywords": "无线,网页,浏览器,免数据线,批量,共享,接收,发送,上传,下载,Windows,WiFi,离线"
+  },
+  "zh-Hant": {
+    "name": "iOS 文件傳輸助手",
+    "subtitle": "手機電腦雙向互傳，區域網路傳檔",
+    "keywords": "無線,瀏覽器,免傳輸線,批次,分享,接收,發送,上傳,下載,Windows,WiFi,離線"
+  }
+}

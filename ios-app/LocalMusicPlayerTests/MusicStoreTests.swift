@@ -4,6 +4,21 @@ import XCTest
 
 @MainActor
 final class MusicStoreTests: XCTestCase {
+    func testDuplicateSongFromDifferentSourcesKeepsOneLibraryEntry() throws {
+        let container = try ModelContainerFactory.make(inMemory: true)
+        let store = try MusicStore(context: container.mainContext)
+        let first = makeTrack(id: "first", title: "同一首歌")
+        let second = makeTrack(id: "second", title: "同一首歌")
+        first.artist = "歌手"; second.artist = "歌手"
+        first.duration = 180; second.duration = 180
+        try store.upsert(first); try store.setLiked(trackID: first.id, isLiked: true)
+        try store.upsert(second)
+        XCTAssertEqual(try store.tracks().count, 1)
+        XCTAssertTrue(try store.tracks()[0].isLiked)
+        let live = makeTrack(id: "live", title: "同一首歌 (Live)")
+        try store.upsert(live)
+        XCTAssertEqual(try store.tracks().count, 2)
+    }
     func testTrackLikeAndPlaybackPreferencesRoundTrip() throws {
         let container = try ModelContainerFactory.make(inMemory: true)
         let store = try MusicStore(context: container.mainContext)
@@ -99,6 +114,33 @@ final class MusicStoreTests: XCTestCase {
             try store.playlistTracks(playlistID: playlist.id).map(\.id),
             ["first", "second"]
         )
+    }
+
+    func testDeleteTrackRemovesLibraryRecordAndPlaylistEntries() throws {
+        let container = try ModelContainerFactory.make(inMemory: true)
+        let store = try MusicStore(context: container.mainContext)
+        let track = makeTrack(id: "delete-me", title: "待删除")
+        try store.upsert(track)
+        let playlist = try store.createPlaylist(name: "清理测试")
+        try store.add(trackID: track.id, to: playlist.id)
+
+        XCTAssertTrue(try store.deleteTrack(id: track.id))
+        XCTAssertNil(try store.track(id: track.id))
+        XCTAssertTrue(try store.playlistTracks(playlistID: playlist.id).isEmpty)
+        XCTAssertFalse(try store.deleteTrack(id: track.id))
+    }
+
+    func testResolveImportedPathMigratesStaleContainerPrefix() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let songDirectory = root.appendingPathComponent("fingerprint", isDirectory: true)
+        try FileManager.default.createDirectory(at: songDirectory, withIntermediateDirectories: true)
+        let audio = songDirectory.appendingPathComponent("audio.mp3")
+        try Data([0x01]).write(to: audio)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let stale = "/var/mobile/Containers/Data/Application/old/Library/Application Support/ImportedMusic/fingerprint/audio.mp3"
+        XCTAssertEqual(MusicStore.resolveImportedPath(stale, root: root), audio.path)
     }
 
     private func makeTrack(id: String, title: String) -> TrackRecord {
