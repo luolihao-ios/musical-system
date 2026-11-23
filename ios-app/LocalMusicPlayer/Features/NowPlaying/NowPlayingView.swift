@@ -476,16 +476,19 @@ struct NowPlayingView: View {
                     Text(model.hasLyrics ? String(localized: "点击查看完整歌词") : String(localized: "暂无歌词 · 点击查看"))
                         .font(.subheadline)
                         .foregroundStyle(foreground.opacity(0.7))
+                        .multilineTextAlignment(.center)
                 } else {
                     ForEach(Array(lines.enumerated()), id: \.element.id) { entry in
                         Text(entry.element.text)
                             .font(entry.offset == 0 ? .subheadline.weight(.semibold) : .caption)
                             .foregroundStyle(foreground.opacity(entry.offset == 0 ? 0.95 : 0.55))
+                            .multilineTextAlignment(.center)
                             .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .center)
                     }
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 44)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .center)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

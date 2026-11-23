@@ -28,7 +28,7 @@ struct SyncedLyricsView: View {
             ScrollViewReader { proxy in
                 ZStack {
                     ScrollView {
-                        LazyVStack(spacing: 20) {
+                        LazyVStack(alignment: .center, spacing: 20) {
                             ForEach(
                                 Array(model.lyricLines.enumerated()),
                                 id: \.element.id
@@ -52,7 +52,8 @@ struct SyncedLyricsView: View {
                                         isPlayingLine ? 1.0 : (isScrubTarget ? 0.95 : 0.40)
                                     )
                                 )
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: .infinity, alignment: .center)
                                 .padding(.vertical, 6)
                                 .background {
                                     GeometryReader { rowGeo in

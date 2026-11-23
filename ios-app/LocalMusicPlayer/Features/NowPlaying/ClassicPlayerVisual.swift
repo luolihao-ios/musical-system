@@ -190,8 +190,9 @@ struct ClassicPlayerVisual: View {
                 Text(snippet.text)
                     .font(.caption)
                     .foregroundStyle(PlayerTheme.accent)
+                    .multilineTextAlignment(.center)
                     .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
             Spacer(minLength: 4)
             VStack(spacing: 5) {
