@@ -64,7 +64,7 @@ class IOSAPICompatibilityTests(unittest.TestCase):
         dock = (IOS_ROOT / "LocalMusicPlayer" / "Features" / "Shared" / "PlayerDockContainer.swift").read_text(encoding="utf-8")
         self.assertIn("PlayerDockContainer(", app_shell)
         self.assertNotIn(".sheet(isPresented: $showNowPlaying)", app_shell)
-        self.assertIn(".ignoresSafeArea(.container, edges: .bottom)", dock)
+        self.assertIn(".ignoresSafeArea()", dock)
         self.assertIn("menuClearance", dock)
         self.assertIn("UITabBar", dock)
 
