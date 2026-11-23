@@ -11,7 +11,6 @@ struct SyncedLyricsView: View {
     @Bindable var model: NowPlayingModel
     var foreground: Color = .primary
     var onTapLyrics: (() -> Void)? = nil
-    var onSwipeNext: (() -> Void)? = nil
     @State private var isUserBrowsing = false
     @State private var scrubbedIndex: Int?
     @State private var resumeFollowingTask: Task<Void, Never>?
@@ -109,19 +108,8 @@ struct SyncedLyricsView: View {
                                 }
                                 resumeFollowingTask?.cancel()
                             }
-                            .onEnded { value in
-                                let predictedY = value.predictedEndTranslation.height
-                                let predictedX = value.predictedEndTranslation.width
-                                let isFastSwipeUp = predictedY < -240 && abs(predictedY) > abs(predictedX) * 1.5 && value.translation.height < -45
-                                if isFastSwipeUp, let onSwipeNext {
-                                    resumeFollowingTask?.cancel()
-                                    withAnimation(.easeOut(duration: 0.15)) {
-                                        isUserBrowsing = false
-                                    }
-                                    onSwipeNext()
-                                } else {
-                                    scheduleAutoReturn(proxy: proxy)
-                                }
+                            .onEnded { _ in
+                                scheduleAutoReturn(proxy: proxy)
                             }
                     )
                     .onChange(of: model.currentLyricIndex) { _, index in

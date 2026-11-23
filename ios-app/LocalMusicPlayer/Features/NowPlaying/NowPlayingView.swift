@@ -55,7 +55,6 @@ struct NowPlayingView: View {
 
                 VStack(spacing: 0) {
                     header
-                        .padding(.top, topSafeInset)
 
                     GeometryReader { geometry in
                         let layout = AdaptivePlayerLayout.resolve(size: geometry.size)
@@ -226,7 +225,7 @@ struct NowPlayingView: View {
             }
             .padding(.horizontal, 26)
             .padding(.top, 10)
-            .padding(.bottom, max(24, bottomSafeInset + 10))
+            .padding(.bottom, max(20, bottomSafeInset))
         }
         .contentShape(Rectangle())
         .simultaneousGesture(bodyPanelDrag)
@@ -241,8 +240,7 @@ struct NowPlayingView: View {
                 SyncedLyricsView(
                     model: model,
                     foreground: foreground,
-                    onTapLyrics: { switchContent(to: .artwork) },
-                    onSwipeNext: { Task { await model.next() } }
+                    onTapLyrics: { switchContent(to: .artwork) }
                 )
             } else {
                 VStack(spacing: 14) {
