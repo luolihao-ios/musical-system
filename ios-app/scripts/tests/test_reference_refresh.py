@@ -15,6 +15,8 @@ class ReferenceRefreshTests(unittest.TestCase):
         view = (ROOT / "Features/Library/OnlineCatalogSearchView.swift").read_text(encoding="utf-8")
         self.assertIn("search.submit", view)
         self.assertIn("OnlineCatalog.shared.search", view)
+        self.assertIn("scrollDismissesKeyboard(.immediately)", view)
+        self.assertIn("KeyboardDismissTapBridge", view)
         self.assertNotIn('Picker("音乐来源"', view)
 
     def test_player_can_switch_appearance_without_switching_engine(self):
@@ -22,6 +24,8 @@ class ReferenceRefreshTests(unittest.TestCase):
         self.assertIn("case .vinyl:", view)
         self.assertIn("case .classic:", view)
         self.assertIn("model.scheduleSleepTimer", view)
+        self.assertIn("nextTrackPreviewPage", view)
+        self.assertIn("nextTrackDragOffset", view)
 
     def test_cached_remote_image_and_discovery_card_contain_hit_testing(self):
         image = (ROOT / "Features/Shared/CachedRemoteImage.swift").read_text(encoding="utf-8")

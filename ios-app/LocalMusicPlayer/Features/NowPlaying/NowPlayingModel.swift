@@ -85,6 +85,19 @@ final class NowPlayingModel {
         return min(max(state.position / state.duration, 0), 1)
     }
 
+    var upcomingTrackEntry: (index: Int, track: TrackSnapshot)? {
+        let queue = state.queue
+        guard queue.count > 1 else { return nil }
+        let current = state.currentIndex ?? -1
+        for offset in 1..<queue.count {
+            let candidate = (current + offset) % queue.count
+            if queue[candidate].isAvailable {
+                return (candidate, queue[candidate])
+            }
+        }
+        return nil
+    }
+
     func togglePlayback() async {
         if state.isPlaying {
             try? playback.pause()

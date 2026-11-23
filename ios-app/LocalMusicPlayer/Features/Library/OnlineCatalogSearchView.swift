@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 @MainActor
 struct OnlineCatalogSearchView: View {
@@ -20,6 +21,7 @@ struct OnlineCatalogSearchView: View {
     @State private var searchGeneration = UUID()
     @State private var selectedSource: String = "all"
     @FocusState private var isSearchFocused: Bool
+    @State private var didAutoFocus = false
 
     private var recentQueries: [String] {
         recentQueriesRaw
@@ -112,8 +114,11 @@ struct OnlineCatalogSearchView: View {
                             HStack {
                                 Text("最近搜索")
                                 Spacer()
-                                Button("清空") { recentQueriesRaw = "" }
-                                    .font(.caption)
+                                Button("清空") {
+                                    dismissKeyboard()
+                                    recentQueriesRaw = ""
+                                }
+                                .font(.caption)
                             }
                         }
                     }
@@ -138,7 +143,6 @@ struct OnlineCatalogSearchView: View {
                             ForEach(suggestions, id: \.self) { term in
                                 Button {
                                     query = term
-                                    isSearchFocused = false
                                     startSearch()
                                 } label: {
                                     HStack(spacing: 10) {
@@ -194,17 +198,20 @@ struct OnlineCatalogSearchView: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+            .scrollDismissesKeyboard(.immediately)
         }
         .background(RefreshBackdrop())
         .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .onAppear {
-            if autoFocus {
+            if autoFocus, !didAutoFocus {
+                didAutoFocus = true
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(120))
                     isSearchFocused = true
                 }
             }
         }
+        .onDisappear { dismissKeyboard() }
         .onChange(of: query) { _, value in
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty {
@@ -234,7 +241,10 @@ struct OnlineCatalogSearchView: View {
                     .autocorrectionDisabled()
                     .submitLabel(.search)
                     .focused($isSearchFocused)
-                    .onSubmit { startSearch() }
+                    .onSubmit {
+                        dismissKeyboard()
+                        startSearch()
+                    }
                 if !query.isEmpty {
                     Button {
                         query = ""
@@ -250,9 +260,10 @@ struct OnlineCatalogSearchView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .background(.regularMaterial, in: Capsule())
+            .background(KeyboardDismissTapBridge(isActive: isSearchFocused, onDismiss: dismissKeyboard))
 
             Button {
-                isSearchFocused = false
+                dismissKeyboard()
                 startSearch()
             } label: {
                 Text("搜索")
@@ -287,6 +298,7 @@ struct OnlineCatalogSearchView: View {
     private func filterChip(id: String, title: String) -> some View {
         let active = selectedSource == id
         return Button {
+            dismissKeyboard()
             selectedSource = id
         } label: {
             Text(title)
@@ -304,6 +316,7 @@ struct OnlineCatalogSearchView: View {
 
     private func playOnline(_ track: CatalogTrack) {
         guard track.previewURL != nil else { return }
+        dismissKeyboard()
         if model.currentTrackID != track.previewID {
             NotificationCenter.default.post(name: .openNowPlayingPanel, object: nil)
         }
@@ -405,7 +418,18 @@ struct OnlineCatalogSearchView: View {
         results = []
     }
 
+    private func dismissKeyboard() {
+        isSearchFocused = false
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
+    }
+
     private func startSearch() {
+        dismissKeyboard()
         let keyword = query.trimmingCharacters(in: .whitespacesAndNewlines)
         cancelSearch()
         guard !keyword.isEmpty else { return }
@@ -441,6 +465,7 @@ struct OnlineCatalogSearchView: View {
     private func downloadButton(_ track: CatalogTrack) -> some View {
         let state = model.catalogDownloads[track.id]
         return Button {
+            dismissKeyboard()
             Task { await model.downloadCatalogTrack(track) }
         } label: {
             ZStack {
@@ -480,5 +505,90 @@ struct OnlineCatalogSearchView: View {
     private func downloadValue(_ state: CatalogDownloadState?) -> String {
         if case .downloading(let progress) = state, let progress { return "\(Int(progress * 100))%" }
         return ""
+    }
+}
+
+private struct KeyboardDismissTapBridge: UIViewRepresentable {
+    let isActive: Bool
+    let onDismiss: () -> Void
+
+    func makeUIView(context: Context) -> HostView {
+        let view = HostView()
+        view.isActive = isActive
+        view.onDismiss = onDismiss
+        return view
+    }
+
+    func updateUIView(_ uiView: HostView, context: Context) {
+        uiView.isActive = isActive
+        uiView.onDismiss = onDismiss
+    }
+
+    static func dismantleUIView(_ uiView: HostView, coordinator: ()) {
+        uiView.detachRecognizer()
+    }
+
+    final class HostView: UIView, UIGestureRecognizerDelegate {
+        var isActive = false
+        var onDismiss: (() -> Void)?
+        private weak var attachedWindow: UIWindow?
+        private var tapRecognizer: UITapGestureRecognizer?
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isUserInteractionEnabled = false
+            backgroundColor = .clear
+        }
+
+        required init?(coder: NSCoder) { nil }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard attachedWindow !== window else { return }
+            detachRecognizer()
+            guard let window else { return }
+            let recognizer = UITapGestureRecognizer(target: self, action: #selector(handleOutsideTap))
+            recognizer.cancelsTouchesInView = false
+            recognizer.delaysTouchesBegan = false
+            recognizer.delaysTouchesEnded = false
+            recognizer.delegate = self
+            window.addGestureRecognizer(recognizer)
+            attachedWindow = window
+            tapRecognizer = recognizer
+        }
+
+        func detachRecognizer() {
+            if let recognizer = tapRecognizer, let window = attachedWindow {
+                window.removeGestureRecognizer(recognizer)
+            }
+            tapRecognizer = nil
+            attachedWindow = nil
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            guard isActive, let window else { return false }
+            if let touchedView = touch.view,
+               sequence(first: Optional(touchedView), next: { $0?.superview })
+               .contains(where: { $0 is UITextField || $0 is UITextView }) {
+                return false
+            }
+            let inputRect = convert(bounds, to: window)
+            if !inputRect.isEmpty, inputRect.contains(touch.location(in: window)) {
+                return false
+            }
+            return true
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            true
+        }
+
+        @objc private func handleOutsideTap() {
+            guard isActive else { return }
+            onDismiss?()
+        }
     }
 }

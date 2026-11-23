@@ -36,6 +36,22 @@ struct NowPlayingView: View {
     @State private var showSleepTimer = false
     @State private var showSkinPicker = false
     @State private var scrubbingProgress: Double?
+    private enum VerticalDragMode {
+        case panelDismiss
+        case nextTrackPush
+    }
+
+    private struct PreloadedTheme: Equatable {
+        let request: ArtworkRequest
+        let theme: NowPlayingArtworkTheme
+    }
+
+    @State private var activeDragMode: VerticalDragMode?
+    @State private var nextTrackDragOffset: CGFloat = 0
+    @State private var isTransitioningToNext = false
+    @State private var lockedNextTarget: (index: Int, track: TrackSnapshot)?
+    @State private var preloadedNextTheme: PreloadedTheme?
+    @State private var compactBodyHeight: CGFloat = 680
 
     private struct ArtworkRequest: Equatable, Sendable {
         let trackID: String?
@@ -48,10 +64,33 @@ struct NowPlayingView: View {
 
     private var foreground: Color { artworkTheme.foreground.color }
 
+    private var displayedNextTarget: (index: Int, track: TrackSnapshot)? {
+        lockedNextTarget ?? model.upcomingTrackEntry
+    }
+
+    private var nextArtworkRequest: ArtworkRequest {
+        .init(trackID: displayedNextTarget?.track.id, path: displayedNextTarget?.track.artworkReference)
+    }
+
+    private var nextArtworkTheme: NowPlayingArtworkTheme {
+        if let preloaded = preloadedNextTheme, preloaded.request == nextArtworkRequest {
+            return preloaded.theme
+        }
+        return .fallback
+    }
+
+    private var nextPushProgress: CGFloat {
+        min(1, max(0, -nextTrackDragOffset / max(1, compactBodyHeight)))
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
-                immersiveBackdrop
+                backdropView(for: artworkTheme)
+                if nextTrackDragOffset < 0 && displayedNextTarget != nil {
+                    backdropView(for: nextArtworkTheme)
+                        .opacity(nextPushProgress)
+                }
 
                 VStack(spacing: 0) {
                     header
@@ -70,7 +109,36 @@ struct NowPlayingView: View {
                                 .accessibilityElement(children: .contain)
                                 .accessibilityIdentifier("player.layout.compact")
                         } else {
-                            compactPlayer(in: geometry.size, artworkSide: layout.artworkSide)
+                            ZStack(alignment: .top) {
+                                compactPlayer(in: geometry.size, artworkSide: layout.artworkSide)
+                                    .offset(y: nextTrackDragOffset)
+                                    .opacity(1 - nextPushProgress * 0.18)
+
+                                if nextTrackDragOffset < 0,
+                                   contentMode == .artwork,
+                                   let nextTrack = displayedNextTarget?.track {
+                                    nextTrackPreviewPage(
+                                        track: nextTrack,
+                                        in: geometry.size,
+                                        artworkSide: layout.artworkSide
+                                    )
+                                    .offset(y: geometry.size.height + nextTrackDragOffset)
+                                    .allowsHitTesting(false)
+                                    .accessibilityHidden(true)
+                                }
+                            }
+                            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
+                            .clipped()
+                            .onAppear {
+                                if geometry.size.height > 0 {
+                                    compactBodyHeight = geometry.size.height
+                                }
+                            }
+                            .onChange(of: geometry.size.height) { _, height in
+                                if height > 0 {
+                                    compactBodyHeight = height
+                                }
+                            }
                         }
                     }
                 }
@@ -84,13 +152,46 @@ struct NowPlayingView: View {
             if queueRequest > 0 { showQueue = true }
         }
         .onChange(of: reduceMotion) { _, value in model.reduceMotion = value }
-        .onChange(of: model.state.currentTrack?.id) { _, _ in contentMode = .artwork }
+        .onChange(of: model.state.currentTrack?.id) { _, _ in
+            contentMode = .artwork
+            if isTransitioningToNext {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    if let preloaded = preloadedNextTheme, preloaded.request == artworkRequest {
+                        artworkTheme = preloaded.theme
+                    }
+                    nextTrackDragOffset = 0
+                    isTransitioningToNext = false
+                    lockedNextTarget = nil
+                }
+            }
+        }
         .onChange(of: queueRequest) { _, _ in showQueue = true }
         .onChange(of: panelGestureActive) { _, active in
-            if !active { panelGestureFinished?() }
+            if !active {
+                panelGestureFinished?()
+                if activeDragMode == .nextTrackPush && !isTransitioningToNext {
+                    activeDragMode = nil
+                    lockedNextTarget = nil
+                    if reduceMotion {
+                        nextTrackDragOffset = 0
+                    } else {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                            nextTrackDragOffset = 0
+                        }
+                    }
+                } else if activeDragMode == .panelDismiss {
+                    activeDragMode = nil
+                }
+            }
         }
         .task(id: artworkRequest) {
             let request = artworkRequest
+            if let preloaded = preloadedNextTheme, preloaded.request == request {
+                artworkTheme = preloaded.theme
+                return
+            }
             artworkTheme = .fallback
             let task = Task.detached(priority: .utility) {
                 guard !Task.isCancelled else { return NowPlayingArtworkTheme.fallback }
@@ -107,6 +208,26 @@ struct NowPlayingView: View {
             } else {
                 withAnimation(.easeInOut(duration: 0.3)) { artworkTheme = theme }
             }
+        }
+        .task(id: nextArtworkRequest) {
+            let request = nextArtworkRequest
+            guard request.trackID != nil else { return }
+            if let path = request.path,
+               (path.hasPrefix("https://") || path.hasPrefix("http://")),
+               let url = URL(string: path) {
+                _ = await RemoteImageCache.shared.load(url: url, maxPixelSize: 600)
+            }
+            let task = Task.detached(priority: .utility) {
+                guard !Task.isCancelled else { return NowPlayingArtworkTheme.fallback }
+                return NowPlayingArtworkTheme.load(atPath: request.path)
+            }
+            let theme = await withTaskCancellationHandler {
+                await task.value
+            } onCancel: {
+                task.cancel()
+            }
+            guard !Task.isCancelled, nextArtworkRequest == request else { return }
+            preloadedNextTheme = PreloadedTheme(request: request, theme: theme)
         }
         .sheet(isPresented: $showQueue) { queueSheet }
         .sheet(isPresented: $showSkinPicker) {
@@ -126,12 +247,12 @@ struct NowPlayingView: View {
         }
     }
 
-    private var immersiveBackdrop: some View {
+    private func backdropView(for theme: NowPlayingArtworkTheme) -> some View {
         LinearGradient(
             colors: [
-                artworkTheme.top.color,
-                artworkTheme.bottom.color,
-                artworkTheme.top.mixed(with: .black, amount: 0.22).color
+                theme.top.color,
+                theme.bottom.color,
+                theme.top.mixed(with: .black, amount: 0.22).color
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -228,9 +349,174 @@ struct NowPlayingView: View {
             .padding(.bottom, max(20, bottomSafeInset))
         }
         .contentShape(Rectangle())
-        .simultaneousGesture(bodyPanelDrag)
+        .simultaneousGesture(compactVerticalDrag(pageHeight: size.height))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("player.layout.compact")
+    }
+
+    private func nextTrackPreviewPage(
+        track: TrackSnapshot,
+        in size: CGSize,
+        artworkSide: CGFloat
+    ) -> some View {
+        let nextForeground = nextArtworkTheme.foreground.color
+        let isLiked = OnlineHistoryStore.shared.isFavorite(track.id) || track.isLiked
+        return VStack(spacing: 0) {
+            GeometryReader { viewport in
+                VStack(spacing: 18) {
+                    Spacer(minLength: 4)
+                    nextTrackPreviewArtwork(
+                        track: track,
+                        side: min(artworkSide, viewport.size.width - 48, viewport.size.height - 36)
+                    )
+                    Spacer(minLength: 4)
+                }
+                .padding(.horizontal, 24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+            VStack(spacing: 20) {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(track.title)
+                            .font(.title3.weight(.bold))
+                            .lineLimit(1)
+                        HStack(spacing: 8) {
+                            Text(track.artist)
+                                .font(.subheadline)
+                                .foregroundStyle(nextForeground.opacity(0.72))
+                                .lineLimit(1)
+                            if track.isShortPreview {
+                                Text("30秒试听")
+                                    .font(.caption2.weight(.semibold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(nextForeground.opacity(0.16), in: Capsule())
+                            }
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: isLiked ? "heart.fill" : "heart")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(isLiked ? Color.pink : nextForeground.opacity(0.92))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(nextForeground.opacity(0.85))
+                        .frame(width: 40, height: 40)
+                }
+
+                VStack(spacing: 8) {
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(nextForeground.opacity(0.24))
+                            .frame(height: 4)
+                        Capsule()
+                            .fill(nextForeground.opacity(0.90))
+                            .frame(width: 4, height: 4)
+                    }
+                    .frame(height: 24)
+
+                    HStack {
+                        Text("00:00")
+                        Spacer()
+                        Text(format(track.duration))
+                    }
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(nextForeground.opacity(0.68))
+                }
+
+                HStack(spacing: 0) {
+                    Image(systemName: modeIcon)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(nextForeground.opacity(0.82))
+                        .frame(width: 44, height: 48)
+                    Spacer(minLength: 0)
+                    Image(systemName: "backward.fill")
+                        .font(.title2)
+                        .frame(width: 48, height: 48)
+                    Spacer(minLength: 0)
+                    Image(systemName: "play.fill")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 68, height: 68)
+                        .background(PlayerTheme.accent, in: Circle())
+                        .shadow(color: .black.opacity(0.22), radius: 12, y: 6)
+                    Spacer(minLength: 0)
+                    Image(systemName: "forward.fill")
+                        .font(.title2)
+                        .frame(width: 48, height: 48)
+                    Spacer(minLength: 0)
+                    Image(systemName: "list.bullet")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(nextForeground.opacity(0.82))
+                        .frame(width: 44, height: 48)
+                }
+            }
+            .padding(.horizontal, 26)
+            .padding(.top, 10)
+            .padding(.bottom, max(20, bottomSafeInset))
+        }
+        .foregroundStyle(nextForeground)
+        .frame(width: size.width, height: size.height)
+    }
+
+    private func nextTrackPreviewArtwork(track: TrackSnapshot, side: CGFloat) -> some View {
+        let clampedSide = max(140, side)
+        return Group {
+            if visualMode == .vinyl || track.artworkReference == nil {
+                ZStack {
+                    Circle()
+                        .fill(PlayerTheme.accent.opacity(0.28))
+                        .blur(radius: model.reduceMotion ? 16 : 28)
+                        .scaleEffect(0.94)
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [Color.black, Color(red: 0.08, green: 0.075, blue: 0.09)],
+                                center: .center,
+                                startRadius: 8,
+                                endRadius: 180
+                            )
+                        )
+                        .overlay {
+                            ForEach(0..<9, id: \.self) { index in
+                                Circle()
+                                    .stroke(Color.white.opacity(0.05), lineWidth: 1)
+                                    .padding(CGFloat(index) * 10 + 12)
+                            }
+                        }
+                        .overlay {
+                            ArtworkView(path: track.artworkReference, cornerRadius: 100)
+                                .frame(width: 118, height: 118)
+                                .clipShape(Circle())
+                                .overlay {
+                                    Circle().stroke(Color.black.opacity(0.8), lineWidth: 4)
+                                }
+                        }
+                        .overlay {
+                            Circle()
+                                .fill(PlayerTheme.accent)
+                                .frame(width: 15, height: 15)
+                        }
+                        .shadow(color: .black.opacity(0.32), radius: 18, y: 10)
+                }
+                .aspectRatio(1, contentMode: .fit)
+                .padding(visualMode == .vinyl ? 8 : 0)
+                .overlay(alignment: .topTrailing) {
+                    if visualMode == .vinyl {
+                        VinylTonearm(isPlaying: false)
+                            .frame(width: clampedSide * 0.34, height: clampedSide * 0.57)
+                            .allowsHitTesting(false)
+                    }
+                }
+            } else {
+                ArtworkView(path: track.artworkReference, cornerRadius: 22)
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .shadow(color: .black.opacity(0.38), radius: 26, y: 14)
+            }
+        }
+        .frame(width: clampedSide, height: clampedSide)
     }
 
     @ViewBuilder
@@ -370,7 +656,6 @@ struct NowPlayingView: View {
                 switchContent(to: .lyrics)
             }
         }
-        .highPriorityGesture(panelDrag)
         .accessibilityElement(children: visualMode == .classic ? .contain : .ignore)
         .accessibilityLabel(Text(visualMode.title))
         .accessibilityIdentifier("player.artwork")
@@ -503,19 +788,127 @@ struct NowPlayingView: View {
             .onEnded { panelDragEnded?($0) }
     }
 
-    private var bodyPanelDrag: some Gesture {
-        DragGesture(minimumDistance: 18, coordinateSpace: .global)
+    private func compactVerticalDrag(pageHeight: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 10, coordinateSpace: .global)
             .updating($panelGestureActive) { _, active, _ in
-                if contentMode == .artwork { active = true }
+                if contentMode == .artwork && scrubbingProgress == nil {
+                    active = true
+                }
             }
             .onChanged { value in
-                guard contentMode == .artwork else { return }
-                panelDragChanged?(value)
+                guard contentMode == .artwork, scrubbingProgress == nil, !isTransitioningToNext else { return }
+                let dx = value.translation.width
+                let dy = value.translation.height
+                if activeDragMode == nil {
+                    guard abs(dy) >= 6, abs(dy) >= abs(dx) else { return }
+                    if dy < 0 {
+                        activeDragMode = .nextTrackPush
+                        lockedNextTarget = model.upcomingTrackEntry
+                    } else {
+                        activeDragMode = .panelDismiss
+                    }
+                }
+                switch activeDragMode {
+                case .panelDismiss:
+                    panelDragChanged?(value)
+                case .nextTrackPush:
+                    let raw = min(0, dy)
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        if displayedNextTarget != nil {
+                            nextTrackDragOffset = max(-pageHeight, raw)
+                        } else {
+                            nextTrackDragOffset = max(-72, raw * 0.30)
+                        }
+                    }
+                case nil:
+                    break
+                }
             }
             .onEnded { value in
-                guard contentMode == .artwork else { return }
-                panelDragEnded?(value)
+                guard contentMode == .artwork, scrubbingProgress == nil, !isTransitioningToNext else { return }
+                let mode = activeDragMode
+                activeDragMode = nil
+                switch mode {
+                case .panelDismiss:
+                    panelDragEnded?(value)
+                case .nextTrackPush:
+                    let target = displayedNextTarget
+                    let threshold = min(115, pageHeight * 0.20)
+                    let shouldCommit = (-nextTrackDragOffset >= threshold || value.predictedEndTranslation.height <= -150)
+                        && (target != nil || value.translation.height < -55)
+                    if shouldCommit {
+                        commitNextTrackTransition(target: target, pageHeight: pageHeight)
+                    } else {
+                        lockedNextTarget = nil
+                        if reduceMotion {
+                            nextTrackDragOffset = 0
+                        } else {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                                nextTrackDragOffset = 0
+                            }
+                        }
+                    }
+                case nil:
+                    break
+                }
             }
+    }
+
+    private func commitNextTrackTransition(
+        target: (index: Int, track: TrackSnapshot)?,
+        pageHeight: CGFloat
+    ) {
+        isTransitioningToNext = true
+        lockedNextTarget = target
+        guard let target else {
+            if reduceMotion {
+                nextTrackDragOffset = 0
+            } else {
+                withAnimation(.spring(response: 0.26, dampingFraction: 0.88)) {
+                    nextTrackDragOffset = 0
+                }
+            }
+            Task { @MainActor in
+                await model.next()
+                isTransitioningToNext = false
+                lockedNextTarget = nil
+            }
+            return
+        }
+
+        if reduceMotion {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                nextTrackDragOffset = -pageHeight
+            }
+        } else {
+            withAnimation(.easeOut(duration: 0.22)) {
+                nextTrackDragOffset = -pageHeight
+            }
+        }
+
+        Task { @MainActor in
+            if !reduceMotion {
+                try? await Task.sleep(for: .milliseconds(225))
+            }
+            if model.state.mode == .shuffle {
+                await model.playQueueItem(at: target.index)
+            } else {
+                await model.next()
+            }
+            if isTransitioningToNext {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    nextTrackDragOffset = 0
+                    isTransitioningToNext = false
+                    lockedNextTarget = nil
+                }
+            }
+        }
     }
 
     private func switchContent(to mode: NowPlayingContentMode) {
