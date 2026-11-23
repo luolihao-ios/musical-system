@@ -24,6 +24,7 @@ struct MiniPlayerView: View {
     var dismiss: () -> Void = {}
     var maximumHeight: CGFloat = 780
     var maximumWidth: CGFloat = 390
+    var topInset: CGFloat = 0
     var bottomInset: CGFloat = 0
     var menuClearance: CGFloat = 90
 
@@ -46,6 +47,7 @@ struct MiniPlayerView: View {
             NowPlayingView(
                 model: model,
                 queueRequest: queueRequest,
+                topSafeInset: topInset,
                 bottomSafeInset: bottomInset,
                 closePanel: close,
                 panelDragChanged: dragChanged,

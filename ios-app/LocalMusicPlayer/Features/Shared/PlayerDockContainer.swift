@@ -22,6 +22,7 @@ struct PlayerDockContainer<Content: View>: View {
                                     dismiss: dismiss,
                                     maximumHeight: dock.size.height,
                                     maximumWidth: dock.size.width,
+                                    topInset: safeArea.safeAreaInsets.top,
                                     bottomInset: safeArea.safeAreaInsets.bottom,
                                     menuClearance: menuClearance
                                 )
@@ -34,7 +35,7 @@ struct PlayerDockContainer<Content: View>: View {
                             PlayerInteractionDiagnostics.log("dock frame=\(dock.frame(in: .global)) bottomInset=\(safeArea.safeAreaInsets.bottom)")
                         }
                     }
-                    .ignoresSafeArea(.container, edges: .bottom)
+                    .ignoresSafeArea()
                 }
         }
     }

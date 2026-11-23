@@ -10,6 +10,8 @@ private struct LyricRowMidYKey: PreferenceKey {
 struct SyncedLyricsView: View {
     @Bindable var model: NowPlayingModel
     var foreground: Color = .primary
+    var onTapLyrics: (() -> Void)? = nil
+    var onSwipeNext: (() -> Void)? = nil
     @State private var isUserBrowsing = false
     @State private var scrubbedIndex: Int?
     @State private var resumeFollowingTask: Task<Void, Never>?
@@ -43,27 +45,16 @@ struct SyncedLyricsView: View {
                                     isPlayingLine
                                         ? .title3.weight(.bold)
                                         : isScrubTarget
-                                            ? .body.weight(.semibold)
+                                            ? .title3.weight(.semibold)
                                             : .body
                                 )
                                 .foregroundStyle(
                                     foreground.opacity(
-                                        isPlayingLine ? 1.0 : (isScrubTarget ? 0.88 : 0.42)
+                                        isPlayingLine ? 1.0 : (isScrubTarget ? 0.95 : 0.40)
                                     )
                                 )
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.vertical, 6)
-                                .padding(.horizontal, 10)
-                                .background {
-                                    if isScrubTarget {
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .fill(foreground.opacity(0.08))
-                                            .overlay {
-                                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                                    .stroke(foreground.opacity(0.24), lineWidth: 1)
-                                            }
-                                    }
-                                }
                                 .background {
                                     GeometryReader { rowGeo in
                                         Color.clear.preference(
@@ -73,6 +64,15 @@ struct SyncedLyricsView: View {
                                     }
                                 }
                                 .contentShape(Rectangle())
+                                .onTapGesture {
+                                    if isUserBrowsing {
+                                        resumeFollowingTask?.cancel()
+                                        withAnimation(.easeInOut(duration: 0.18)) {
+                                            isUserBrowsing = false
+                                        }
+                                    }
+                                    onTapLyrics?()
+                                }
                                 .id(entry.offset)
                                 .animation(.easeInOut(duration: 0.18), value: model.currentLyricIndex)
                                 .accessibilityIdentifier("player.lyrics.line.\(entry.offset)")
@@ -83,6 +83,12 @@ struct SyncedLyricsView: View {
                     }
                     .coordinateSpace(name: "lyrics.scroll")
                     .scrollIndicators(.hidden)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if !isUserBrowsing {
+                            onTapLyrics?()
+                        }
+                    }
                     .onPreferenceChange(LyricRowMidYKey.self) { positions in
                         guard isUserBrowsing, !positions.isEmpty else { return }
                         if let nearest = positions.min(by: { abs($0.value - centerY) < abs($1.value - centerY) })?.key,
@@ -103,8 +109,19 @@ struct SyncedLyricsView: View {
                                 }
                                 resumeFollowingTask?.cancel()
                             }
-                            .onEnded { _ in
-                                scheduleAutoReturn(proxy: proxy)
+                            .onEnded { value in
+                                let predictedY = value.predictedEndTranslation.height
+                                let predictedX = value.predictedEndTranslation.width
+                                let isFastSwipeUp = predictedY < -240 && abs(predictedY) > abs(predictedX) * 1.5 && value.translation.height < -45
+                                if isFastSwipeUp, let onSwipeNext {
+                                    resumeFollowingTask?.cancel()
+                                    withAnimation(.easeOut(duration: 0.15)) {
+                                        isUserBrowsing = false
+                                    }
+                                    onSwipeNext()
+                                } else {
+                                    scheduleAutoReturn(proxy: proxy)
+                                }
                             }
                     )
                     .onChange(of: model.currentLyricIndex) { _, index in
@@ -145,18 +162,7 @@ struct SyncedLyricsView: View {
         targetIndex: Int,
         proxy: ScrollViewProxy
     ) -> some View {
-        HStack(spacing: 8) {
-            Text(formatTimestamp(targetLine.timestamp))
-                .font(.caption.monospacedDigit().weight(.semibold))
-                .foregroundStyle(foreground)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(foreground.opacity(0.16), in: Capsule())
-
-            Rectangle()
-                .fill(foreground.opacity(0.22))
-                .frame(height: 1)
-
+        HStack(spacing: 10) {
             Button {
                 resumeFollowingTask?.cancel()
                 try? model.seek(to: targetLine)
@@ -165,19 +171,35 @@ struct SyncedLyricsView: View {
                 }
                 scroll(to: targetIndex, proxy: proxy)
             } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "play.fill")
-                        .font(.caption.weight(.bold))
-                }
-                .foregroundStyle(Color(red: 0.08, green: 0.10, blue: 0.14))
-                .frame(width: 34, height: 28)
-                .background(foreground, in: Capsule())
-                .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+                Image(systemName: "play.fill")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(foreground)
+                    .frame(width: 28, height: 28)
+                    .background(foreground.opacity(0.18), in: Circle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("定位播放到此句歌词")
             .accessibilityIdentifier("player.lyrics.scrubPlay")
+
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            foreground.opacity(0.32),
+                            foreground.opacity(0.08),
+                            foreground.opacity(0.32)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(height: 1)
+
+            Text(formatTimestamp(targetLine.timestamp))
+                .font(.caption2.monospacedDigit().weight(.medium))
+                .foregroundStyle(foreground.opacity(0.75))
         }
+        .padding(.vertical, 4)
     }
 
     private func scheduleAutoReturn(proxy: ScrollViewProxy) {

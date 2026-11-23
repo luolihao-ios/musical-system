@@ -123,20 +123,13 @@ struct OnlineCatalogSearchView: View {
                     }
 
                     ForEach(filteredResults) { track in
-                        ViewThatFits(in: .horizontal) {
-                            HStack(spacing: 12) {
-                                metadata(track)
-                                    .frame(minWidth: 160, maxWidth: .infinity, alignment: .leading)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { playOnline(track) }
-                                actions(track)
-                            }
-                            VStack(alignment: .leading, spacing: 8) {
-                                metadata(track)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { playOnline(track) }
-                                actions(track)
-                            }
+                        HStack(alignment: .center, spacing: 10) {
+                            metadata(track)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                                .onTapGesture { playOnline(track) }
+                            actions(track)
+                                .fixedSize()
                         }
                         .padding(.vertical, 4)
                     }
@@ -333,9 +326,15 @@ struct OnlineCatalogSearchView: View {
                 let found = try await OnlineCatalog.shared.search(query: keyword, onUpdate: { visible in
                     guard searchGeneration == generation, !Task.isCancelled else { return }
                     results = visible
+                    if selectedSource == "all", visible.contains(where: { $0.previewURL != nil }) {
+                        selectedSource = "playable"
+                    }
                 })
                 guard searchGeneration == generation, !Task.isCancelled else { return }
                 results = found
+                if selectedSource == "all", found.contains(where: { $0.previewURL != nil }) {
+                    selectedSource = "playable"
+                }
             } catch {
                 guard searchGeneration == generation, !Task.isCancelled else { return }
                 searchFailed = true

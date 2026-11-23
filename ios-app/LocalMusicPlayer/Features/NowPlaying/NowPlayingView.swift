@@ -19,6 +19,7 @@ enum NowPlayingLyricSnippet {
 struct NowPlayingView: View {
     @Bindable var model: NowPlayingModel
     var queueRequest: Int = 0
+    var topSafeInset: CGFloat = 0
     var bottomSafeInset: CGFloat = 0
     var closePanel: (() -> Void)? = nil
     var panelDragChanged: ((DragGesture.Value) -> Void)? = nil
@@ -54,6 +55,7 @@ struct NowPlayingView: View {
 
                 VStack(spacing: 0) {
                     header
+                        .padding(.top, topSafeInset)
 
                     GeometryReader { geometry in
                         let layout = AdaptivePlayerLayout.resolve(size: geometry.size)
@@ -236,7 +238,12 @@ struct NowPlayingView: View {
     private func lyricsContent(in size: CGSize) -> some View {
         Group {
             if model.hasLyrics {
-                SyncedLyricsView(model: model, foreground: foreground)
+                SyncedLyricsView(
+                    model: model,
+                    foreground: foreground,
+                    onTapLyrics: { switchContent(to: .artwork) },
+                    onSwipeNext: { Task { await model.next() } }
+                )
             } else {
                 VStack(spacing: 14) {
                     Spacer()
