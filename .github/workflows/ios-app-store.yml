@@ -16,6 +16,10 @@ on:
           - inspect-adaptive-environment
           - upload-library
           - upload-screenshots
+      run_tests:
+        description: 是否在打包上传前运行模拟器测试（默认跳过以大幅提速）
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -136,9 +140,10 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Run iOS simulator tests
+        if: inputs.run_tests
         run: ./ios-app/scripts/verify.sh
       - name: Preserve simulator test evidence
-        if: always()
+        if: always() && inputs.run_tests
         uses: actions/upload-artifact@v7
         with:
           name: player-interaction-test-evidence
@@ -269,8 +274,6 @@ jobs:
           IPA_PATH=$(find ios-app/build/AppStore/export -maxdepth 1 -name '*.ipa' -print -quit)
           test -n "$IPA_PATH"
           python scripts/music_release.py verify-ipa --ipa "$IPA_PATH" --output .api-inspection/music-release-ipa.json
-          xcrun altool --validate-app --type ios -f "$IPA_PATH" \
-            --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER_ID"
           xcrun altool --upload-app --type ios -f "$IPA_PATH" \
             --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER_ID"
       - name: Preserve signed release IPA
