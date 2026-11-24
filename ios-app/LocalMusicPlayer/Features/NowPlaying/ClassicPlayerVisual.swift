@@ -42,7 +42,27 @@ struct VinylTonearm: View {
     }
 }
 
+private struct ClickWheelButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.45 : 1.0)
+            .scaleEffect(configuration.isPressed ? 0.92 : 1.0)
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
 struct ClassicPlayerVisual: View {
+    static var chassisBackground: some View {
+        LinearGradient(
+            colors: [
+                Color(red: 0.90, green: 0.91, blue: 0.93),
+                Color(red: 0.78, green: 0.80, blue: 0.83)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
     private enum ScreenMode: CaseIterable {
         case nowPlaying
         case queue
@@ -67,42 +87,51 @@ struct ClassicPlayerVisual: View {
 
     @Bindable var model: NowPlayingModel
     let showQueue: () -> Void
+    var isFullScreen: Bool = false
+    var bottomSafeInset: CGFloat = 0
+    var onLongPressArtwork: (() -> Void)? = nil
     @State private var screenMode: ScreenMode = .nowPlaying
     @State private var lastWheelAngle: Double?
     @State private var wheelDeltaAccumulator: Double = 0
 
     var body: some View {
         GeometryReader { geometry in
-            let bodyWidth = min(max(geometry.size.width - 28, 260), 420)
-            let bodyHeight = max(geometry.size.height - 12, 420)
-            let wheelDiameter = min(bodyWidth * 0.68, bodyHeight * 0.43, 250)
+            if isFullScreen {
+                let wheelDiameter = min(geometry.size.width * 0.72, geometry.size.height * 0.44, 276)
+                VStack(spacing: 22) {
+                    ipodScreen
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    clickWheel(diameter: wheelDiameter)
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 4)
+                .padding(.bottom, max(24, bottomSafeInset + 12))
+                .frame(width: geometry.size.width, height: geometry.size.height)
+            } else {
+                let bodyWidth = min(max(geometry.size.width - 28, 260), 420)
+                let bodyHeight = max(geometry.size.height - 12, 420)
+                let wheelDiameter = min(bodyWidth * 0.68, bodyHeight * 0.43, 250)
 
-            VStack(spacing: 18) {
-                ipodScreen
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                clickWheel(diameter: wheelDiameter)
-                    .padding(.bottom, 6)
+                VStack(spacing: 18) {
+                    ipodScreen
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    clickWheel(diameter: wheelDiameter)
+                        .padding(.bottom, 6)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 18)
+                .frame(width: bodyWidth, height: bodyHeight)
+                .background(
+                    Self.chassisBackground,
+                    in: RoundedRectangle(cornerRadius: 34, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 34, style: .continuous)
+                        .stroke(.white.opacity(0.65), lineWidth: 1.5)
+                }
+                .shadow(color: .black.opacity(0.28), radius: 22, y: 12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 18)
-            .frame(width: bodyWidth, height: bodyHeight)
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.87, green: 0.89, blue: 0.91),
-                        Color(red: 0.74, green: 0.76, blue: 0.79)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                in: RoundedRectangle(cornerRadius: 34, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 34, style: .continuous)
-                    .stroke(.white.opacity(0.65), lineWidth: 1.5)
-            }
-            .shadow(color: .black.opacity(0.28), radius: 22, y: 12)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -169,6 +198,10 @@ struct ClassicPlayerVisual: View {
                 ArtworkView(path: model.state.currentTrack?.artworkReference, cornerRadius: 10)
                     .frame(width: 92, height: 92)
                     .shadow(color: .black.opacity(0.14), radius: 6, y: 3)
+                    .onLongPressGesture(minimumDuration: 0.45) {
+                        haptic()
+                        onLongPressArtwork?()
+                    }
                 VStack(alignment: .leading, spacing: 5) {
                     Text(model.state.currentTrack?.title ?? String(localized: "爱乐之城"))
                         .font(.headline.weight(.bold))
@@ -274,6 +307,7 @@ struct ClassicPlayerVisual: View {
 
     private func clickWheel(diameter: CGFloat) -> some View {
         let centerDiameter = diameter * 0.36
+        let ringForeground = Color(red: 0.36, green: 0.38, blue: 0.42)
         return ZStack {
             Circle()
                 .fill(
@@ -287,9 +321,8 @@ struct ClassicPlayerVisual: View {
                 .overlay {
                     Circle().stroke(Color.black.opacity(0.08), lineWidth: 1)
                 }
-                .gesture(wheelScrubGesture(diameter: diameter))
 
-            VStack {
+            ZStack {
                 Button {
                     haptic()
                     screenMode = screenMode.next
@@ -300,50 +333,54 @@ struct ClassicPlayerVisual: View {
                     Text("MENU")
                         .font(.caption.weight(.bold))
                         .tracking(1)
-                        .frame(width: 72, height: 42)
+                        .frame(width: diameter * 0.46, height: diameter * 0.28)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel("切换 iPod 菜单")
+                .accessibilityIdentifier("ipod.menu")
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
-                Spacer(minLength: 0)
-
-                HStack {
-                    Button {
-                        haptic()
-                        Task { await model.previous() }
-                    } label: {
-                        Image(systemName: "backward.end.fill")
-                            .font(.subheadline.weight(.bold))
-                            .frame(width: 48, height: 48)
-                    }
-                    .accessibilityLabel("上一首")
-
-                    Spacer(minLength: 0)
-
-                    Button {
-                        haptic()
-                        Task { await model.next() }
-                    } label: {
-                        Image(systemName: "forward.end.fill")
-                            .font(.subheadline.weight(.bold))
-                            .frame(width: 48, height: 48)
-                    }
-                    .accessibilityLabel("下一首")
+                Button {
+                    haptic()
+                    Task { await model.previous() }
+                } label: {
+                    Image(systemName: "backward.end.fill")
+                        .font(.body.weight(.bold))
+                        .frame(width: diameter * 0.30, height: diameter * 0.44)
+                        .contentShape(Rectangle())
                 }
-                .padding(.horizontal, 4)
+                .accessibilityLabel("上一首")
+                .accessibilityIdentifier("ipod.previous")
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
 
-                Spacer(minLength: 0)
+                Button {
+                    haptic()
+                    Task { await model.next() }
+                } label: {
+                    Image(systemName: "forward.end.fill")
+                        .font(.body.weight(.bold))
+                        .frame(width: diameter * 0.30, height: diameter * 0.44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("下一首")
+                .accessibilityIdentifier("ipod.next")
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
 
                 Button {
                     haptic()
                     Task { await model.togglePlayback() }
                 } label: {
                     Image(systemName: "playpause.fill")
-                        .font(.subheadline.weight(.bold))
-                        .frame(width: 64, height: 42)
+                        .font(.body.weight(.bold))
+                        .frame(width: diameter * 0.46, height: diameter * 0.28)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel(model.state.isPlaying ? String(localized: "暂停") : String(localized: "播放"))
+                .accessibilityIdentifier("ipod.playPause")
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
-            .foregroundStyle(Color(red: 0.36, green: 0.38, blue: 0.42))
+            .foregroundStyle(ringForeground)
+            .clipShape(Circle())
 
             Button {
                 haptic()
@@ -365,19 +402,22 @@ struct ClassicPlayerVisual: View {
                         )
                     )
                     .frame(width: centerDiameter, height: centerDiameter)
+                    .contentShape(Circle())
                     .overlay {
                         Circle().stroke(.white.opacity(0.6), lineWidth: 1)
                     }
                     .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
             }
             .accessibilityLabel(screenMode == .nowPlaying ? String(localized: "切换播放模式") : String(localized: "返回正在播放"))
+            .accessibilityIdentifier("ipod.center")
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ClickWheelButtonStyle())
+        .simultaneousGesture(wheelScrubGesture(diameter: diameter))
         .frame(width: diameter, height: diameter)
     }
 
     private func wheelScrubGesture(diameter: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 6)
+        DragGesture(minimumDistance: 14)
             .onChanged { value in
                 let center = CGPoint(x: diameter / 2, y: diameter / 2)
                 let dx = value.location.x - center.x

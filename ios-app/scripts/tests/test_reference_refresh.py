@@ -44,3 +44,13 @@ class ReferenceRefreshTests(unittest.TestCase):
         self.assertIn("RecommendationEngine.continuationQueries", catalog)
         self.assertIn("onTrackSessionEnded", playback)
         self.assertIn("TasteProfileStore.shared", container)
+
+    def test_classic_ipod_fullscreen_buttons_and_long_press_skin_picker(self):
+        now_playing = (ROOT / "Features/NowPlaying/NowPlayingView.swift").read_text(encoding="utf-8")
+        classic = (ROOT / "Features/NowPlaying/ClassicPlayerVisual.swift").read_text(encoding="utf-8")
+        self.assertIn("onLongPressGesture", now_playing)
+        self.assertIn("chassisBackground", now_playing)
+        self.assertIn("ipod.previous", classic)
+        self.assertIn("ipod.next", classic)
+        self.assertIn("ipod.playPause", classic)
+        self.assertIn(".contentShape(Rectangle())", classic)

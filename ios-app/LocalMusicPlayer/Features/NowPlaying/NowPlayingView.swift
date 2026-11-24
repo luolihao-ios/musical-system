@@ -52,6 +52,7 @@ struct NowPlayingView: View {
     @State private var lockedNextTarget: (index: Int, track: TrackSnapshot)?
     @State private var preloadedNextTheme: PreloadedTheme?
     @State private var compactBodyHeight: CGFloat = 680
+    @State private var containerSize: CGSize = .zero
 
     private struct ArtworkRequest: Equatable, Sendable {
         let trackID: String?
@@ -63,6 +64,14 @@ struct NowPlayingView: View {
     }
 
     private var foreground: Color { artworkTheme.foreground.color }
+
+    private var isClassicFullScreen: Bool {
+        visualMode == .classic && !AdaptivePlayerLayout.resolve(size: containerSize).isWide
+    }
+
+    private var effectiveForeground: Color {
+        isClassicFullScreen ? Color(red: 0.22, green: 0.25, blue: 0.29) : foreground
+    }
 
     private var displayedNextTarget: (index: Int, track: TrackSnapshot)? {
         lockedNextTarget ?? model.upcomingTrackEntry
@@ -86,14 +95,20 @@ struct NowPlayingView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                backdropView(for: artworkTheme)
-                if nextTrackDragOffset < 0 && displayedNextTarget != nil {
-                    backdropView(for: nextArtworkTheme)
-                        .opacity(nextPushProgress)
+                if isClassicFullScreen {
+                    ClassicPlayerVisual.chassisBackground
+                        .ignoresSafeArea()
+                        .accessibilityHidden(true)
+                } else {
+                    backdropView(for: artworkTheme)
+                    if nextTrackDragOffset < 0 && displayedNextTarget != nil {
+                        backdropView(for: nextArtworkTheme)
+                            .opacity(nextPushProgress)
+                    }
                 }
 
                 VStack(spacing: 0) {
-                    header
+                    header(hideContentTabs: isClassicFullScreen)
 
                     GeometryReader { geometry in
                         let layout = AdaptivePlayerLayout.resolve(size: geometry.size)
@@ -101,13 +116,20 @@ struct NowPlayingView: View {
                             duoPlayer
                         } else if layout.isWide {
                             widePlayer(layout: layout)
-                        } else if visualMode == .classic && contentMode == .artwork {
-                            ClassicPlayerVisual(model: model, showQueue: { showQueue = true })
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .padding(.bottom, 16)
-                                .accessibilityIdentifier("player.artwork")
-                                .accessibilityElement(children: .contain)
-                                .accessibilityIdentifier("player.layout.compact")
+                        } else if visualMode == .classic {
+                            ClassicPlayerVisual(
+                                model: model,
+                                showQueue: { showQueue = true },
+                                isFullScreen: true,
+                                bottomSafeInset: bottomSafeInset,
+                                onLongPressArtwork: {
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    showSkinPicker = true
+                                }
+                            )
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .accessibilityElement(children: .contain)
+                            .accessibilityIdentifier("player.layout.compact")
                         } else {
                             ZStack(alignment: .top) {
                                 compactPlayer(in: geometry.size, artworkSide: layout.artworkSide)
@@ -142,8 +164,15 @@ struct NowPlayingView: View {
                         }
                     }
                 }
-                .foregroundStyle(foreground)
-                .tint(foreground)
+                .foregroundStyle(effectiveForeground)
+                .tint(effectiveForeground)
+                .background {
+                    GeometryReader { geo in
+                        Color.clear
+                            .onAppear { containerSize = geo.size }
+                            .onChange(of: geo.size) { _, newSize in containerSize = newSize }
+                    }
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -152,6 +181,9 @@ struct NowPlayingView: View {
             if queueRequest > 0 { showQueue = true }
         }
         .onChange(of: reduceMotion) { _, value in model.reduceMotion = value }
+        .onChange(of: visualMode) { _, mode in
+            if mode == .classic { contentMode = .artwork }
+        }
         .onChange(of: model.state.currentTrack?.id) { _, _ in
             contentMode = .artwork
             if isTransitioningToNext {
@@ -261,7 +293,7 @@ struct NowPlayingView: View {
         .accessibilityHidden(true)
     }
 
-    private var header: some View {
+    private func header(hideContentTabs: Bool) -> some View {
         HStack(spacing: 12) {
             Button {
                 if let closePanel { closePanel() } else { dismiss() }
@@ -276,15 +308,17 @@ struct NowPlayingView: View {
 
             Spacer(minLength: 0)
 
-            HStack(spacing: 18) {
-                contentTab("歌曲", mode: .artwork, identifier: "player.tab.song")
-                Rectangle()
-                    .fill(foreground.opacity(0.25))
-                    .frame(width: 1, height: 12)
-                contentTab("歌词", mode: .lyrics, identifier: "player.tab.lyrics")
-            }
+            if !hideContentTabs {
+                HStack(spacing: 18) {
+                    contentTab("歌曲", mode: .artwork, identifier: "player.tab.song")
+                    Rectangle()
+                        .fill(foreground.opacity(0.25))
+                        .frame(width: 1, height: 12)
+                    contentTab("歌词", mode: .lyrics, identifier: "player.tab.lyrics")
+                }
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
+            }
 
             Button {
                 showSkinPicker = true
@@ -655,6 +689,10 @@ struct NowPlayingView: View {
             if visualMode != .classic {
                 switchContent(to: .lyrics)
             }
+        }
+        .onLongPressGesture(minimumDuration: 0.45) {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            showSkinPicker = true
         }
         .accessibilityElement(children: visualMode == .classic ? .contain : .ignore)
         .accessibilityLabel(Text(visualMode.title))
