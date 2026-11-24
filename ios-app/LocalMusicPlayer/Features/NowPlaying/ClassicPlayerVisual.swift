@@ -52,7 +52,7 @@ private struct ClickWheelButtonStyle: ButtonStyle {
 }
 
 struct ClassicPlayerVisual: View {
-    static var chassisBackground: some View {
+    static var chassisBackground: LinearGradient {
         LinearGradient(
             colors: [
                 Color(red: 0.90, green: 0.91, blue: 0.93),
