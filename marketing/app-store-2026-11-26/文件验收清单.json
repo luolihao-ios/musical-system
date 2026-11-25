@@ -1,86 +1,386 @@
 [
   {
-    "file": "iphone-medium/01-aiyue-20261126-discovery.png",
+    "locale": "zh-Hans",
+    "file": "zh-Hans/iphone-medium/01-aiyue-20261126-discovery.png",
     "width": 1206,
     "height": 2622,
     "title": "懂你的首页，越听越合拍",
-    "sha256": "f1b6b1939f69f931dd43090dd148c412c722cc96eade3d28e4a5ebe953d7b3de"
+    "sha256": "02ae436dbf64f2e11d8558a41706d8e4d2a3c5b67fd58f1511819b88dd573970"
   },
   {
-    "file": "iphone-medium/02-aiyue-20261126-vinyl.png",
+    "locale": "zh-Hans",
+    "file": "zh-Hans/iphone-medium/02-aiyue-20261126-vinyl.png",
     "width": 1206,
     "height": 2622,
     "title": "黑胶沉浸，上推顺滑切曲",
-    "sha256": "c3930fa6b672ede2d2e725f63514eaf391f9b2968381adf2b38f5bc1d4ee2282"
+    "sha256": "0a2f6c93abedc0e3be24b886c0188783c7554e6ee610d68cadc11c6b5fcb1615"
   },
   {
-    "file": "iphone-medium/03-aiyue-20261126-classic.png",
+    "locale": "zh-Hans",
+    "file": "zh-Hans/iphone-medium/03-aiyue-20261126-classic.png",
     "width": 1206,
     "height": 2622,
     "title": "复古转盘，掌心重现",
-    "sha256": "386a14f6455940a482a9e2a9c650e9136979d16e9dcca978124e47b072d698db"
+    "sha256": "e396ac9fe3adec8dcbd68acf88987cae97dc8eadb6055dad99000a1d197d5e6d"
   },
   {
-    "file": "iphone-medium/04-aiyue-20261126-search.png",
+    "locale": "zh-Hans",
+    "file": "zh-Hans/iphone-medium/04-aiyue-20261126-search.png",
     "width": 1206,
     "height": 2622,
     "title": "多源速搜，无损曲库随行",
-    "sha256": "678f9a90ddaaf7721aa4d73273ca5ab77179b102896c953f6278a8e663ceb35f"
+    "sha256": "06b670e8566328e8fa7b03fe287536734782abf276c20c66a8b7afb708936c91"
   },
   {
-    "file": "iphone-duo/01-aiyue-20261126-discovery.png",
+    "locale": "zh-Hans",
+    "file": "zh-Hans/iphone-duo/01-aiyue-20261126-discovery.png",
     "width": 1398,
     "height": 2034,
     "title": "懂你的首页，越听越合拍",
-    "sha256": "cb1a20db0e71da06454b423b134c689fe667e2122baec9e01a91377da1f6ee74"
+    "sha256": "e4021fbfe65c6668fd095cf281fece355a9542de5773af15a7a3e50be8472b5b"
   },
   {
-    "file": "iphone-duo/02-aiyue-20261126-vinyl.png",
+    "locale": "zh-Hans",
+    "file": "zh-Hans/iphone-duo/02-aiyue-20261126-vinyl.png",
     "width": 1398,
     "height": 2034,
     "title": "黑胶沉浸，上推顺滑切曲",
-    "sha256": "1f6ac01d7b2601e49643cf80f2aae9dd446ed312b7054e0b504a541436d3ae21"
+    "sha256": "09d4c889a33300fb4fb665634ab281a8e5fe681473238c0aca842ec20f091f79"
   },
   {
-    "file": "iphone-duo/03-aiyue-20261126-classic.png",
+    "locale": "zh-Hans",
+    "file": "zh-Hans/iphone-duo/03-aiyue-20261126-classic.png",
     "width": 1398,
     "height": 2034,
     "title": "复古转盘，掌心重现",
-    "sha256": "d98031d814dc6fc723cba3dbd7c89ea87b8d245be84043c4fad2267914b0c973"
+    "sha256": "87d72eca083981f3a1c0b6d27c8dcd1d093aa18a02e624d34ec16af18235b338"
   },
   {
-    "file": "iphone-duo/04-aiyue-20261126-search.png",
+    "locale": "zh-Hans",
+    "file": "zh-Hans/iphone-duo/04-aiyue-20261126-search.png",
     "width": 1398,
     "height": 2034,
     "title": "多源速搜，无损曲库随行",
-    "sha256": "58ec89c56669b2d955d2b0135b2e3a183b460824b92b095beedd4d0809a55a8b"
+    "sha256": "f0bd4024f3293be01c971ad99a29cfc5291eaf2436f2eba942bb60bdf2ec37b9"
   },
   {
-    "file": "ipad-13/01-aiyue-20261126-discovery.png",
+    "locale": "zh-Hans",
+    "file": "zh-Hans/ipad-13/01-aiyue-20261126-discovery.png",
     "width": 2064,
     "height": 2752,
     "title": "懂你的首页，越听越合拍",
-    "sha256": "5b56264ca04d008861b64ab3cb7863dd16287753b6073dc13243a5ae101965c3"
+    "sha256": "aaf083b36136c961b269af9867b47c67371957196b2652cb01372f62ddbfdb4e"
   },
   {
-    "file": "ipad-13/02-aiyue-20261126-vinyl.png",
+    "locale": "zh-Hans",
+    "file": "zh-Hans/ipad-13/02-aiyue-20261126-vinyl.png",
     "width": 2064,
     "height": 2752,
     "title": "黑胶沉浸，上推顺滑切曲",
-    "sha256": "a5e9708f43cf4c9355bc5718eea5d4ec39380c2e55ce71e57a9f0da9846d65c0"
+    "sha256": "e3cf3bfd560571bf2c080f3751b8e35bf6d4507c07f30b855e4a71aa4ba760ae"
   },
   {
-    "file": "ipad-13/03-aiyue-20261126-classic.png",
+    "locale": "zh-Hans",
+    "file": "zh-Hans/ipad-13/03-aiyue-20261126-classic.png",
     "width": 2064,
     "height": 2752,
     "title": "复古转盘，掌心重现",
-    "sha256": "95c2252d4fbae342959485aebcb44165c48ab95fc716dc656bfd6d923079d8a2"
+    "sha256": "dc4d726815482de38a7b6be0e0f5ba4cc2e5ec317f73e43a8279bcda5c980a36"
   },
   {
-    "file": "ipad-13/04-aiyue-20261126-search.png",
+    "locale": "zh-Hans",
+    "file": "zh-Hans/ipad-13/04-aiyue-20261126-search.png",
     "width": 2064,
     "height": 2752,
     "title": "多源速搜，无损曲库随行",
-    "sha256": "a28df0d3c4d015671e4593e9f6ff64e52fc2798b025fd4daab687e1fd01b4302"
+    "sha256": "fd1b5da788f7ee1a9aec86c1e34027a69b21de65b9d282885d2f360b69600841"
+  },
+  {
+    "locale": "zh-Hant",
+    "file": "zh-Hant/iphone-medium/01-aiyue-20261126-discovery.png",
+    "width": 1206,
+    "height": 2622,
+    "title": "懂你的首頁，越聽越合拍",
+    "sha256": "6933fda3e12f4f2cbc03e4f8509713ee2e436886d33b67ea4976e960180c8a73"
+  },
+  {
+    "locale": "zh-Hant",
+    "file": "zh-Hant/iphone-medium/02-aiyue-20261126-vinyl.png",
+    "width": 1206,
+    "height": 2622,
+    "title": "黑膠沉浸，上推順滑切曲",
+    "sha256": "3131736a26a436b92b4f0cb05bdba0e023105fc914f604c3ff835efe6f81135c"
+  },
+  {
+    "locale": "zh-Hant",
+    "file": "zh-Hant/iphone-medium/03-aiyue-20261126-classic.png",
+    "width": 1206,
+    "height": 2622,
+    "title": "復古轉盤，掌心重現",
+    "sha256": "65a04723dd93cb9253b24541652567f96caddbdd5dd14baee3479ccd8f85542e"
+  },
+  {
+    "locale": "zh-Hant",
+    "file": "zh-Hant/iphone-medium/04-aiyue-20261126-search.png",
+    "width": 1206,
+    "height": 2622,
+    "title": "多源速搜，無損曲庫隨行",
+    "sha256": "8a19db3442935df0e7a20f0981d775961661c92ed990f7ca53909ac5778278af"
+  },
+  {
+    "locale": "zh-Hant",
+    "file": "zh-Hant/iphone-duo/01-aiyue-20261126-discovery.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "懂你的首頁，越聽越合拍",
+    "sha256": "a9934f561bf41fe2ca8aaa14550dba95d17f9a1bdc14e777b96cb40238a02b61"
+  },
+  {
+    "locale": "zh-Hant",
+    "file": "zh-Hant/iphone-duo/02-aiyue-20261126-vinyl.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "黑膠沉浸，上推順滑切曲",
+    "sha256": "6ed70af8c580d47d6e75551e8506edf2afe25f4b2885849b2e271aca4d85bb55"
+  },
+  {
+    "locale": "zh-Hant",
+    "file": "zh-Hant/iphone-duo/03-aiyue-20261126-classic.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "復古轉盤，掌心重現",
+    "sha256": "0739861024f5051dad1961642ee1d05dc64104e284f4bbfc267675e9de6f288e"
+  },
+  {
+    "locale": "zh-Hant",
+    "file": "zh-Hant/iphone-duo/04-aiyue-20261126-search.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "多源速搜，無損曲庫隨行",
+    "sha256": "2a218fe97ede3d49cdce1ae8dc264dfdd5926dab44ae94a0175314f156dc17bb"
+  },
+  {
+    "locale": "zh-Hant",
+    "file": "zh-Hant/ipad-13/01-aiyue-20261126-discovery.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "懂你的首頁，越聽越合拍",
+    "sha256": "e922076890d5046ed838536e0601f9616438e756a2c08f5b276cbf81979fbf95"
+  },
+  {
+    "locale": "zh-Hant",
+    "file": "zh-Hant/ipad-13/02-aiyue-20261126-vinyl.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "黑膠沉浸，上推順滑切曲",
+    "sha256": "97d0547ae02efc49a54f06dfe40397a86014c384c53ff5b4b477d321669e57d1"
+  },
+  {
+    "locale": "zh-Hant",
+    "file": "zh-Hant/ipad-13/03-aiyue-20261126-classic.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "復古轉盤，掌心重現",
+    "sha256": "7e880e123af3bc91f7d3d82bb225949ff61d8b5de5477fef296923c857325af4"
+  },
+  {
+    "locale": "zh-Hant",
+    "file": "zh-Hant/ipad-13/04-aiyue-20261126-search.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "多源速搜，無損曲庫隨行",
+    "sha256": "2a02701ce0ded5af9e9da65b3c04ea783c950a9c67f4a66ece6b42fe9019e914"
+  },
+  {
+    "locale": "en-US",
+    "file": "en-US/iphone-medium/01-aiyue-20261126-discovery.png",
+    "width": 1206,
+    "height": 2622,
+    "title": "Home Made For Your Taste",
+    "sha256": "6090edc51070531b9acb2b5204eb4f2b83cdc5bfa029d6308f0204f77229e583"
+  },
+  {
+    "locale": "en-US",
+    "file": "en-US/iphone-medium/02-aiyue-20261126-vinyl.png",
+    "width": 1206,
+    "height": 2622,
+    "title": "Vinyl Mode & Fluid Push-Up",
+    "sha256": "b9558430dcf97c367cfef13b6c159da8a8cb665a7d1036b4ccb9581650980ed2"
+  },
+  {
+    "locale": "en-US",
+    "file": "en-US/iphone-medium/03-aiyue-20261126-classic.png",
+    "width": 1206,
+    "height": 2622,
+    "title": "Retro Wheel, Reimagined",
+    "sha256": "2fe11ecc7ae7db860808052499021319c7b5628c0d290fe8be95693d9de1987b"
+  },
+  {
+    "locale": "en-US",
+    "file": "en-US/iphone-medium/04-aiyue-20261126-search.png",
+    "width": 1206,
+    "height": 2622,
+    "title": "Multi-Source Search & Lossless",
+    "sha256": "e9104fc6074e8febf7df3896727c1456c675cae0117aa7502ed65a4ebb3955db"
+  },
+  {
+    "locale": "en-US",
+    "file": "en-US/iphone-duo/01-aiyue-20261126-discovery.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "Home Made For Your Taste",
+    "sha256": "a11ef50d3da48356a8bf889121993438bf9de15164a52baaeadbb13e7d729616"
+  },
+  {
+    "locale": "en-US",
+    "file": "en-US/iphone-duo/02-aiyue-20261126-vinyl.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "Vinyl Mode & Fluid Push-Up",
+    "sha256": "a5f7f4daab8d8752ba89d4babd9981a449e396487d02dbfdbfbafc4d1beda173"
+  },
+  {
+    "locale": "en-US",
+    "file": "en-US/iphone-duo/03-aiyue-20261126-classic.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "Retro Wheel, Reimagined",
+    "sha256": "3d25ab035a9e70a415190be9b93bbfd81e1438b76bb7475f7de1aaeb8efc7764"
+  },
+  {
+    "locale": "en-US",
+    "file": "en-US/iphone-duo/04-aiyue-20261126-search.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "Multi-Source Search & Lossless",
+    "sha256": "7a72b8ad7ea20e6e1a449ba13c51c70c9d02a3d11d752d49eb7b1b78c062f618"
+  },
+  {
+    "locale": "en-US",
+    "file": "en-US/ipad-13/01-aiyue-20261126-discovery.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "Home Made For Your Taste",
+    "sha256": "abf1130a245a659dc0e1bc9c590f4b6f86bde57a6eec1d2c0809609d7c62a44d"
+  },
+  {
+    "locale": "en-US",
+    "file": "en-US/ipad-13/02-aiyue-20261126-vinyl.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "Vinyl Mode & Fluid Push-Up",
+    "sha256": "bd2960132cbaf9fbd0b62227f71c7012da915e35f6ad028938a2c1ce99497983"
+  },
+  {
+    "locale": "en-US",
+    "file": "en-US/ipad-13/03-aiyue-20261126-classic.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "Retro Wheel, Reimagined",
+    "sha256": "e7f35fecbcca7689b360cbc01e59b502c6447291ce682e449103f213cb414285"
+  },
+  {
+    "locale": "en-US",
+    "file": "en-US/ipad-13/04-aiyue-20261126-search.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "Multi-Source Search & Lossless",
+    "sha256": "2b6ab40f68baa2e85c8ed4ac71d301a2c9cb2408bfb16da8aeedd8b402157e5e"
+  },
+  {
+    "locale": "fr-FR",
+    "file": "fr-FR/iphone-medium/01-aiyue-20261126-discovery.png",
+    "width": 1206,
+    "height": 2622,
+    "title": "Un Accueil Selon Vos Goûts",
+    "sha256": "26126cf2682e3f8ed10bdf381851fdc0e8553e03727a73a1766bdd352ab85ed8"
+  },
+  {
+    "locale": "fr-FR",
+    "file": "fr-FR/iphone-medium/02-aiyue-20261126-vinyl.png",
+    "width": 1206,
+    "height": 2622,
+    "title": "Vinyle et Passage Fluide",
+    "sha256": "61b2df47d5190c9b5befacee4c1034be6da8c35477fbc5f7db9664b7300f334a"
+  },
+  {
+    "locale": "fr-FR",
+    "file": "fr-FR/iphone-medium/03-aiyue-20261126-classic.png",
+    "width": 1206,
+    "height": 2622,
+    "title": "Molette Rétro Réinventée",
+    "sha256": "2da2cd3a65d66fb4c2c74644e3bbf7e91ef8d269b63155a124bb3956e0025343"
+  },
+  {
+    "locale": "fr-FR",
+    "file": "fr-FR/iphone-medium/04-aiyue-20261126-search.png",
+    "width": 1206,
+    "height": 2622,
+    "title": "Recherche Multi-Sources",
+    "sha256": "5c523a0c60548337669229c373294ce0656609699e2a6dc51a9391cca9a047b4"
+  },
+  {
+    "locale": "fr-FR",
+    "file": "fr-FR/iphone-duo/01-aiyue-20261126-discovery.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "Un Accueil Selon Vos Goûts",
+    "sha256": "b27acc50ce6ccd18eacf68ea650174632c2f688e75c756b40342109e4d1ac6d2"
+  },
+  {
+    "locale": "fr-FR",
+    "file": "fr-FR/iphone-duo/02-aiyue-20261126-vinyl.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "Vinyle et Passage Fluide",
+    "sha256": "93bdb73a0fe1204f019d71c9a4f14962e0b1f42eadbc3ef2cb36181464ff7ed3"
+  },
+  {
+    "locale": "fr-FR",
+    "file": "fr-FR/iphone-duo/03-aiyue-20261126-classic.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "Molette Rétro Réinventée",
+    "sha256": "2f576f1acb17e20b695dd709bacbfd27ec897e4e673159215c11fd64a71b1710"
+  },
+  {
+    "locale": "fr-FR",
+    "file": "fr-FR/iphone-duo/04-aiyue-20261126-search.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "Recherche Multi-Sources",
+    "sha256": "403568a99353f392a35ed20400840115b34548b0519d7b18a7cbbfd61317ff85"
+  },
+  {
+    "locale": "fr-FR",
+    "file": "fr-FR/ipad-13/01-aiyue-20261126-discovery.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "Un Accueil Selon Vos Goûts",
+    "sha256": "0af1f391c5d1ed22d2beb6bae4459a661f294cae4fe1ae2328088ce3acaf7303"
+  },
+  {
+    "locale": "fr-FR",
+    "file": "fr-FR/ipad-13/02-aiyue-20261126-vinyl.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "Vinyle et Passage Fluide",
+    "sha256": "ba73ced941e0a83f6313e4cf272ee831835ebadb9e767823b0a1bb3301bdd6c3"
+  },
+  {
+    "locale": "fr-FR",
+    "file": "fr-FR/ipad-13/03-aiyue-20261126-classic.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "Molette Rétro Réinventée",
+    "sha256": "b8c8b7ebbcbe4a7dfb58285f7617732c561a6f24088a0eb7b60ac6bf68da8c39"
+  },
+  {
+    "locale": "fr-FR",
+    "file": "fr-FR/ipad-13/04-aiyue-20261126-search.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "Recherche Multi-Sources",
+    "sha256": "aa180b33f74a2066553b25207cbf912d40cb12bd13b13b47f0e0c7121e6caf85"
   }
 ]
