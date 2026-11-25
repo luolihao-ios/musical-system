@@ -1,0 +1,86 @@
+[
+  {
+    "file": "iphone-medium/01-aiyue-20261126-discovery.png",
+    "width": 1206,
+    "height": 2622,
+    "title": "懂你的首页，越听越合拍",
+    "sha256": "f1b6b1939f69f931dd43090dd148c412c722cc96eade3d28e4a5ebe953d7b3de"
+  },
+  {
+    "file": "iphone-medium/02-aiyue-20261126-vinyl.png",
+    "width": 1206,
+    "height": 2622,
+    "title": "黑胶沉浸，上推顺滑切曲",
+    "sha256": "c3930fa6b672ede2d2e725f63514eaf391f9b2968381adf2b38f5bc1d4ee2282"
+  },
+  {
+    "file": "iphone-medium/03-aiyue-20261126-classic.png",
+    "width": 1206,
+    "height": 2622,
+    "title": "复古转盘，掌心重现",
+    "sha256": "386a14f6455940a482a9e2a9c650e9136979d16e9dcca978124e47b072d698db"
+  },
+  {
+    "file": "iphone-medium/04-aiyue-20261126-search.png",
+    "width": 1206,
+    "height": 2622,
+    "title": "多源速搜，无损曲库随行",
+    "sha256": "678f9a90ddaaf7721aa4d73273ca5ab77179b102896c953f6278a8e663ceb35f"
+  },
+  {
+    "file": "iphone-duo/01-aiyue-20261126-discovery.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "懂你的首页，越听越合拍",
+    "sha256": "cb1a20db0e71da06454b423b134c689fe667e2122baec9e01a91377da1f6ee74"
+  },
+  {
+    "file": "iphone-duo/02-aiyue-20261126-vinyl.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "黑胶沉浸，上推顺滑切曲",
+    "sha256": "1f6ac01d7b2601e49643cf80f2aae9dd446ed312b7054e0b504a541436d3ae21"
+  },
+  {
+    "file": "iphone-duo/03-aiyue-20261126-classic.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "复古转盘，掌心重现",
+    "sha256": "d98031d814dc6fc723cba3dbd7c89ea87b8d245be84043c4fad2267914b0c973"
+  },
+  {
+    "file": "iphone-duo/04-aiyue-20261126-search.png",
+    "width": 1398,
+    "height": 2034,
+    "title": "多源速搜，无损曲库随行",
+    "sha256": "58ec89c56669b2d955d2b0135b2e3a183b460824b92b095beedd4d0809a55a8b"
+  },
+  {
+    "file": "ipad-13/01-aiyue-20261126-discovery.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "懂你的首页，越听越合拍",
+    "sha256": "5b56264ca04d008861b64ab3cb7863dd16287753b6073dc13243a5ae101965c3"
+  },
+  {
+    "file": "ipad-13/02-aiyue-20261126-vinyl.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "黑胶沉浸，上推顺滑切曲",
+    "sha256": "a5e9708f43cf4c9355bc5718eea5d4ec39380c2e55ce71e57a9f0da9846d65c0"
+  },
+  {
+    "file": "ipad-13/03-aiyue-20261126-classic.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "复古转盘，掌心重现",
+    "sha256": "95c2252d4fbae342959485aebcb44165c48ab95fc716dc656bfd6d923079d8a2"
+  },
+  {
+    "file": "ipad-13/04-aiyue-20261126-search.png",
+    "width": 2064,
+    "height": 2752,
+    "title": "多源速搜，无损曲库随行",
+    "sha256": "a28df0d3c4d015671e4593e9f6ff64e52fc2798b025fd4daab687e1fd01b4302"
+  }
+]
