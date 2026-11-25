@@ -33,7 +33,7 @@
 "编辑文件" = "Edit files";
 "全部删除" = "Delete all";
 "正在启动网页服务…" = "Starting web service…";
-"访问码：%lld" = "Access code: %lld";
+"访问码：%@" = "Access code: %@";
 "添加手机文件发送给电脑" = "Add files from iPhone for computer";
 "发送给电脑" = "Send to computer";
 "删除" = "Delete";
@@ -51,3 +51,26 @@
 "已加入发送队列，电脑浏览器会自动下载" = "Added to the send queue. The computer browser will download it automatically.";
 "媒体已加入发送队列，电脑浏览器会自动下载" = "Media added to the send queue. The computer browser will download it automatically.";
 "导入爱乐之城" = "Import to AiYue Music";
+
+"接收" = "Receive";
+"发送" = "Send";
+"更多选项" = "More options";
+"网页服务运行中" = "Web service running";
+"在电脑浏览器打开" = "Open in computer browser";
+"访问码" = "Access code";
+"已复制" = "Copied";
+"复制地址" = "Copy address";
+"扫码打开" = "Scan to open";
+"等待电脑发送文件" = "Waiting for files from computer";
+"同一 Wi-Fi 下在电脑浏览器打开上方地址" = "Open the address above in a browser on the same Wi-Fi";
+"输入 6 位访问码即可建立连接" = "Enter the 6-digit access code to connect";
+"拖入文件或文件夹即可高速接收" = "Drop files or folders to receive at full speed";
+"选择文件" = "Select files";
+"照片与视频" = "Photos & videos";
+"音乐、文档、压缩包" = "Music, docs, archives";
+"最多一次选 50 项" = "Up to 50 items at once";
+"选择手机文件发送到电脑" = "Select phone files to send to computer";
+"添加文件后点击发送，电脑浏览器会自动开始接收" = "Add files and tap Send; your browser downloads them automatically";
+"已加入待发列表，点击下方“发送给电脑”开始传输" = "Added to queue. Tap Send to computer below to start.";
+"媒体已加入待发列表，点击下方“发送给电脑”开始传输" = "Media added to queue. Tap Send to computer below to start.";
+"文件保存到：文件 › 我的 iPad › file send › 按日期分类" = "Files are saved to Files › On My iPad › file send › by date";

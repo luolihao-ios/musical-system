@@ -12,7 +12,7 @@ globalThis.fileSendI18n = (() => {
     },
     'zh-Hans': {
       appName: 'file send', send: '发送', receive: '接收', settings: '设置',
-      connectIPhone: '连接 iPhone', accessCodeHint: '输入手机“电脑传文件”页面上的访问码', accessCode: '访问码', connect: '连接',
+      connectIPhone: '连接 iPhone', accessCodeHint: '输入手机“浏览器传文件”页面上的访问码', accessCode: '访问码', connect: '连接',
       choose: '选择', file: '文件', folder: '文件夹', noFiles: '尚未选择文件', dropHint: '文件或文件夹可以拖到这里', edit: '编辑', done: '完成', delete: '删除', clearAll: '全部删除', endPrevious: '结束上一批未完成传输', sendToPhone: '发送到手机',
       phoneToComputer: '手机发送给电脑', phoneAutoDownload: '手机选择文件后会自动开始下载到浏览器默认下载目录。',
       waitingPhoneFiles: '等待手机发送文件…', receivedFiles: '接收', saveLocation: '文件保存位置', filesRoot: '文件 › file send', chooseDestination: '选择保存位置', diagnostics: '诊断日志', diagnosticsHint: '手机“文件”App 中的诊断日志', downloadDiagnostics: '下载日志', copyAddress: '复制连接地址', phoneFiles: '手机文件', up: '返回上级', newFolder: '新建文件夹', refresh: '刷新', waitingPhone: '等待手机响应…', cancel: '取消',
@@ -20,7 +20,7 @@ globalThis.fileSendI18n = (() => {
     },
     'zh-Hant': {
       appName: 'file send', send: '傳送', receive: '接收', settings: '設定',
-      connectIPhone: '連接 iPhone', accessCodeHint: '輸入手機「電腦傳檔案」頁面上的存取碼', accessCode: '存取碼', connect: '連接',
+      connectIPhone: '連接 iPhone', accessCodeHint: '輸入手機「瀏覽器傳檔案」頁面上的存取碼', accessCode: '存取碼', connect: '連接',
       choose: '選擇', file: '檔案', folder: '資料夾', noFiles: '尚未選擇檔案', dropHint: '可將檔案或資料夾拖曳到此處', edit: '編輯', done: '完成', delete: '刪除', clearAll: '全部刪除', endPrevious: '結束上一批未完成傳輸', sendToPhone: '傳送到手機',
       phoneToComputer: '手機傳送到電腦', phoneAutoDownload: '手機選擇檔案後，會自動下載到瀏覽器的預設下載位置。',
       waitingPhoneFiles: '等待手機傳送檔案…', receivedFiles: '接收', saveLocation: '檔案儲存位置', filesRoot: '檔案 › file send', chooseDestination: '選擇儲存位置', diagnostics: '診斷日誌', diagnosticsHint: '手機「檔案」App 中的診斷日誌', downloadDiagnostics: '下載日誌', copyAddress: '複製連接位址', phoneFiles: '手機檔案', up: '返回上層', newFolder: '新增資料夾', refresh: '重新整理', waitingPhone: '等待手機回應…', cancel: '取消',

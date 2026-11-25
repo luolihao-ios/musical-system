@@ -27,9 +27,11 @@ final class StoreAssetCaptureTests: XCTestCase {
             save(app, name: "filesend-" + page)
             if page == "connect" {
                 XCUIDevice.shared.orientation = .landscapeLeft
+                RunLoop.current.run(until: Date().addingTimeInterval(1.0))
                 XCTAssertTrue(app.staticTexts["transfer.address"].isHittable)
                 save(app, name: "filesend-landscape")
                 XCUIDevice.shared.orientation = .portrait
+                RunLoop.current.run(until: Date().addingTimeInterval(1.0))
             }
             // Duo 的前台退出自动化曾在截图完成后超时。先让系统完成
             // 前后台切换，再结束进程，保留所有页面及尺寸断言。

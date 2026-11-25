@@ -42,7 +42,7 @@ function render() {
   chosen.forEach((file, index) => {
     const row = document.createElement('div'); row.className = 'file-card';
     if (file.type.startsWith('image/')) { const image = document.createElement('img'); image.src = URL.createObjectURL(file); urls.push(image.src); row.append(image); }
-    else { const icon = document.createElement('span'); icon.className = 'file-icon'; icon.textContent = /\.(mp3|aiyuepack)$/i.test(file.name) ? '♫' : '▤'; row.append(icon); }
+    else { const icon = document.createElement('span'); icon.className = 'file-icon'; icon.textContent = /\.(mp3|m4a|flac|wav|aac|aiff|alac|aiyuepack)$/i.test(file.name) ? '♫' : /\.(mp4|mov|mkv|webm)$/i.test(file.name) ? '🎬' : /\.(zip|rar|7z|tar|gz)$/i.test(file.name) ? '📦' : /\.pdf$/i.test(file.name) ? '📕' : '📄'; row.append(icon); }
     const label = document.createElement('span'); label.className = 'file-name'; label.textContent = file.webkitRelativePath || file.name; label.title = label.textContent;
     const bytes = document.createElement('span'); bytes.className = 'file-size'; bytes.textContent = size(file.size);
     const remove = document.createElement('button'); remove.textContent = t('delete'); remove.hidden = !editing; remove.onclick = () => { chosen.splice(index, 1); render(); };
@@ -72,6 +72,7 @@ async function droppedFiles(dataTransfer) {
 $('clear').onclick = () => { chosen = []; render(); };
 const drop = $('drop'); drop.ondragenter = event => { event.preventDefault(); drop.classList.add('dragging'); }; drop.ondragover = event => event.preventDefault(); drop.ondragleave = () => drop.classList.remove('dragging'); drop.ondrop = async event => { event.preventDefault(); drop.classList.remove('dragging'); const direct = Array.from(event.dataTransfer.files || []); select(direct.length ? direct : await droppedFiles(event.dataTransfer)); };
 
+$('code').onkeydown = event => { if (event.key === 'Enter') $('connect').click(); };
 $('connect').onclick = async () => {
   try { await api('/web/session', 'POST', { code: $('code').value }); $('code').value = ''; connected = true; page('send'); message(t('connected')); await recover(); await loadOutbound(); const info = await api('/web/info'); $('version').textContent = t('browserConnected', info.version); }
   catch (error) { message(error.message); }

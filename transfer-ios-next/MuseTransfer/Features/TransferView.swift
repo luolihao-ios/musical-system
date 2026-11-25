@@ -5,16 +5,24 @@ import PhotosUI
 struct TransferView: View {
     @State private var model = TransferViewModel()
     @State private var mediaItems: [PhotosPickerItem] = []
-    @State private var textToSend = ""
-    @State private var refreshRotation = 0.0
+
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 18) {
-                BrowserTransferView()
-            }
-            .navigationTitle("file send")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { ShareLink(item: DiagnosticLog.fileURL) { Image(systemName: "stethoscope") }.accessibilityLabel("导出诊断日志") } }
+            BrowserTransferView()
+                .navigationTitle("file send")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu {
+                            ShareLink(item: DiagnosticLog.fileURL) {
+                                Label("导出诊断日志", systemImage: "stethoscope")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                        }
+                        .accessibilityLabel("更多选项")
+                    }
+                }
         }
         .fileImporter(isPresented: $model.showImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { model.select($0) }
         .fileImporter(isPresented: $model.showFolderImporter, allowedContentTypes: [.folder], allowsMultipleSelection: false) { model.selectFolder($0) }
@@ -28,71 +36,10 @@ struct TransferView: View {
         .alert("未选择文件", isPresented: $model.showSelectionWarning) { Button("关闭", role: .cancel) { } } message: { Text("请至少选择一个文件。") }
         .sheet(isPresented: $model.showEditor) { SelectionEditor(model: model) }
     }
-
-    @ViewBuilder
-    private var clientTransferContent: some View {
-        VStack(alignment: .leading, spacing: 18) {
-                Text("选择").font(.title.bold())
-                if model.selectedFiles.isEmpty {
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        PhotosPicker(selection: $mediaItems, maxSelectionCount: 50, matching: .any(of: [.images, .videos])) { SelectionTile(title: "媒体", icon: "photo.on.rectangle") }
-                        Button { model.showImporter = true } label: { SelectionTile(title: "文件", icon: "doc") }
-                        Button { model.showFolderImporter = true } label: { SelectionTile(title: "文件夹", icon: "folder") }
-                    }
-                } else {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack { Text("选择").font(.headline); Spacer(); Button("编辑") { model.showEditor = true }.foregroundStyle(.indigo) }
-                        Text(model.selectedSummary).foregroundStyle(.secondary)
-                        ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 12) { ForEach(model.selectedFiles, id: \.self) { url in
-                            VStack(spacing: 7) { Image(systemName: thumbnailIcon(url)).font(.title2).foregroundStyle(.indigo).frame(width: 52, height: 52).background(.indigo.opacity(0.12), in: RoundedRectangle(cornerRadius: 12)); Text(url.lastPathComponent).font(.caption).lineLimit(1).frame(width: 82); Button("移除") { model.remove(url) }.font(.caption2) }.frame(width: 92)
-                        } } }
-                        Button("添加文件", systemImage: "plus") { model.showImporter = true }.buttonStyle(.bordered).tint(.indigo)
-                    }.padding().background(.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 18))
-                }
-                HStack(spacing: 8) {
-                    Text("附近设备").font(.title.bold())
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.7)) { refreshRotation += 720 }
-                        model.refresh()
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .rotationEffect(.degrees(refreshRotation))
-                    }.buttonStyle(.plain).foregroundStyle(.indigo).accessibilityLabel("刷新附近设备")
-                }
-                if let status = model.sendStatus { Text(status).foregroundStyle(status == "传输完成" ? .green : .secondary) }
-                if model.devices.isEmpty { ContentUnavailableView("暂未发现设备", systemImage: "wifi.exclamationmark", description: Text("请确认设备连接同一 Wi‑Fi 后点击刷新")) }
-                ForEach(model.devices) { device in
-                    HStack { Image(systemName: device.deviceType == "mobile" ? "iphone" : "desktopcomputer").font(.title2).foregroundStyle(.indigo); VStack(alignment: .leading) { Text(device.alias).font(.headline); Text(device.deviceType).foregroundStyle(.secondary) }; Spacer(); if model.isSending { ProgressView() } }
-                    .padding().background(.indigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 16)).contentShape(RoundedRectangle(cornerRadius: 16)).onTapGesture { model.send(to: device) }
-                }
-                Spacer()
-            }
-    }
-
-    private func thumbnailIcon(_ url: URL) -> String {
-        let type = (try? url.resourceValues(forKeys: [.contentTypeKey]).contentType)
-        if type?.conforms(to: .image) == true { return "photo" }
-        if type?.conforms(to: .audio) == true { return "music.note" }
-        if type?.conforms(to: .movie) == true { return "film" }
-        return "doc"
-    }
-}
-
-private struct SelectionTile: View {
-    let title: String
-    let icon: String
-    var body: some View {
-        VStack(spacing: 9) {
-            Image(systemName: icon).font(.title2)
-            Text(title).font(.headline)
-        }
-        .foregroundStyle(.indigo)
-        .frame(maxWidth: .infinity, minHeight: 82)
-        .background(.indigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-    }
 }
 
 private struct ReceiveProgressScreen: View {
+    private static let importableMusicExtensions: Set<String> = ["aiyuepack", "mp3", "m4a", "flac", "wav", "aiff", "aac", "alac"]
     @Bindable var model: TransferViewModel
 
     var body: some View {
@@ -107,7 +54,17 @@ private struct ReceiveProgressScreen: View {
                             ReceiveFileRow(name: expected.fileName, size: saved?.size ?? expected.size,
                                            savedDescription: saved?.savedDescription,
                                            completed: saved != nil)
-                            if let saved, saved.url.pathExtension.lowercased() == "aiyuepack" { ShareLink("导入爱乐之城", item: saved.url) }
+                            if let saved, Self.importableMusicExtensions.contains(saved.url.pathExtension.lowercased()) {
+                                ShareLink(item: saved.url) {
+                                    Label("导入爱乐之城", systemImage: "music.note")
+                                        .font(.caption.weight(.semibold))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 7)
+                                        .background(Color.indigo.opacity(0.12), in: Capsule())
+                                        .foregroundStyle(.indigo)
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                     }
                 }
@@ -132,7 +89,6 @@ private struct ReceiveProgressScreen: View {
         }
         .interactiveDismissDisabled(!model.receiveCompleted)
     }
-
 }
 
 private struct ReceiveFileRow: View {
@@ -161,8 +117,13 @@ private struct ReceiveFileRow: View {
     }
 
     private var fileIcon: String {
-        let extensionName = URL(fileURLWithPath: name).pathExtension.lowercased()
-        return ["jpg", "jpeg", "png", "gif", "heic", "webp"].contains(extensionName) ? "photo" : "doc"
+        let ext = URL(fileURLWithPath: name).pathExtension.lowercased()
+        if ["mp3", "m4a", "flac", "wav", "aiff", "aac", "alac", "aiyuepack"].contains(ext) { return "music.note" }
+        if ["jpg", "jpeg", "png", "gif", "heic", "webp"].contains(ext) { return "photo" }
+        if ["mp4", "mov", "m4v", "mkv", "avi", "webm"].contains(ext) { return "film" }
+        if ["zip", "rar", "7z", "tar", "gz"].contains(ext) { return "doc.zipper" }
+        if ext == "pdf" { return "doc.richtext" }
+        return "doc"
     }
 }
 
