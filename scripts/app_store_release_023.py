@@ -34,6 +34,13 @@ def require(condition, message):
         raise ValueError(message)
 
 
+def entry_device_folder(entry: dict) -> str:
+    parts = entry["file"].split("/")
+    if len(parts) >= 3:
+        return parts[1]
+    return parts[0]
+
+
 def validate_campaign(campaign: dict, folder: Path = CAMPAIGN_DIR):
     require(campaign.get("version") == "0.2.3", "版本号必须是 0.2.3")
     locales = campaign.get("locales") or {}
@@ -49,7 +56,13 @@ def validate_campaign(campaign: dict, folder: Path = CAMPAIGN_DIR):
 
     manifest_path = folder / "文件验收清单.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    require(len(manifest) == 12, f"宣传图清单应为 12 张，实际 {len(manifest)}")
+    require(len(manifest) == 48, f"四语宣传图清单应为 48 张，实际 {len(manifest)}")
+    for loc in LOCALES:
+        loc_items = [e for e in manifest if e.get("locale") == loc]
+        require(len(loc_items) == 12, f"{loc} 宣传图数量应为 12 张，实际 {len(loc_items)}")
+        for dev in ("iphone-medium", "iphone-duo", "ipad-13"):
+            cnt = sum(entry_device_folder(e) == dev for e in loc_items)
+            require(cnt == 4, f"{loc}/{dev} 宣传图数量应为 4 张，实际 {cnt}")
     prepared = [(entry, validate_manifest_image(folder, entry)) for entry in manifest]
     return manifest, prepared
 
@@ -157,7 +170,8 @@ def upload_campaign_images(api, prepared: list[tuple[dict, bytes]]) -> list[tupl
         require(bool(matched), f"Apple 素材规格中未匹配尺寸 {width}x{height}")
 
         filename = "v023-" + entry["file"].replace("/", "-")
-        reference = f"{CAMPAIGN_REFERENCE} {entry['title']} {width}x{height} {entry['sha256'][:12]}"
+        loc_tag = entry.get("locale", "zh-Hans")
+        reference = f"{CAMPAIGN_REFERENCE} {loc_tag} {entry['title']} {width}x{height} {entry['sha256'][:12]}"
         item = by_name.get(filename)
         if item and item["attributes"].get("referenceName") == reference:
             selected.append((entry, item["id"]))
@@ -220,8 +234,12 @@ def sync_placements_for_locale(api, locale_resource: dict, selected: list[tuple[
     locale_code = locale_resource["attributes"]["locale"]
     grouped_expected: dict[str, list[str]] = {}
     for entry, image_id in selected:
-        group = screenshot_group(entry["file"])
+        if entry.get("locale") != locale_code:
+            continue
+        group = screenshot_group(f"{entry_device_folder(entry)}/poster.png")
         grouped_expected.setdefault(group, []).append(image_id)
+    require(set(grouped_expected) == {"IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE", "IPHONE_DUO_PROFILE", "IPAD_13_PROFILE"},
+            f"{locale_code} 缺少对应设备分组截图：{grouped_expected}")
 
     order_verified = {}
     for group, expected_ids in grouped_expected.items():

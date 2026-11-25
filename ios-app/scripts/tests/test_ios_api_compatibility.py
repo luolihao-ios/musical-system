@@ -67,6 +67,18 @@ class IOSAPICompatibilityTests(unittest.TestCase):
         self.assertIn(".ignoresSafeArea()", dock)
         self.assertIn("menuClearance", dock)
         self.assertIn("UITabBar", dock)
+        self.assertNotIn("GeometryReader { safeArea in\n            content()", dock)
+
+    def test_info_plist_supports_all_orientations_for_unfolded_and_tabletop_duo(self) -> None:
+        import plistlib
+        info = plistlib.loads((IOS_ROOT / "LocalMusicPlayer" / "Info.plist").read_bytes())
+        orientations = set(info.get("UISupportedInterfaceOrientations", []))
+        self.assertTrue({
+            "UIInterfaceOrientationPortrait",
+            "UIInterfaceOrientationLandscapeLeft",
+            "UIInterfaceOrientationLandscapeRight",
+        }.issubset(orientations))
+        self.assertNotIn("UIRequiresFullScreen", info)
 
 
 if __name__ == "__main__":

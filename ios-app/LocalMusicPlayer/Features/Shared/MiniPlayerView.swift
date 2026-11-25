@@ -51,6 +51,8 @@ struct MiniPlayerView: View {
                 queueRequest: queueRequest,
                 topSafeInset: topInset,
                 bottomSafeInset: bottomInset,
+                leadingSafeInset: leadingInset,
+                trailingSafeInset: trailingInset,
                 closePanel: close,
                 panelDragChanged: dragChanged,
                 panelDragEnded: dragEnded,

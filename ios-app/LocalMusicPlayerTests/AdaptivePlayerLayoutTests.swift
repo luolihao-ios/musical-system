@@ -68,4 +68,12 @@ final class AdaptivePlayerLayoutTests: XCTestCase {
         XCTAssertEqual(AdaptivePlayerLayout.menuClearance(window: window,
             menu: CGRect(x: 0, y: 0, width: 1024, height: 60), bottomInset: 20), 28)
     }
+
+    func testTabletopCompactPaneDetectsHalfFoldedWideLowContainers() {
+        XCTAssertTrue(AdaptivePlayerLayout.isTabletopCompactPane(size: CGSize(width: 669, height: 320)))
+        XCTAssertTrue(AdaptivePlayerLayout.isTabletopCompactPane(size: CGSize(width: 956, height: 320)))
+        XCTAssertFalse(AdaptivePlayerLayout.isTabletopCompactPane(size: CGSize(width: 466, height: 678)))
+        XCTAssertFalse(AdaptivePlayerLayout.isTabletopCompactPane(size: CGSize(width: 500, height: 669)))
+        XCTAssertFalse(AdaptivePlayerLayout.isTabletopCompactPane(size: CGSize(width: 1032, height: 1376)))
+    }
 }

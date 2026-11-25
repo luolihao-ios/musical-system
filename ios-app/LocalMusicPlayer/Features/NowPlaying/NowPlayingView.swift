@@ -21,6 +21,8 @@ struct NowPlayingView: View {
     var queueRequest: Int = 0
     var topSafeInset: CGFloat = 0
     var bottomSafeInset: CGFloat = 0
+    var leadingSafeInset: CGFloat = 0
+    var trailingSafeInset: CGFloat = 0
     var closePanel: (() -> Void)? = nil
     var panelDragChanged: ((DragGesture.Value) -> Void)? = nil
     var panelDragEnded: ((DragGesture.Value) -> Void)? = nil
@@ -183,6 +185,8 @@ struct NowPlayingView: View {
                         }
                     }
                 }
+                .padding(.leading, leadingSafeInset)
+                .padding(.trailing, trailingSafeInset)
                 .foregroundStyle(effectiveForeground)
                 .tint(effectiveForeground)
                 .background {
@@ -767,6 +771,23 @@ struct NowPlayingView: View {
                     showSkinPicker = true
                 }
             )
+            .frame(width: size.width, height: size.height)
+        } else if AdaptivePlayerLayout.isTabletopCompactPane(size: size) {
+            let side = min(max(96, size.height - 20), max(120, size.width * 0.36), 230)
+            HStack(spacing: 18) {
+                artwork(side: side)
+                VStack(spacing: 10) {
+                    Spacer(minLength: 0)
+                    trackIdentityBar
+                    if model.hasLyrics {
+                        lyricSnippet
+                    }
+                    progressControls
+                    transportControls
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity)
+            }
             .frame(width: size.width, height: size.height)
         } else {
             let side = min(max(0, size.width), max(120, size.height - 290), 560)

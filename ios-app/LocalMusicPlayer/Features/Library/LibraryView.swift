@@ -301,6 +301,8 @@ private struct LibraryGroupsView: View {
             }
         }
         .navigationTitle(title)
+        .scrollContentBackground(.hidden)
+        .background(RefreshBackdrop())
         .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .overlay {
             if groups.isEmpty {
@@ -348,6 +350,8 @@ struct LibraryTracksView: View {
             }
         }
         .navigationTitle(title)
+        .scrollContentBackground(.hidden)
+        .background(RefreshBackdrop())
         .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .overlay {
             if tracks.isEmpty {

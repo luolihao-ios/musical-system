@@ -46,7 +46,7 @@ struct DiscoveryView: View {
                     emptyState
                 }
             }
-            .frame(maxWidth: 920)
+            .frame(maxWidth: 1120)
             .padding(.horizontal, 20)
             .padding(.top, 14)
             .padding(.bottom, 88)

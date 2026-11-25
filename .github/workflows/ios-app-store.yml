@@ -139,6 +139,7 @@ jobs:
         with:
           name: store-023-verification
           path: .api-inspection/store-023-*.json
+          include-hidden-files: true
           if-no-files-found: warn
   archive-and-upload:
     if: inputs.operation == 'build' || inputs.operation == 'testflight' || inputs.operation == ''

@@ -110,6 +110,8 @@ struct AppShellView: View {
                     .accessibilityIdentifier("personal.settings")
                 }
                 .navigationTitle("我的")
+                .scrollContentBackground(.hidden)
+                .background(RefreshBackdrop())
                 .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
             }
             .tabItem { Label("我的", systemImage: "person.crop.circle") }
@@ -165,6 +167,8 @@ struct AppShellView: View {
                     }
                 }
                 .navigationTitle("设置")
+                .scrollContentBackground(.hidden)
+                .background(RefreshBackdrop())
                 .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
                 .task {
                     guard !didCheckStore else { return }

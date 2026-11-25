@@ -16,14 +16,19 @@ final class StoreAssetCaptureTests: XCTestCase {
         app.buttons["player.compact.open"].tap()
         XCTAssertTrue(app.buttons["player.detail.playPause"].waitForExistence(timeout: 10))
         save(app, name: "adaptive-02-artwork")
+        XCUIDevice.shared.orientation = .landscapeLeft
+        XCTAssertTrue(app.buttons["player.detail.playPause"].waitForExistence(timeout: 10))
+        save(app, name: "adaptive-05-landscape-nowplaying")
+        XCUIDevice.shared.orientation = .portrait
         app.buttons["player.tab.lyrics"].tap()
         XCTAssertTrue(app.staticTexts["player.lyrics.line.0"].firstMatch.waitForExistence(timeout: 10))
         save(app, name: "adaptive-03-lyrics")
         app.buttons["player.detail.close"].tap()
         XCTAssertTrue(app.buttons["搜索"].firstMatch.waitForExistence(timeout: 10))
         app.buttons["搜索"].firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["演示搜索结果 · License unknown"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["演示搜索结果 · 许可未知"].firstMatch.waitForExistence(timeout: 10))
         save(app, name: "adaptive-04-online")
+        XCUIDevice.shared.press(.home)
     }
     func testCaptureArtworkAndLyrics() {
         let app = XCUIApplication()

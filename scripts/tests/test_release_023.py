@@ -1,4 +1,4 @@
-"""0.2.3 App Store Connect 版本发布资料与三设备宣传图离线测试。"""
+"""0.2.3 App Store Connect 版本发布资料与四语言三设备（48 张）宣传图离线测试。"""
 import importlib.util
 import json
 from pathlib import Path
@@ -97,10 +97,13 @@ class Release023Tests(unittest.TestCase):
     def test_campaign_manifest_and_localizations_are_valid(self):
         campaign = json.loads((ROOT / "marketing/app-store-2026-11-26/localizations/0.2.3.json").read_text(encoding="utf-8"))
         manifest, prepared = release.validate_campaign(campaign)
-        self.assertEqual(len(manifest), 12)
-        self.assertEqual(len(prepared), 12)
-        for group in ("iphone-medium", "iphone-duo", "ipad-13"):
-            self.assertEqual(sum(m["file"].startswith(group + "/") for m in manifest), 4)
+        self.assertEqual(len(manifest), 48)
+        self.assertEqual(len(prepared), 48)
+        for loc in release.LOCALES:
+            loc_items = [m for m in manifest if m.get("locale") == loc]
+            self.assertEqual(len(loc_items), 12)
+            for group in ("iphone-medium", "iphone-duo", "ipad-13"):
+                self.assertEqual(sum(release.entry_device_folder(m) == group for m in loc_items), 4)
 
     def test_ensure_editable_version_creates_reuses_and_renames_safely(self):
         api_create = FakeAPI([{"id": "v21", "attributes": {"versionString": "0.2.1", "appStoreState": "READY_FOR_SALE"}}])
@@ -122,7 +125,7 @@ class Release023Tests(unittest.TestCase):
         with self.assertRaises(ValueError):
             release.ensure_editable_version(api_locked, "0.2.3")
 
-    def test_sync_localizations_and_placements_without_review_submission(self):
+    def test_sync_localizations_and_per_locale_placements_isolated(self):
         campaign = json.loads((ROOT / "marketing/app-store-2026-11-26/localizations/0.2.3.json").read_text(encoding="utf-8"))
         api = FakeAPI(
             versions=[{"id": "v23", "attributes": {"versionString": "0.2.3", "appStoreState": "PREPARE_FOR_SUBMISSION"}}],
@@ -144,14 +147,22 @@ class Release023Tests(unittest.TestCase):
         )
         locs = release.sync_localizations(api, "v23", campaign)
         self.assertEqual({x["attributes"]["locale"] for x in locs}, set(release.LOCALES))
-        selected = [
-            ({"file": "iphone-medium/01.png"}, "m1"),
-            ({"file": "iphone-medium/02.png"}, "m2"),
-            ({"file": "ipad-13/01.png"}, "p1"),
-        ]
-        report = release.sync_placements_for_locale(api, locs[0], selected)
-        self.assertTrue(all(report["groupsVerified"].values()))
-        # Creative asset in DEFAULT_PROFILE was untouched
+        selected = []
+        for loc in release.LOCALES:
+            for dev in ("iphone-medium", "iphone-duo", "ipad-13"):
+                selected.append(({"locale": loc, "file": f"{loc}/{dev}/01.png"}, f"{loc}-{dev}-1"))
+
+        for loc_res in locs:
+            loc_code = loc_res["attributes"]["locale"]
+            report = release.sync_placements_for_locale(api, loc_res, selected)
+            self.assertTrue(all(report["groupsVerified"].values()))
+            placed_ids = [
+                p["relationships"]["image"]["data"]["id"]
+                for p in api.placements[loc_res["id"]]
+                if p["attributes"]["placementType"] == "APP_SCREENSHOT"
+            ]
+            self.assertEqual(set(placed_ids), {f"{loc_code}-{dev}-1" for dev in ("iphone-medium", "iphone-duo", "ipad-13")})
+
         remaining_ids = {p["id"] for p in api.placements["loc-zh"]}
         self.assertIn("creative-1", remaining_ids)
         self.assertNotIn("stale-1", remaining_ids)

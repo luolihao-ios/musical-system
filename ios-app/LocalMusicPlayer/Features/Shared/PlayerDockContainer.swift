@@ -8,42 +8,49 @@ struct PlayerDockContainer<Content: View>: View {
     let dismiss: () -> Void
     @ViewBuilder let content: () -> Content
     @State private var menuClearance: CGFloat = 90
+    @State private var safeInsets = EdgeInsets()
 
     var body: some View {
-        GeometryReader { safeArea in
-            content()
-                .overlay {
-                    GeometryReader { dock in
-                        ZStack(alignment: .bottom) {
-                            if isVisible {
-                                MiniPlayerView(
-                                    model: model,
-                                    openNowPlaying: {},
-                                    dismiss: dismiss,
-                                    maximumHeight: dock.size.height,
-                                    maximumWidth: dock.size.width,
-                                    topInset: safeArea.safeAreaInsets.top,
-                                    bottomInset: safeArea.safeAreaInsets.bottom,
-                                    leadingInset: safeArea.safeAreaInsets.leading,
-                                    trailingInset: safeArea.safeAreaInsets.trailing,
-                                    menuClearance: menuClearance
-                                )
-                            }
-                        }
-                        .frame(width: dock.size.width, height: dock.size.height, alignment: .bottom)
-                        .overlay(alignment: .top) {
-                            ToastOverlayView()
-                                .padding(.top, safeArea.safeAreaInsets.top + 8)
-                        }
-                        .background(PlayerWindowMetricsProbe(clearance: $menuClearance).allowsHitTesting(false))
-                        .onAppear {
-                            PlayerInteractionDiagnostics.beginSession()
-                            PlayerInteractionDiagnostics.log("dock frame=\(dock.frame(in: .global)) bottomInset=\(safeArea.safeAreaInsets.bottom)")
+        content()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                GeometryReader { safeArea in
+                    Color.clear
+                        .onAppear { safeInsets = safeArea.safeAreaInsets }
+                        .onChange(of: safeArea.safeAreaInsets) { _, value in safeInsets = value }
+                }
+            }
+            .overlay {
+                GeometryReader { dock in
+                    ZStack(alignment: .bottom) {
+                        if isVisible {
+                            MiniPlayerView(
+                                model: model,
+                                openNowPlaying: {},
+                                dismiss: dismiss,
+                                maximumHeight: dock.size.height,
+                                maximumWidth: dock.size.width,
+                                topInset: safeInsets.top,
+                                bottomInset: safeInsets.bottom,
+                                leadingInset: safeInsets.leading,
+                                trailingInset: safeInsets.trailing,
+                                menuClearance: menuClearance
+                            )
                         }
                     }
-                    .ignoresSafeArea()
+                    .frame(width: dock.size.width, height: dock.size.height, alignment: .bottom)
+                    .overlay(alignment: .top) {
+                        ToastOverlayView()
+                            .padding(.top, safeInsets.top + 8)
+                    }
+                    .background(PlayerWindowMetricsProbe(clearance: $menuClearance).allowsHitTesting(false))
+                    .onAppear {
+                        PlayerInteractionDiagnostics.beginSession()
+                        PlayerInteractionDiagnostics.log("dock frame=\(dock.frame(in: .global)) bottomInset=\(safeInsets.bottom) trailingInset=\(safeInsets.trailing)")
+                    }
                 }
-        }
+                .ignoresSafeArea()
+            }
     }
 }
 

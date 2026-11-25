@@ -25,6 +25,12 @@ struct AdaptivePlayerLayout: Equatable {
               menu.maxY >= window.maxY - max(80, safeBottom + 32) else { return fallback }
         return max(fallback, window.maxY - menu.minY + 8)
     }
+
+    static func isTabletopCompactPane(size: CGSize) -> Bool {
+        let width = size.width.isFinite ? max(0, size.width) : 0
+        let height = size.height.isFinite ? max(0, size.height) : 0
+        return height > 0 && height < 460 && width > height * 1.25
+    }
 }
 
 struct AdaptiveTabNavigation: ViewModifier {

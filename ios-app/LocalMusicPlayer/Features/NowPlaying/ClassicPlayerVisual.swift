@@ -107,6 +107,29 @@ struct ClassicPlayerVisual: View {
                 .padding(.top, 4)
                 .padding(.bottom, max(24, bottomSafeInset + 12))
                 .frame(width: geometry.size.width, height: geometry.size.height)
+            } else if AdaptivePlayerLayout.isTabletopCompactPane(size: geometry.size) {
+                let bodyWidth = min(max(geometry.size.width - 20, 320), 620)
+                let bodyHeight = min(max(geometry.size.height - 12, 220), 340)
+                let wheelDiameter = min(bodyHeight - 28, bodyWidth * 0.42, 220)
+
+                HStack(spacing: 16) {
+                    ipodScreen
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    clickWheel(diameter: wheelDiameter)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .frame(width: bodyWidth, height: bodyHeight)
+                .background(
+                    Self.chassisBackground,
+                    in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .stroke(.white.opacity(0.65), lineWidth: 1.5)
+                }
+                .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 let bodyWidth = min(max(geometry.size.width - 24, 220), 420)
                 let maxH = max(geometry.size.height - 12, 260)
