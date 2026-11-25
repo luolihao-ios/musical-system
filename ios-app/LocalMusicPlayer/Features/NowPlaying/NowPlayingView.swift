@@ -110,6 +110,12 @@ struct NowPlayingView: View {
                     }
                 }
 
+                Color.clear
+                    .contentShape(Rectangle())
+                    .highPriorityGesture(panelDrag)
+                    .ignoresSafeArea()
+                    .accessibilityHidden(true)
+
                 VStack(spacing: 0) {
                     header(hideContentTabs: isClassicFullScreen)
 
@@ -366,6 +372,8 @@ struct NowPlayingView: View {
             Text(LocalizedStringKey(title))
                 .font(.subheadline.weight(contentMode == mode ? .bold : .regular))
                 .foregroundStyle(foreground.opacity(contentMode == mode ? 1.0 : 0.55))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .frame(minWidth: 44, minHeight: 36)
         }
         .accessibilityAddTraits(contentMode == mode ? .isSelected : [])

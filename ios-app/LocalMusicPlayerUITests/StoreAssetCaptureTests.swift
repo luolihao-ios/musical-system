@@ -17,9 +17,11 @@ final class StoreAssetCaptureTests: XCTestCase {
         XCTAssertTrue(app.buttons["player.detail.playPause"].waitForExistence(timeout: 10))
         save(app, name: "adaptive-02-artwork")
         XCUIDevice.shared.orientation = .landscapeLeft
+        RunLoop.current.run(until: Date().addingTimeInterval(1.2))
         XCTAssertTrue(app.buttons["player.detail.playPause"].waitForExistence(timeout: 10))
         save(app, name: "adaptive-05-landscape-nowplaying")
         XCUIDevice.shared.orientation = .portrait
+        RunLoop.current.run(until: Date().addingTimeInterval(1.2))
         app.buttons["player.tab.lyrics"].tap()
         XCTAssertTrue(app.staticTexts["player.lyrics.line.0"].firstMatch.waitForExistence(timeout: 10))
         save(app, name: "adaptive-03-lyrics")

@@ -246,9 +246,9 @@ enum RecommendationEngine {
         if let playedAt = feedback?.lastPlayedAt {
             let elapsed = max(0, now.timeIntervalSince(playedAt))
             if elapsed < 12 * 3_600 {
-                value -= 9.0
+                value -= 16.0
             } else if elapsed < 48 * 3_600 {
-                value -= 5.0
+                value -= 7.0
             } else if elapsed < 7 * 86_400 {
                 value -= 2.0
             }
@@ -362,11 +362,8 @@ enum RecommendationEngine {
                 pickedIndex = strict
             } else if let relaxed = remaining.firstIndex(where: passesFallback) {
                 pickedIndex = relaxed
-            } else if needsExplorationQuota,
-                      let anyExploration = remaining.firstIndex(where: { explorationChannels.contains($0.candidate.channel) }) {
-                pickedIndex = anyExploration
             } else {
-                pickedIndex = 0
+                break
             }
 
             selected.append(remaining.remove(at: pickedIndex))

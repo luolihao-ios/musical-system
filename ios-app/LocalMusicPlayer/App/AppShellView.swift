@@ -65,7 +65,7 @@ struct AppShellView: View {
             .tag(0)
 
             NavigationStack {
-                LibraryView(model: container.libraryModel, personalLibrary: true, title: "我的音乐")
+                LibraryView(model: container.libraryModel, personalLibrary: true, title: "我的音乐", isRootTab: true)
             }
             .tabItem { Label("音乐库", systemImage: "music.note.list") }.tag(1)
 

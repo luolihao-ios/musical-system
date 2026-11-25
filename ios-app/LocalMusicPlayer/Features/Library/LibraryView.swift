@@ -6,7 +6,9 @@ struct LibraryView: View {
     var categoriesOnly = false
     var personalLibrary = false
     var title: LocalizedStringKey? = nil
+    var isRootTab = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.openURL) private var openURL
 
     @State private var showDocumentPicker = false
     @State private var showMusicFolderPicker = false
@@ -18,59 +20,74 @@ struct LibraryView: View {
     }
 
     var body: some View {
-        Group {
-            if categoriesOnly {
-                VStack {
-                    libraryEntrances.frame(maxHeight: horizontalSizeClass == .regular ? 400 : 150)
-                    Spacer()
-                }
-            } else if model.tracks.isEmpty && !personalLibrary {
-                emptyLibrary
-            } else {
-                List {
-                    if personalLibrary {
-                        Section {
-                            libraryEntrances
-                                .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
+        VStack(spacing: 0) {
+            if isRootTab {
+                rootLibraryHeader
+            }
+            Group {
+                if categoriesOnly {
+                    VStack {
+                        libraryEntrances.frame(maxHeight: horizontalSizeClass == .regular ? 400 : 150)
+                        Spacer()
+                    }
+                } else if model.tracks.isEmpty && !personalLibrary {
+                    emptyLibrary
+                } else {
+                    List {
+                        if personalLibrary {
+                            Section {
+                                libraryEntrances
+                                    .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
+                                    .listRowSeparator(.hidden)
+                                    .listRowBackground(Color.clear)
+                                if !model.tracks.isEmpty {
+                                    transferAppCompactBanner
+                                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
+                                        .listRowSeparator(.hidden)
+                                        .listRowBackground(Color.clear)
+                                }
+                            } header: {
+                                Text("音乐库")
+                            }
+                        }
+                        if model.tracks.isEmpty {
+                            emptyLibrary
                                 .listRowSeparator(.hidden)
                                 .listRowBackground(Color.clear)
-                        } header: {
-                            Text("音乐库")
-                        }
-                    }
-                    if model.tracks.isEmpty {
-                        emptyLibrary.listRowBackground(Color.clear)
-                    } else {
-                        Section {
-                            ForEach(displayedTracks) { track in
-                                trackRow(track)
-                            }
-                        } header: {
-                            HStack {
-                                Text("\(String(localized: "全部歌曲")) · \(displayedTracks.count)")
-                                Spacer()
-                                Menu {
-                                    Button("导入顺序") { sortedByTitle = false }
-                                    Button("歌曲名称") { sortedByTitle = true }
-                                } label: {
-                                    Image(systemName: "line.3.horizontal.decrease")
+                        } else {
+                            Section {
+                                ForEach(displayedTracks) { track in
+                                    trackRow(track)
                                 }
-                                .accessibilityLabel("歌曲排序")
+                            } header: {
+                                HStack {
+                                    Text("\(String(localized: "全部歌曲")) · \(displayedTracks.count)")
+                                    Spacer()
+                                    Menu {
+                                        Button("导入顺序") { sortedByTitle = false }
+                                        Button("歌曲名称") { sortedByTitle = true }
+                                    } label: {
+                                        Image(systemName: "line.3.horizontal.decrease")
+                                    }
+                                    .accessibilityLabel("歌曲排序")
+                                }
                             }
                         }
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .accessibilityIdentifier("personal.library")
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .accessibilityIdentifier("personal.library")
             }
         }
         .navigationTitle(title ?? (personalLibrary ? "我的" : categoriesOnly ? "音乐库" : ""))
+        .navigationBarTitleDisplayMode(isRootTab ? .automatic : .inline)
+        .toolbar(isRootTab ? .hidden : .visible, for: .navigationBar)
         .background(RefreshBackdrop())
         .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 72) }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                HStack {
+            if !isRootTab {
+                ToolbarItem(placement: .topBarTrailing) {
                     importMenu.accessibilityIdentifier("personal.import")
                 }
             }
@@ -132,6 +149,25 @@ struct LibraryView: View {
         )
     }
 
+    private var rootLibraryHeader: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text(title ?? "我的音乐")
+                .font(.largeTitle.bold())
+            Spacer(minLength: 0)
+            importMenu
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(PlayerTheme.accent)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(.white.opacity(0.45), lineWidth: 0.75))
+                .accessibilityIdentifier("personal.import")
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+        .padding(.bottom, 8)
+    }
+
     private var emptyLibrary: some View {
         VStack(spacing: 14) {
             ContentUnavailableView {
@@ -146,7 +182,70 @@ struct LibraryView: View {
                 importShortcut("扫描本地音频", icon: "waveform") { Task { await model.scanLocalAudio() } }
                 importShortcut("授权音乐文件夹", icon: "checkmark.shield") { showMusicFolderPicker = true }
             }
+            transferAppEmptyCard
         }
+    }
+
+    private var transferAppEmptyCard: some View {
+        Button {
+            openURL(CompanionTransferApp.storeURL)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "arrow.left.arrow.right.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(PlayerTheme.accent)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("使用这个软件导入")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(PlayerTheme.accent)
+                    Text("电脑与手机无线传歌 · 前往 App Store 获取爱乐互传")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(PlayerTheme.accent)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(PlayerTheme.accent.opacity(0.28), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, personalLibrary ? 0 : 16)
+        .accessibilityIdentifier("library.transferApp.link")
+    }
+
+    private var transferAppCompactBanner: some View {
+        Button {
+            openURL(CompanionTransferApp.storeURL)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.left.arrow.right.circle.fill")
+                    .foregroundStyle(PlayerTheme.accent)
+                Text("从电脑快速无线传歌？")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("使用这个软件导入")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(PlayerTheme.accent)
+                    .underline()
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(PlayerTheme.accent)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("library.transferApp.banner")
     }
 
     private func importShortcut(_ label: LocalizedStringKey, icon: String, action: @escaping () -> Void) -> some View {

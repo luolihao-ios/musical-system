@@ -6,7 +6,7 @@ final class PlayerInteractionUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments = ["--player-interaction-tests"]
+        app.launchArguments = ["--player-interaction-tests", "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
         app.launch()
     }
 
@@ -52,8 +52,10 @@ final class PlayerInteractionUITests: XCTestCase {
         XCTAssertEqual(app.otherElements.matching(identifier: "player.panel").count, 1)
         XCTAssertEqual(panel.frame.maxY, app.frame.maxY, accuracy: 1)
         attachScreenshot("同一面板展开")
+        let closeFrame = app.buttons["player.detail.close"].frame
+        let headerOffsetY = max(26, closeFrame.midY - panel.frame.minY)
         let header = panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0))
-            .withOffset(CGVector(dx: 0, dy: 26))
+            .withOffset(CGVector(dx: 0, dy: headerOffsetY))
         header.press(forDuration: 0.1, thenDragTo: header.withOffset(CGVector(dx: 0, dy: panel.frame.height * 0.4)))
         waitForPhase("compact")
         XCTAssertTrue(app.buttons["player.compact.playback"].isHittable)
@@ -74,8 +76,10 @@ final class PlayerInteractionUITests: XCTestCase {
         XCTAssertTrue(panel.waitForExistence(timeout: 8))
         app.buttons["player.compact.open"].tap()
         waitForPhase("expanded")
+        let closeFrame = app.buttons["player.detail.close"].frame
+        let headerOffsetY = max(26, closeFrame.midY - panel.frame.minY)
         let start = panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0))
-            .withOffset(CGVector(dx: 0, dy: 26))
+            .withOffset(CGVector(dx: 0, dy: headerOffsetY))
         start.press(forDuration: 0.1, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 80)))
         waitForPhase("expanded")
         XCTAssertEqual(panel.value as? String, "expanded;expansions=1")

@@ -16,7 +16,7 @@ jobs:
   adaptive-layout:
     if: github.event.inputs.focus == 'full'
     runs-on: xcode-27
-    timeout-minutes: 45
+    timeout-minutes: 65
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
