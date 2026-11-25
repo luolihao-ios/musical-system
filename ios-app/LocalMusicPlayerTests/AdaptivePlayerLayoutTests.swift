@@ -27,6 +27,25 @@ final class AdaptivePlayerLayoutTests: XCTestCase {
         XCTAssertTrue(AdaptivePlayerLayout.resolve(size: CGSize(width: 956, height: 669)).isWide)
     }
 
+    func testDuoAndIPad13ResolveBoundedColumnsAndArtwork() {
+        let duoPortrait = AdaptivePlayerLayout.resolve(size: CGSize(width: 466, height: 678))
+        XCTAssertFalse(duoPortrait.isWide)
+        XCTAssertGreaterThan(duoPortrait.columnWidth, 0)
+        XCTAssertLessThanOrEqual(duoPortrait.artworkSide, duoPortrait.columnWidth)
+
+        for size in [
+            CGSize(width: 956, height: 669),
+            CGSize(width: 1032, height: 1376),
+            CGSize(width: 1376, height: 1032)
+        ] {
+            let layout = AdaptivePlayerLayout.resolve(size: size)
+            XCTAssertTrue(layout.isWide)
+            XCTAssertTrue(layout.columnWidth.isFinite && layout.columnWidth > 0)
+            XCTAssertTrue(layout.artworkSide.isFinite && layout.artworkSide > 0)
+            XCTAssertLessThanOrEqual(layout.artworkSide, layout.columnWidth)
+        }
+    }
+
     func testWideBoundaryAndInvalidSizes() {
         XCTAssertFalse(AdaptivePlayerLayout.resolve(size: CGSize(width: 719, height: 900)).isWide)
         XCTAssertTrue(AdaptivePlayerLayout.resolve(size: CGSize(width: 720, height: 900)).isWide)

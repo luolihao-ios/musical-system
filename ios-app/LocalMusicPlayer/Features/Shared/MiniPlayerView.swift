@@ -26,6 +26,8 @@ struct MiniPlayerView: View {
     var maximumWidth: CGFloat = 390
     var topInset: CGFloat = 0
     var bottomInset: CGFloat = 0
+    var leadingInset: CGFloat = 0
+    var trailingInset: CGFloat = 0
     var menuClearance: CGFloat = 90
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -84,7 +86,8 @@ struct MiniPlayerView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("player.panel")
         .accessibilityValue("\(panel.phase.rawValue);expansions=\(panel.expansionCount)")
-        .padding(.horizontal, 12 * (1 - progress))
+        .padding(.leading, (12 + leadingInset) * (1 - progress))
+        .padding(.trailing, (12 + trailingInset) * (1 - progress))
         .padding(.bottom, menuClearance * (1 - progress))
         .onAppear {
             PlayerInteractionDiagnostics.log("panel appear compact=\(compactHeight) full=\(fullHeight) bottomInset=\(bottomInset)")

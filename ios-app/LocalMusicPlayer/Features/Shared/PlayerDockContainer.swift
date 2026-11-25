@@ -24,6 +24,8 @@ struct PlayerDockContainer<Content: View>: View {
                                     maximumWidth: dock.size.width,
                                     topInset: safeArea.safeAreaInsets.top,
                                     bottomInset: safeArea.safeAreaInsets.bottom,
+                                    leadingInset: safeArea.safeAreaInsets.leading,
+                                    trailingInset: safeArea.safeAreaInsets.trailing,
                                     menuClearance: menuClearance
                                 )
                             }

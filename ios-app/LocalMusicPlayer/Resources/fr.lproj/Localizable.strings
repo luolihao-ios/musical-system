@@ -158,7 +158,6 @@
 "%lld 首" = "%lld titres";
 "暂无%@" = "Aucun élément dans « %@ »";
 "无法获得文件夹访问权限：%@" = "Impossible d’accéder au dossier : %@";
-
 "我的" = "Ma musique";
 "搜索" = "Recherche";
 "导入音乐" = "Importer de la musique";
@@ -215,7 +214,6 @@
 "在线搜索暂不可用，请重试" = "La recherche en ligne est indisponible. Réessayez.";
 "找到曲目信息，暂无可试听音源" = "Des morceaux ont été trouvés, mais aucun extrait n’est disponible.";
 "仅曲目信息" = "Informations uniquement";
-
 "iPod" = "iPod";
 "最近搜索" = "Recherches récentes";
 "仅显示可试听曲目" = "Titres écoutables uniquement";

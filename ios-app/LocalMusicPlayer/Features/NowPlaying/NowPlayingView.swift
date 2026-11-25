@@ -53,6 +53,7 @@ struct NowPlayingView: View {
     @State private var preloadedNextTheme: PreloadedTheme?
     @State private var compactBodyHeight: CGFloat = 680
     @State private var containerSize: CGSize = .zero
+    @State private var hasDuoDivision = false
 
     private struct ArtworkRequest: Equatable, Sendable {
         let trackID: String?
@@ -66,7 +67,7 @@ struct NowPlayingView: View {
     private var foreground: Color { artworkTheme.foreground.color }
 
     private var isClassicFullScreen: Bool {
-        visualMode == .classic && !AdaptivePlayerLayout.resolve(size: containerSize).isWide
+        visualMode == .classic && !hasDuoDivision && !AdaptivePlayerLayout.resolve(size: containerSize).isWide
     }
 
     private var effectiveForeground: Color {
@@ -112,54 +113,72 @@ struct NowPlayingView: View {
 
                     GeometryReader { geometry in
                         let layout = AdaptivePlayerLayout.resolve(size: geometry.size)
-                        if #available(iOS 27.1, *), !geometry.reservedRegions(kind: .division, options: .includeInactive).isEmpty {
-                            duoPlayer
-                        } else if layout.isWide {
-                            widePlayer(layout: layout)
-                        } else if visualMode == .classic {
-                            ClassicPlayerVisual(
-                                model: model,
-                                showQueue: { showQueue = true },
-                                isFullScreen: true,
-                                bottomSafeInset: bottomSafeInset,
-                                onLongPressArtwork: {
-                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                    showSkinPicker = true
-                                }
-                            )
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .accessibilityElement(children: .contain)
-                            .accessibilityIdentifier("player.layout.compact")
-                        } else {
-                            ZStack(alignment: .top) {
-                                compactPlayer(in: geometry.size, artworkSide: layout.artworkSide)
-                                    .offset(y: nextTrackDragOffset)
-                                    .opacity(1 - nextPushProgress * 0.18)
+                        let isDuoSplit: Bool = {
+                            if #available(iOS 27.1, *) {
+                                return !geometry.reservedRegions(kind: .division, options: .includeInactive).isEmpty
+                            }
+                            return false
+                        }()
+                        Group {
+                            if #available(iOS 27.1, *), isDuoSplit {
+                                duoPlayer
+                            } else if layout.isWide {
+                                widePlayer(layout: layout)
+                            } else if visualMode == .classic {
+                                ClassicPlayerVisual(
+                                    model: model,
+                                    showQueue: { showQueue = true },
+                                    isFullScreen: true,
+                                    bottomSafeInset: bottomSafeInset,
+                                    onLongPressArtwork: {
+                                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                        showSkinPicker = true
+                                    }
+                                )
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .accessibilityElement(children: .contain)
+                                .accessibilityIdentifier("player.layout.compact")
+                            } else {
+                                ZStack(alignment: .top) {
+                                    compactPlayer(in: geometry.size, artworkSide: layout.artworkSide)
+                                        .offset(y: nextTrackDragOffset)
+                                        .opacity(1 - nextPushProgress * 0.18)
 
-                                if nextTrackDragOffset < 0,
-                                   contentMode == .artwork,
-                                   let nextTrack = displayedNextTarget?.track {
-                                    nextTrackPreviewPage(
-                                        track: nextTrack,
-                                        in: geometry.size,
-                                        artworkSide: layout.artworkSide
-                                    )
-                                    .offset(y: geometry.size.height + nextTrackDragOffset)
-                                    .allowsHitTesting(false)
-                                    .accessibilityHidden(true)
+                                    if nextTrackDragOffset < 0,
+                                       contentMode == .artwork,
+                                       let nextTrack = displayedNextTarget?.track {
+                                        nextTrackPreviewPage(
+                                            track: nextTrack,
+                                            in: geometry.size,
+                                            artworkSide: layout.artworkSide
+                                        )
+                                        .offset(y: geometry.size.height + nextTrackDragOffset)
+                                        .allowsHitTesting(false)
+                                        .accessibilityHidden(true)
+                                    }
+                                }
+                                .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
+                                .clipped()
+                                .onAppear {
+                                    if geometry.size.height > 0 {
+                                        compactBodyHeight = geometry.size.height
+                                    }
+                                }
+                                .onChange(of: geometry.size.height) { _, height in
+                                    if height > 0 {
+                                        compactBodyHeight = height
+                                    }
                                 }
                             }
-                            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
-                            .clipped()
-                            .onAppear {
-                                if geometry.size.height > 0 {
-                                    compactBodyHeight = geometry.size.height
-                                }
+                        }
+                        .onAppear {
+                            if hasDuoDivision != isDuoSplit {
+                                hasDuoDivision = isDuoSplit
                             }
-                            .onChange(of: geometry.size.height) { _, height in
-                                if height > 0 {
-                                    compactBodyHeight = height
-                                }
+                        }
+                        .onChange(of: isDuoSplit) { _, value in
+                            if hasDuoDivision != value {
+                                hasDuoDivision = value
                             }
                         }
                     }
@@ -680,7 +699,14 @@ struct NowPlayingView: View {
                             .accessibilityHidden(true)
                     }
             case .classic:
-                ClassicPlayerVisual(model: model, showQueue: { showQueue = true })
+                ClassicPlayerVisual(
+                    model: model,
+                    showQueue: { showQueue = true },
+                    onLongPressArtwork: {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        showSkinPicker = true
+                    }
+                )
             }
         }
         .frame(width: clampedSide, height: clampedSide)
@@ -729,22 +755,36 @@ struct NowPlayingView: View {
         .accessibilityIdentifier("player.layout.wide")
     }
 
+    @ViewBuilder
     private func primaryPane(size: CGSize) -> some View {
-        let side = min(max(0, size.width), max(120, size.height - 290), 560)
-        return ScrollView {
-            VStack(spacing: 18) {
-                Spacer(minLength: 0)
-                artwork(side: side)
-                if model.hasLyrics { lyricSnippet }
-                trackIdentityBar
-                Spacer(minLength: 10)
-                progressControls
-                transportControls
+        if visualMode == .classic {
+            ClassicPlayerVisual(
+                model: model,
+                showQueue: { showQueue = true },
+                isFullScreen: false,
+                onLongPressArtwork: {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    showSkinPicker = true
+                }
+            )
+            .frame(width: size.width, height: size.height)
+        } else {
+            let side = min(max(0, size.width), max(120, size.height - 290), 560)
+            ScrollView {
+                VStack(spacing: 18) {
+                    Spacer(minLength: 0)
+                    artwork(side: side)
+                    if model.hasLyrics { lyricSnippet }
+                    trackIdentityBar
+                    Spacer(minLength: 10)
+                    progressControls
+                    transportControls
+                }
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: max(0, size.height))
             }
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: max(0, size.height))
+            .scrollIndicators(.hidden)
         }
-        .scrollIndicators(.hidden)
     }
 
     private var secondaryPane: some View {
@@ -756,7 +796,22 @@ struct NowPlayingView: View {
                     SyncedLyricsView(model: model, foreground: foreground)
                         .accessibilityIdentifier("player.lyrics.full")
                 } else {
-                    ContentUnavailableView("暂无歌词", systemImage: "text.alignleft")
+                    VStack(spacing: 14) {
+                        Spacer()
+                        Image(systemName: "text.alignleft")
+                            .font(.largeTitle)
+                            .foregroundStyle(foreground.opacity(0.5))
+                        Text("暂无歌词")
+                            .font(.headline)
+                        Text("可以查找歌词或导入同名 LRC 文件")
+                            .font(.subheadline)
+                            .foregroundStyle(foreground.opacity(0.65))
+                            .multilineTextAlignment(.center)
+                        lyricsSearch
+                            .padding(.top, 4)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
                 }
             } else {
                 ScrollView {

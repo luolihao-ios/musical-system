@@ -108,9 +108,10 @@ struct ClassicPlayerVisual: View {
                 .padding(.bottom, max(24, bottomSafeInset + 12))
                 .frame(width: geometry.size.width, height: geometry.size.height)
             } else {
-                let bodyWidth = min(max(geometry.size.width - 28, 260), 420)
-                let bodyHeight = max(geometry.size.height - 12, 420)
-                let wheelDiameter = min(bodyWidth * 0.68, bodyHeight * 0.43, 250)
+                let bodyWidth = min(max(geometry.size.width - 24, 220), 420)
+                let maxH = max(geometry.size.height - 12, 260)
+                let bodyHeight = min(maxH, 660)
+                let wheelDiameter = min(bodyWidth * 0.66, bodyHeight * 0.42, 240)
 
                 VStack(spacing: 18) {
                     ipodScreen
