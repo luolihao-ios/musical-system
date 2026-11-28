@@ -15,11 +15,14 @@ import UIKit
     @Published var outboundCompleted = false
     private var server: BrowserTransferServer?
     private var mockPort = BrowserTransferServer.defaultPort
+    private var isRunning = false
 
     func start() {
         #if DEBUG
         if let page = Self.storeCapturePage { loadStoreCapture(page); return }
         #endif
+        if isRunning && server != nil && error.isEmpty { return }
+        isRunning = true
         address = ""; code = ""; error = ""; upload = nil
         TransferStorage.normalize()
         DiagnosticLog.reset()
@@ -31,13 +34,13 @@ import UIKit
                 let root = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
                 let server = try BrowserTransferServer(root: root, alias: UIDevice.current.name, outboundRoot: outboundRoot)
                 server.onReady = { [weak self] address, code in Task { @MainActor in self?.address = address; self?.code = code; self?.error = "" } }
-                server.onError = { [weak self] error in Task { @MainActor in self?.error = error } }
+                server.onError = { [weak self] error in Task { @MainActor in self?.error = error; self?.isRunning = false } }
                 server.onUpload = { [weak self] upload in Task { @MainActor in self?.upload = upload } }
                 server.onOutboundUpdate = { [weak self] id, progress, state in Task { @MainActor in self?.outboundProgress[id] = progress; if state == "completed", let self { self.outboundCompleted = self.outboundFiles.allSatisfy { (self.outboundProgress[$0.id] ?? 0) >= 1 } } } }
                 self.server = server
             }
             server?.start(); UIApplication.shared.isIdleTimerDisabled = true
-        } catch { self.error = error.localizedDescription }
+        } catch { isRunning = false; self.error = error.localizedDescription }
     }
 
     func switchPort() {
@@ -48,6 +51,7 @@ import UIKit
             return
         }
         #endif
+        isRunning = true
         error = ""
         upload = nil
         if server == nil {
@@ -58,7 +62,15 @@ import UIKit
         }
     }
 
-    func stop() { server?.stop(); try? FileManager.default.removeItem(at: outboundRoot); outboundFiles = []; address = ""; code = ""; UIApplication.shared.isIdleTimerDisabled = false }
+    func stop() {
+        isRunning = false
+        server?.stop()
+        try? FileManager.default.removeItem(at: outboundRoot)
+        outboundFiles = []
+        address = ""
+        code = ""
+        UIApplication.shared.isIdleTimerDisabled = false
+    }
     func decide(_ accepted: Bool) { if let upload { server?.decide(upload.id, accepted: accepted) } }
     func publishOutbound() { outboundCompleted = false; outboundProgress = [:]; server?.publishOutbound() }
     func clearOutbound() { outboundFiles = []; outboundProgress = [:]; outboundCompleted = false; server?.clearOutbound() }

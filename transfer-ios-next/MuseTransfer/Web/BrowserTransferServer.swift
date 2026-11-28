@@ -36,6 +36,7 @@ final class BrowserTransferServer: @unchecked Sendable {
     private var attempts = 0
     private var currentPort: UInt16 = BrowserTransferServer.defaultPort
     private var activePort: UInt16?
+    private var generation: UInt64 = 0
     private let alias: String
     var onReady: ((String, String) -> Void)?
     var onError: ((String) -> Void)?
@@ -48,11 +49,13 @@ final class BrowserTransferServer: @unchecked Sendable {
     }
     func start() {
         queue.async {
-            self.stopNow()
+            guard self.listener == nil else { return }
+            self.generation &+= 1
+            let gen = self.generation
             self.code = String(Int.random(in: 100000...999999))
             self.token = UUID().uuidString
             self.attempts = 0
-            self.listen(port: self.currentPort, remainingAttempts: Int(Self.maxPort - Self.defaultPort) + 1)
+            self.listen(port: self.currentPort, remainingAttempts: Int(Self.maxPort - Self.defaultPort) + 1, samePortRetries: 2, generation: gen)
         }
     }
     func restartWithNextPort() {
@@ -60,28 +63,33 @@ final class BrowserTransferServer: @unchecked Sendable {
             let next = Self.nextPort(after: self.activePort ?? self.currentPort)
             self.currentPort = next
             self.stopNow()
+            let gen = self.generation
             self.code = String(Int.random(in: 100000...999999))
             self.token = UUID().uuidString
             self.attempts = 0
             DiagnosticLog.write("Browser server switching to port \(next).")
-            self.listen(port: next, remainingAttempts: Int(Self.maxPort - Self.defaultPort) + 1)
+            self.listen(port: next, remainingAttempts: Int(Self.maxPort - Self.defaultPort) + 1, samePortRetries: 1, generation: gen)
         }
     }
     func stop() { queue.async { self.stopNow() } }
     private func stopNow() {
+        generation &+= 1
         listener?.cancel(); listener = nil
         activePort = nil
         Array(connections.values).forEach { $0.close() }; connections.removeAll()
         uploads.removeAll(); activeFiles.removeAll(); connectionBatches.removeAll(); outboundStates.removeAll(); outboundProgress.removeAll(); outboundPublished = false; token = ""
         DiagnosticLog.write("Browser server stopped; sessions cleared.")
     }
-    private func listen(port: UInt16, remainingAttempts: Int) {
+    private func listen(port: UInt16, remainingAttempts: Int, samePortRetries: Int, generation gen: UInt64) {
+        guard self.generation == gen else { return }
         do {
+            let parameters = NWParameters.tcp
+            parameters.allowLocalEndpointReuse = true
             let endpointPort: NWEndpoint.Port = port == 0 ? .any : (NWEndpoint.Port(rawValue: port) ?? .any)
-            let next = try NWListener(using: .tcp, on: endpointPort)
+            let next = try NWListener(using: parameters, on: endpointPort)
             listener = next
             next.stateUpdateHandler = { [weak self, weak next] state in
-                guard let self, let next, self.listener === next else { return }
+                guard let self, let next, self.listener === next, self.generation == gen else { return }
                 if case .ready = state {
                     guard let ip = Self.wifiAddress(), let boundPort = next.port else {
                         self.onError?("未找到 Wi-Fi 地址，请连接同一局域网")
@@ -96,29 +104,33 @@ final class BrowserTransferServer: @unchecked Sendable {
                 if case .failed = state {
                     next.cancel(); self.listener = nil
                     self.activePort = nil
-                    if remainingAttempts > 1 {
-                        let fallback = Self.nextPort(after: port)
-                        DiagnosticLog.write("Port \(port) unavailable; retrying TCP \(fallback).")
-                        self.listen(port: fallback, remainingAttempts: remainingAttempts - 1)
-                    } else if port != 0 {
-                        DiagnosticLog.write("Preset ports busy; retrying ephemeral TCP port.")
-                        self.listen(port: 0, remainingAttempts: 0)
-                    } else {
-                        self.onError?("网页服务无法启动，请重试或检查网络")
-                    }
+                    self.handleListenFailure(port: port, remainingAttempts: remainingAttempts, samePortRetries: samePortRetries, generation: gen)
                 }
             }
             next.newConnectionHandler = { [weak self] socket in self?.accept(socket) }
             next.start(queue: queue)
         } catch {
-            if remainingAttempts > 1 {
-                let fallback = Self.nextPort(after: port)
-                listen(port: fallback, remainingAttempts: remainingAttempts - 1)
-            } else if port != 0 {
-                listen(port: 0, remainingAttempts: 0)
-            } else {
-                onError?("网页服务无法启动，请重试或检查网络")
+            handleListenFailure(port: port, remainingAttempts: remainingAttempts, samePortRetries: samePortRetries, generation: gen)
+        }
+    }
+
+    private func handleListenFailure(port: UInt16, remainingAttempts: Int, samePortRetries: Int, generation gen: UInt64) {
+        guard self.generation == gen else { return }
+        if samePortRetries > 0 && port != 0 {
+            DiagnosticLog.write("Port \(port) temporarily busy; retrying same port.")
+            queue.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                guard let self, self.listener == nil, self.generation == gen else { return }
+                self.listen(port: port, remainingAttempts: remainingAttempts, samePortRetries: samePortRetries - 1, generation: gen)
             }
+        } else if remainingAttempts > 1 {
+            let fallback = Self.nextPort(after: port)
+            DiagnosticLog.write("Port \(port) unavailable; retrying TCP \(fallback).")
+            listen(port: fallback, remainingAttempts: remainingAttempts - 1, samePortRetries: 0, generation: gen)
+        } else if port != 0 {
+            DiagnosticLog.write("Preset ports busy; retrying ephemeral TCP port.")
+            listen(port: 0, remainingAttempts: 0, samePortRetries: 0, generation: gen)
+        } else {
+            onError?("网页服务无法启动，请重试或检查网络")
         }
     }
     private func accept(_ socket: NWConnection) {
