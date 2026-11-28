@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 import PhotosUI
 import CoreTransferable
 import CoreImage.CIFilterBuiltins
+import UIKit
 
 @MainActor final class BrowserTransferModel: ObservableObject {
     @Published var address = ""
@@ -13,6 +14,8 @@ import CoreImage.CIFilterBuiltins
     @Published var outboundProgress: [String: Double] = [:]
     @Published var outboundCompleted = false
     private var server: BrowserTransferServer?
+    private var mockPort = BrowserTransferServer.defaultPort
+
     func start() {
         #if DEBUG
         if let page = Self.storeCapturePage { loadStoreCapture(page); return }
@@ -27,7 +30,7 @@ import CoreImage.CIFilterBuiltins
             if server == nil {
                 let root = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
                 let server = try BrowserTransferServer(root: root, alias: UIDevice.current.name, outboundRoot: outboundRoot)
-                server.onReady = { [weak self] address, code in Task { @MainActor in self?.address = address; self?.code = code } }
+                server.onReady = { [weak self] address, code in Task { @MainActor in self?.address = address; self?.code = code; self?.error = "" } }
                 server.onError = { [weak self] error in Task { @MainActor in self?.error = error } }
                 server.onUpload = { [weak self] upload in Task { @MainActor in self?.upload = upload } }
                 server.onOutboundUpdate = { [weak self] id, progress, state in Task { @MainActor in self?.outboundProgress[id] = progress; if state == "completed", let self { self.outboundCompleted = self.outboundFiles.allSatisfy { (self.outboundProgress[$0.id] ?? 0) >= 1 } } } }
@@ -36,6 +39,25 @@ import CoreImage.CIFilterBuiltins
             server?.start(); UIApplication.shared.isIdleTimerDisabled = true
         } catch { self.error = error.localizedDescription }
     }
+
+    func switchPort() {
+        #if DEBUG
+        if Self.storeCapturePage != nil {
+            mockPort = BrowserTransferServer.nextPort(after: mockPort)
+            address = "http://192.168.1.23:\(mockPort)"
+            return
+        }
+        #endif
+        error = ""
+        upload = nil
+        if server == nil {
+            start()
+            server?.restartWithNextPort()
+        } else {
+            server?.restartWithNextPort()
+        }
+    }
+
     func stop() { server?.stop(); try? FileManager.default.removeItem(at: outboundRoot); outboundFiles = []; address = ""; code = ""; UIApplication.shared.isIdleTimerDisabled = false }
     func decide(_ accepted: Bool) { if let upload { server?.decide(upload.id, accepted: accepted) } }
     func publishOutbound() { outboundCompleted = false; outboundProgress = [:]; server?.publishOutbound() }
@@ -50,7 +72,7 @@ import CoreImage.CIFilterBuiltins
     }
 
     private func loadStoreCapture(_ page: String) {
-        address = "http://192.168.1.23:8080"
+        address = "http://192.168.1.23:\(mockPort)"
         code = "826451"
         let files = [WebUploadFile(id: "photo", name: "旅行照片.zip", size: 48_200_000),
                      WebUploadFile(id: "notes", name: "会议记录.pdf", size: 2_400_000),
@@ -76,6 +98,7 @@ struct BrowserTransferView: View {
         case send = "发送"
         var id: String { rawValue }
         var localizedTitle: String { NSLocalizedString(rawValue, comment: "Transfer direction tab") }
+        var iconName: String { self == .receive ? "arrow.down.circle.fill" : "paperplane.fill" }
     }
 
     private static let qrContext = CIContext()
@@ -87,13 +110,17 @@ struct BrowserTransferView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var importing = false
+    @State private var importTypes: [UTType] = [.item]
     @State private var photos: [PhotosPickerItem] = []
-    @State private var importMessage = ""
     @State private var tab: Tab = .receive
     @State private var editingOutbound = false
     @State private var copiedAddress = false
     @State private var copiedCode = false
     @State private var showQRSheet = false
+    @State private var showInfoSheet = false
+    @State private var portSpinDegrees = 0.0
+    @State private var pulseRadar = false
+    @State private var importErrorMessage = ""
 
     private var pageBackground: Color {
         colorScheme == .dark
@@ -140,8 +167,10 @@ struct BrowserTransferView: View {
         .navigationTitle("浏览器传文件")
         .tint(.indigo)
         .sheet(isPresented: $showQRSheet) { qrPreviewSheet }
-        .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+        .sheet(isPresented: $showInfoSheet) { connectionInfoSheet }
+        .fileImporter(isPresented: $importing, allowedContentTypes: importTypes, allowsMultipleSelection: true) { result in
             do {
+                importErrorMessage = ""
                 let store = try WebFileStore(root: model.outboundRoot)
                 for url in try result.get() {
                     let access = url.startAccessingSecurityScopedResource()
@@ -158,12 +187,12 @@ struct BrowserTransferView: View {
                         url: savedURL.path
                     ))
                 }
-                importMessage = String(localized: "已加入待发列表，点击下方“发送给电脑”开始传输")
-            } catch { importMessage = error.localizedDescription }
+            } catch { importErrorMessage = error.localizedDescription }
         }
         .onChange(of: photos) { _, items in
             Task {
                 do {
+                    importErrorMessage = ""
                     let store = try WebFileStore(root: model.outboundRoot)
                     for item in items {
                         guard let file = try await item.loadTransferable(type: BrowserPickedMedia.self) else { continue }
@@ -178,8 +207,7 @@ struct BrowserTransferView: View {
                             url: savedURL.path
                         ))
                     }
-                    importMessage = String(localized: "媒体已加入待发列表，点击下方“发送给电脑”开始传输")
-                } catch { importMessage = error.localizedDescription }
+                } catch { importErrorMessage = error.localizedDescription }
                 photos = []
             }
         }
@@ -191,6 +219,9 @@ struct BrowserTransferView: View {
             }
             #endif
             model.start()
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                pulseRadar = true
+            }
         }
         .onDisappear { model.stop() }
         .onChange(of: scenePhase) { _, phase in
@@ -199,142 +230,195 @@ struct BrowserTransferView: View {
     }
 
     private var connectionCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 10) {
-                Circle()
-                    .fill(statusDotColor)
-                    .frame(width: 9, height: 9)
-                Text(statusHeaderTitle)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(model.error.isEmpty ? Color.primary : Color.red)
-                Spacer(minLength: 0)
-                Button {
-                    model.start()
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.indigo)
-                        .frame(width: 34, height: 34)
-                        .background(.indigo.opacity(0.10), in: Circle())
+        VStack(spacing: 16) {
+            HStack(spacing: 12) {
+                radarEmblem
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(statusDotColor)
+                            .frame(width: 8, height: 8)
+                        Text(statusHeaderTitle)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(model.error.isEmpty ? Color.primary : Color.red)
+                    }
+                    if !model.code.isEmpty {
+                        Button {
+                            copyCode()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: copiedCode ? "checkmark.circle.fill" : "key.fill")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(copiedCode ? .green : .indigo)
+                                Text(formattedCode(model.code))
+                                    .font(.title2.weight(.bold).monospacedDigit())
+                                    .foregroundStyle(.primary)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 5)
+                            .background(Color.indigo.opacity(0.08), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(String(format: String(localized: "访问码：%@"), model.code))
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("重新开启服务")
+                Spacer(minLength: 0)
             }
 
             if !model.address.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("在电脑浏览器打开")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                    HStack(alignment: .center, spacing: 10) {
-                        Text(model.address)
-                            .font(.headline.monospaced())
-                            .textSelection(.enabled)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.75)
-                            .accessibilityIdentifier("transfer.address")
-                        Spacer(minLength: 0)
-                        Button {
-                            UIPasteboard.general.string = model.address
-                            copiedAddress = true
-                            Task {
-                                try? await Task.sleep(for: .seconds(1.5))
-                                copiedAddress = false
-                            }
-                        } label: {
-                            Label(
-                                copiedAddress ? String(localized: "已复制") : String(localized: "复制地址"),
-                                systemImage: copiedAddress ? "checkmark" : "doc.on.doc"
-                            )
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(.indigo.opacity(0.12), in: Capsule())
-                            .foregroundStyle(.indigo)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(12)
-                .background(Color.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                VStack(spacing: 10) {
+                    Text(model.address)
+                        .font(.headline.monospaced())
+                        .textSelection(.enabled)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(Color.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .accessibilityIdentifier("transfer.address")
 
-                HStack(alignment: .center, spacing: 14) {
-                    Button {
-                        UIPasteboard.general.string = model.code
-                        copiedCode = true
-                        Task {
-                            try? await Task.sleep(for: .seconds(1.5))
-                            copiedCode = false
+                    HStack(spacing: 10) {
+                        actionPillButton(
+                            title: copiedAddress ? String(localized: "已复制") : String(localized: "复制"),
+                            icon: copiedAddress ? "checkmark" : "doc.on.doc",
+                            tint: copiedAddress ? .green : .indigo
+                        ) {
+                            copyAddress()
                         }
-                    } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 6) {
-                                Text("访问码")
-                                    .font(.caption.weight(.medium))
-                                    .foregroundStyle(.secondary)
-                                if copiedCode {
-                                    Text("已复制")
-                                        .font(.caption2.weight(.semibold))
-                                        .foregroundStyle(.green)
-                                }
-                            }
-                            Text(formattedCode(model.code))
-                                .font(.system(size: 30, weight: .bold, design: .monospaced))
-                                .foregroundStyle(.primary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(String(format: String(localized: "访问码：%@"), model.code))
 
-                    if let qr = qrCodeImage(for: model.address) {
-                        Button {
+                        actionPillButton(
+                            title: String(localized: "换端口"),
+                            icon: "arrow.triangle.2.circlepath",
+                            tint: .indigo,
+                            rotationDegrees: portSpinDegrees
+                        ) {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            withAnimation(.easeInOut(duration: 0.45)) {
+                                portSpinDegrees += 360
+                            }
+                            model.switchPort()
+                        }
+                        .accessibilityIdentifier("transfer.switchPort")
+
+                        actionPillButton(
+                            title: String(localized: "扫码"),
+                            icon: "qrcode",
+                            tint: .indigo
+                        ) {
                             showQRSheet = true
-                        } label: {
-                            Image(uiImage: qr)
-                                .interpolation(.none)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 68, height: 68)
-                                .padding(6)
-                                .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .strokeBorder(Color.indigo.opacity(0.18), lineWidth: 1)
-                                )
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("扫码打开")
                     }
                 }
             }
 
-            Divider()
+            HStack(spacing: 8) {
+                Button {
+                    showInfoSheet = true
+                } label: {
+                    Label("保持亮屏", systemImage: "sun.max.fill")
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.indigo.opacity(0.07), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Label("不要关闭此应用。请保持此页面打开，切换到后台后服务会关闭。", systemImage: "iphone.radiowaves.left.and.right")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Label(saveLocationText, systemImage: "folder")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Button {
+                    showInfoSheet = true
+                } label: {
+                    Label("file send", systemImage: "folder.fill")
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.indigo.opacity(0.07), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+
+                Spacer(minLength: 0)
             }
         }
         .padding(18)
-        .background(cardBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(cardBackground, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(Color.indigo.opacity(0.12), lineWidth: 1)
         )
         .shadow(color: .black.opacity(colorScheme == .dark ? 0.22 : 0.05), radius: 14, y: 6)
     }
 
+    private var radarEmblem: some View {
+        ZStack {
+            Circle()
+                .fill(Color.indigo.opacity(pulseRadar ? 0.12 : 0.05))
+                .frame(width: 60, height: 60)
+                .scaleEffect(pulseRadar ? 1.08 : 0.94)
+            Circle()
+                .fill(Color.indigo.opacity(0.14))
+                .frame(width: 44, height: 44)
+            Image(systemName: "antenna.radiowaves.left.and.right")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.indigo)
+        }
+    }
+
+    private func actionPillButton(
+        title: String,
+        icon: String,
+        tint: Color,
+        rotationDegrees: Double = 0,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.subheadline.weight(.semibold))
+                    .rotationEffect(.degrees(rotationDegrees))
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(tint)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(tint.opacity(0.11), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
     private var transferWorkspace: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Picker("传输方向", selection: $tab) {
-                ForEach(Tab.allCases) { Text($0.localizedTitle).tag($0) }
+            HStack(spacing: 8) {
+                ForEach(Tab.allCases) { item in
+                    let isSelected = tab == item
+                    Button {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                            tab = item
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: item.iconName)
+                                .font(.subheadline.weight(.semibold))
+                            Text(item.localizedTitle)
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .foregroundStyle(isSelected ? .white : .primary)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(isSelected ? Color.indigo : cardBackground)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(Color.indigo.opacity(isSelected ? 0 : 0.12), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .pickerStyle(.segmented)
 
             if tab == .receive {
                 receiveSection
@@ -347,10 +431,12 @@ struct BrowserTransferView: View {
     @ViewBuilder
     private var receiveSection: some View {
         if let batch = model.upload {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center, spacing: 10) {
+                    Image(systemName: "tray.and.arrow.down.fill")
+                        .foregroundStyle(.indigo)
                     Text("接收文件")
-                        .font(.title3.bold())
+                        .font(.headline)
                     Spacer(minLength: 0)
                     Text(batchStatusTitle(batch))
                         .font(.caption.weight(.semibold))
@@ -385,9 +471,10 @@ struct BrowserTransferView: View {
                             .foregroundStyle(.secondary)
 
                             if let path = savedPath {
-                                Text(String(format: String(localized: "已保存到文件 › file send / %@"), path))
+                                Label(path, systemImage: "checkmark.circle.fill")
                                     .font(.caption)
                                     .foregroundStyle(.green)
+                                    .lineLimit(1)
                                 if canImportToMusic(file.name) {
                                     ShareLink(item: sharedRoot.appendingPathComponent(path)) {
                                         Label("导入爱乐之城", systemImage: "music.note")
@@ -400,10 +487,6 @@ struct BrowserTransferView: View {
                                     .buttonStyle(.plain)
                                     .padding(.top, 2)
                                 }
-                            } else {
-                                Text((batch.progress[file.id] ?? 0) > 0 ? "正在接收…" : "等待接收")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
                             }
 
                             ProgressView(value: fraction)
@@ -416,57 +499,65 @@ struct BrowserTransferView: View {
 
                 if batch.state == "waiting" {
                     HStack(spacing: 12) {
-                        Button("拒绝", role: .destructive) { model.decide(false) }
-                            .buttonStyle(.bordered)
-                            .frame(maxWidth: .infinity)
-                        Button("接受") { model.decide(true) }
-                            .buttonStyle(.borderedProminent)
-                            .frame(maxWidth: .infinity)
+                        Button(role: .destructive) {
+                            model.decide(false)
+                        } label: {
+                            Label("拒绝", systemImage: "xmark")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button {
+                            model.decide(true)
+                        } label: {
+                            Label("接受", systemImage: "checkmark")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
                 } else if ["completed", "rejected", "expired", "cancelled"].contains(batch.state) {
                     Button {
                         model.upload = nil
                     } label: {
-                        Text("完成")
+                        Label("完成", systemImage: "checkmark.circle.fill")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
                 }
             }
             .padding(18)
-            .background(cardBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(cardBackground, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .strokeBorder(Color.indigo.opacity(0.12), lineWidth: 1)
             )
             .shadow(color: .black.opacity(colorScheme == .dark ? 0.22 : 0.05), radius: 14, y: 6)
         } else {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 12) {
-                    Image(systemName: "tray.and.arrow.down.fill")
-                        .font(.title2)
+            VStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(Color.indigo.opacity(0.09))
+                        .frame(width: 68, height: 68)
+                    Image(systemName: "tray.and.arrow.down")
+                        .font(.title.weight(.semibold))
                         .foregroundStyle(.indigo)
-                        .frame(width: 44, height: 44)
-                        .background(.indigo.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("等待电脑发送文件")
-                            .font(.headline)
-                        Text("同一 Wi-Fi 下在电脑浏览器打开上方地址")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
                 }
-                VStack(alignment: .leading, spacing: 8) {
-                    stepRow(number: "1", text: String(localized: "同一 Wi-Fi 下在电脑浏览器打开上方地址"))
-                    stepRow(number: "2", text: String(localized: "输入 6 位访问码即可建立连接"))
-                    stepRow(number: "3", text: String(localized: "拖入文件或文件夹即可高速接收"))
+
+                Text("等待文件")
+                    .font(.headline)
+
+                HStack(spacing: 10) {
+                    stepBadge(icon: "wifi", title: String(localized: "同网络"))
+                    stepBadge(icon: "key.fill", title: String(localized: "输入码"))
+                    stepBadge(icon: "arrow.up.doc.fill", title: String(localized: "拖入"))
                 }
             }
-            .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(cardBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .padding(.vertical, 28)
+            .padding(.horizontal, 18)
+            .frame(maxWidth: .infinity)
+            .background(cardBackground, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .strokeBorder(Color.indigo.opacity(0.12), lineWidth: 1)
             )
             .shadow(color: .black.opacity(colorScheme == .dark ? 0.22 : 0.05), radius: 14, y: 6)
@@ -477,57 +568,58 @@ struct BrowserTransferView: View {
     private var sendSection: some View {
         HStack(spacing: 12) {
             Button {
+                importTypes = [.item]
                 importing = true
             } label: {
-                selectionCardLabel(
-                    title: String(localized: "选择文件"),
-                    subtitle: String(localized: "音乐、文档、压缩包"),
-                    icon: "folder.badge.plus"
-                )
+                selectionSquareTile(title: String(localized: "文件"), icon: "doc.badge.plus")
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("transfer.addFiles")
 
             PhotosPicker(selection: $photos, maxSelectionCount: 50, matching: .any(of: [.images, .videos])) {
-                selectionCardLabel(
-                    title: String(localized: "照片与视频"),
-                    subtitle: String(localized: "最多一次选 50 项"),
-                    icon: "photo.on.rectangle.angled"
-                )
+                selectionSquareTile(title: String(localized: "媒体"), icon: "photo.on.rectangle.angled")
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                importTypes = [.audio]
+                importing = true
+            } label: {
+                selectionSquareTile(title: String(localized: "音乐"), icon: "music.note")
             }
             .buttonStyle(.plain)
         }
 
-        if !importMessage.isEmpty {
-            Label(importMessage, systemImage: "checkmark.circle.fill")
+        if !importErrorMessage.isEmpty {
+            Label(importErrorMessage, systemImage: "exclamationmark.triangle.fill")
                 .font(.caption)
-                .foregroundStyle(.indigo)
+                .foregroundStyle(.red)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.indigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
 
         if model.outboundFiles.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Label("选择手机文件发送到电脑", systemImage: "paperplane")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Text("添加文件后点击发送，电脑浏览器会自动开始接收")
-                    .font(.caption)
+            VStack(spacing: 10) {
+                Image(systemName: "hand.tap")
+                    .font(.title2.weight(.medium))
+                    .foregroundStyle(.indigo)
+                Text("点击上方添加")
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
             }
-            .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(cardBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .padding(.vertical, 26)
+            .frame(maxWidth: .infinity)
+            .background(cardBackground, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .strokeBorder(Color.indigo.opacity(0.12), lineWidth: 1)
             )
         } else {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    Text("发送给电脑")
+                    Text("待发送")
                         .font(.headline)
                     Text("\(model.outboundFiles.count)")
                         .font(.caption.weight(.semibold))
@@ -593,59 +685,60 @@ struct BrowserTransferView: View {
                         model.publishOutbound()
                     }
                 } label: {
-                    Text(model.outboundCompleted ? "完成" : "发送给电脑")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 4)
+                    Label(
+                        model.outboundCompleted ? String(localized: "完成") : String(localized: "发送给电脑"),
+                        systemImage: model.outboundCompleted ? "checkmark.circle.fill" : "paperplane.fill"
+                    )
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .accessibilityIdentifier("transfer.send")
             }
             .padding(18)
-            .background(cardBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(cardBackground, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .strokeBorder(Color.indigo.opacity(0.12), lineWidth: 1)
             )
             .shadow(color: .black.opacity(colorScheme == .dark ? 0.22 : 0.05), radius: 14, y: 6)
         }
     }
 
-    private func selectionCardLabel(title: String, subtitle: String, icon: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private func selectionSquareTile(title: String, icon: String) -> some View {
+        VStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.title3.weight(.semibold))
+                .font(.title2.weight(.semibold))
                 .foregroundStyle(.indigo)
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
-            Text(subtitle)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(cardBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity)
+        .background(cardBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(Color.indigo.opacity(0.14), lineWidth: 1)
         )
     }
 
-    private func stepRow(number: String, text: String) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-            Text(number)
-                .font(.caption.weight(.bold))
+    private func stepBadge(icon: String, title: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(.indigo)
-                .frame(width: 22, height: 22)
-                .background(.indigo.opacity(0.12), in: Circle())
-            Text(text)
-                .font(.subheadline)
+            Text(title)
+                .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.indigo.opacity(0.07), in: Capsule())
     }
 
     private var qrPreviewSheet: some View {
@@ -680,6 +773,24 @@ struct BrowserTransferView: View {
         .presentationDetents([.medium])
     }
 
+    private var connectionInfoSheet: some View {
+        NavigationStack {
+            List {
+                Label("电脑和手机连接同一个 Wi-Fi，在电脑浏览器打开下面的地址。", systemImage: "wifi")
+                Label("不要关闭此应用。请保持此页面打开，切换到后台后服务会关闭。", systemImage: "sun.max.fill")
+                Label(saveLocationText, systemImage: "folder.fill")
+            }
+            .navigationTitle("连接说明")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完成") { showInfoSheet = false }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
     private var statusDotColor: Color {
         if !model.error.isEmpty { return .red }
         return model.address.isEmpty ? .orange : .green
@@ -687,7 +798,25 @@ struct BrowserTransferView: View {
 
     private var statusHeaderTitle: String {
         if !model.error.isEmpty { return model.error }
-        return model.address.isEmpty ? String(localized: "正在启动网页服务…") : String(localized: "网页服务运行中")
+        return model.address.isEmpty ? String(localized: "启动中") : String(localized: "在线")
+    }
+
+    private func copyAddress() {
+        UIPasteboard.general.string = model.address
+        copiedAddress = true
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            copiedAddress = false
+        }
+    }
+
+    private func copyCode() {
+        UIPasteboard.general.string = model.code
+        copiedCode = true
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            copiedCode = false
+        }
     }
 
     private func batchStatusTitle(_ batch: WebUpload) -> String {

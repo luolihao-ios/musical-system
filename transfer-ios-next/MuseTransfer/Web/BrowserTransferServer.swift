@@ -13,6 +13,13 @@ struct WebUpload: Codable, Identifiable {
 }
 
 final class BrowserTransferServer: @unchecked Sendable {
+    static let defaultPort: UInt16 = 8080
+    static let maxPort: UInt16 = 8099
+
+    static func nextPort(after port: UInt16) -> UInt16 {
+        port >= defaultPort && port < maxPort ? port + 1 : defaultPort
+    }
+
     private let queue = DispatchQueue(label: "aiyue.web")
     private let store: WebFileStore
     private let outboundStore: WebFileStore
@@ -27,6 +34,8 @@ final class BrowserTransferServer: @unchecked Sendable {
     private var token = ""
     private var code = ""
     private var attempts = 0
+    private var currentPort: UInt16 = BrowserTransferServer.defaultPort
+    private var activePort: UInt16?
     private let alias: String
     var onReady: ((String, String) -> Void)?
     var onError: ((String) -> Void)?
@@ -37,33 +46,80 @@ final class BrowserTransferServer: @unchecked Sendable {
         outboundStore = try WebFileStore(root: outboundRoot ?? FileManager.default.temporaryDirectory.appendingPathComponent("AiYueBrowserOutbound"))
         self.alias = alias
     }
-    func start() { queue.async { self.stopNow(); self.code = String(Int.random(in: 100000...999999)); self.token = UUID().uuidString; self.attempts = 0; self.listen(port: 8080) } }
+    func start() {
+        queue.async {
+            self.stopNow()
+            self.code = String(Int.random(in: 100000...999999))
+            self.token = UUID().uuidString
+            self.attempts = 0
+            self.listen(port: self.currentPort, remainingAttempts: Int(Self.maxPort - Self.defaultPort) + 1)
+        }
+    }
+    func restartWithNextPort() {
+        queue.async {
+            let next = Self.nextPort(after: self.activePort ?? self.currentPort)
+            self.currentPort = next
+            self.stopNow()
+            self.code = String(Int.random(in: 100000...999999))
+            self.token = UUID().uuidString
+            self.attempts = 0
+            DiagnosticLog.write("Browser server switching to port \(next).")
+            self.listen(port: next, remainingAttempts: Int(Self.maxPort - Self.defaultPort) + 1)
+        }
+    }
     func stop() { queue.async { self.stopNow() } }
     private func stopNow() {
         listener?.cancel(); listener = nil
+        activePort = nil
         Array(connections.values).forEach { $0.close() }; connections.removeAll()
         uploads.removeAll(); activeFiles.removeAll(); connectionBatches.removeAll(); outboundStates.removeAll(); outboundProgress.removeAll(); outboundPublished = false; token = ""
         DiagnosticLog.write("Browser server stopped; sessions cleared.")
     }
-    private func listen(port: UInt16) {
+    private func listen(port: UInt16, remainingAttempts: Int) {
         do {
-            let next = try NWListener(using: .tcp, on: port == 0 ? .any : NWEndpoint.Port(rawValue: port)!)
+            let endpointPort: NWEndpoint.Port = port == 0 ? .any : (NWEndpoint.Port(rawValue: port) ?? .any)
+            let next = try NWListener(using: .tcp, on: endpointPort)
             listener = next
             next.stateUpdateHandler = { [weak self, weak next] state in
                 guard let self, let next, self.listener === next else { return }
                 if case .ready = state {
-                    guard let ip = Self.wifiAddress(), let port = next.port else { self.onError?("未找到 Wi-Fi 地址，请连接同一局域网"); self.stopNow(); return }
-                    DiagnosticLog.write("Browser server ready: TCP \(port.rawValue).")
-                    self.onReady?("http://\(ip):\(port.rawValue)", self.code)
+                    guard let ip = Self.wifiAddress(), let boundPort = next.port else {
+                        self.onError?("未找到 Wi-Fi 地址，请连接同一局域网")
+                        self.stopNow()
+                        return
+                    }
+                    self.currentPort = boundPort.rawValue
+                    self.activePort = boundPort.rawValue
+                    DiagnosticLog.write("Browser server ready: TCP \(boundPort.rawValue).")
+                    self.onReady?("http://\(ip):\(boundPort.rawValue)", self.code)
                 }
                 if case .failed = state {
                     next.cancel(); self.listener = nil
-                    self.onError?("网页服务无法启动：固定端口 8080 可能已被占用，请关闭占用该端口的应用后重试")
+                    self.activePort = nil
+                    if remainingAttempts > 1 {
+                        let fallback = Self.nextPort(after: port)
+                        DiagnosticLog.write("Port \(port) unavailable; retrying TCP \(fallback).")
+                        self.listen(port: fallback, remainingAttempts: remainingAttempts - 1)
+                    } else if port != 0 {
+                        DiagnosticLog.write("Preset ports busy; retrying ephemeral TCP port.")
+                        self.listen(port: 0, remainingAttempts: 0)
+                    } else {
+                        self.onError?("网页服务无法启动，请重试或检查网络")
+                    }
                 }
             }
             next.newConnectionHandler = { [weak self] socket in self?.accept(socket) }
             next.start(queue: queue)
-        } catch { onError?(error.localizedDescription) }
+        } catch {
+            if remainingAttempts > 1 {
+                let fallback = Self.nextPort(after: port)
+                listen(port: fallback, remainingAttempts: remainingAttempts - 1)
+            } else if port != 0 {
+                listen(port: 0, remainingAttempts: 0)
+            } else {
+                onError?("网页服务无法启动，请重试或检查网络")
+            }
+        }
     }
     private func accept(_ socket: NWConnection) {
         guard connections.count < 16 else { socket.cancel(); return }
